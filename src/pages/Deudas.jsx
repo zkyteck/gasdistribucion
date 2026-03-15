@@ -31,6 +31,7 @@ function resumenDeuda(d) {
 const emptyDeudaForm = {
   nombre_deudor: '', cliente_id: '',
   monto: '', balones: '', tipo_balon: '10kg', vales_20: '', vales_43: '',
+  precio_balon: '',
   fecha: new Date().toISOString().split('T')[0], notas: ''
 }
 
@@ -473,6 +474,39 @@ export default function Deudas() {
                 <input type="number" min="0" className="input" placeholder="0"
                   value={deudaForm.vales_43} onChange={e => setDeudaForm(f => ({...f, vales_43: e.target.value}))} /></div>
             </div>
+
+            {/* Precio por balón — solo si hay balones */}
+            {parseInt(deudaForm.balones) > 0 && (
+              <div className="bg-blue-900/20 border border-blue-800/40 rounded-xl p-3 space-y-2">
+                <p className="text-xs text-blue-300 font-medium">💡 ¿El cliente debe pagar los balones también?</p>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <label className="label">Precio por balón S/</label>
+                    <input type="number" min="0" step="0.50" className="input" placeholder="45"
+                      value={deudaForm.precio_balon || ''}
+                      onChange={e => {
+                        const precio = parseFloat(e.target.value) || 0
+                        const cant = parseInt(deudaForm.balones) || 0
+                        setDeudaForm(f => ({
+                          ...f,
+                          precio_balon: e.target.value,
+                          monto: precio > 0 ? (precio * cant).toFixed(2) : f.monto
+                        }))
+                      }} />
+                  </div>
+                  {parseFloat(deudaForm.precio_balon) > 0 && parseInt(deudaForm.balones) > 0 && (
+                    <div className="flex-1 bg-gray-800 rounded-xl p-3 text-center mt-5">
+                      <p className="text-xs text-gray-500">Total balones</p>
+                      <p className="text-emerald-400 font-bold text-lg">
+                        S/ {(parseFloat(deudaForm.precio_balon) * parseInt(deudaForm.balones)).toFixed(2)}
+                      </p>
+                      <p className="text-xs text-gray-600">→ sumado al dinero</p>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-gray-600">Deja en blanco si solo debe los balones físicos sin monto</p>
+              </div>
+            )}
             <div><label className="label">Fecha</label>
               <input type="date" className="input" value={deudaForm.fecha} onChange={e => setDeudaForm(f => ({...f, fecha: e.target.value}))} /></div>
             <div><label className="label">Notas (opcional)</label>
