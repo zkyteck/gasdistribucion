@@ -1,5 +1,5 @@
 import { useLocation } from 'react-router-dom'
-import { Bell, Search } from 'lucide-react'
+import { Bell, Search, Menu } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -17,13 +17,20 @@ const titles = {
   '/configuracion':  'Configuración',
 }
 
-export default function Topbar() {
+export default function Topbar({ onMenuClick }) {
   const { pathname } = useLocation()
   const title = titles[pathname] || 'Sistema'
 
   return (
-    <header className="h-14 bg-gray-900/80 backdrop-blur border-b border-gray-800 flex items-center justify-between px-6 sticky top-0 z-10">
-      <div className="flex items-center gap-4">
+    <header className="h-14 bg-gray-900/80 backdrop-blur border-b border-gray-800 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-10">
+      <div className="flex items-center gap-3">
+        {/* Botón hamburguesa — solo en móvil */}
+        <button
+          onClick={onMenuClick}
+          className="lg:hidden text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800 transition-colors"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
         <h1 className="text-white font-semibold text-sm">{title}</h1>
       </div>
       <div className="flex items-center gap-3">

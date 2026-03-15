@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext'
 import {
   LayoutDashboard, ShoppingCart, Ticket, ClipboardList, Users,
   CreditCard, Package, Truck, Warehouse, BarChart3, Settings,
-  LogOut, Flame
+  LogOut, Flame, X
 } from 'lucide-react'
 
 const navItems = [
@@ -13,14 +13,14 @@ const navItems = [
   { to: '/acuenta',        icon: ClipboardList,   label: 'A Cuenta' },
   { to: '/clientes',       icon: Users,           label: 'Clientes' },
   { to: '/deudas',         icon: CreditCard,      label: 'Deudas' },
-  { to: '/inventario',     icon: Package,         label: 'Inventario',    adminOnly: true },
-  { to: '/distribuidores', icon: Truck,           label: 'Distribuidores',adminOnly: true },
-  { to: '/almacenes',      icon: Warehouse,       label: 'Almacenes',     adminOnly: true },
-  { to: '/reportes',       icon: BarChart3,       label: 'Reportes',      adminOnly: true },
-  { to: '/configuracion',  icon: Settings,        label: 'Configuración', adminOnly: true },
+  { to: '/inventario',     icon: Package,         label: 'Inventario',     adminOnly: true },
+  { to: '/distribuidores', icon: Truck,           label: 'Distribuidores', adminOnly: true },
+  { to: '/almacenes',      icon: Warehouse,       label: 'Almacenes',      adminOnly: true },
+  { to: '/reportes',       icon: BarChart3,       label: 'Reportes',       adminOnly: true },
+  { to: '/configuracion',  icon: Settings,        label: 'Configuración',  adminOnly: true },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ onClose }) {
   const { perfil, signOut } = useAuth()
   const navigate = useNavigate()
   const isAdmin = perfil?.rol === 'admin'
@@ -31,9 +31,9 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-48 bg-gray-900 border-r border-gray-800 flex flex-col h-screen sticky top-0">
+    <aside className="w-48 bg-gray-900 border-r border-gray-800 flex flex-col h-screen">
       {/* Logo */}
-      <div className="px-4 py-5 border-b border-gray-800">
+      <div className="px-4 py-4 border-b border-gray-800 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
             <Flame className="w-4 h-4 text-white" />
@@ -43,12 +43,19 @@ export default function Sidebar() {
             <p className="text-gray-500 text-xs">Paucara</p>
           </div>
         </div>
+        {/* Botón cerrar — solo en móvil */}
+        {onClose && (
+          <button onClick={onClose} className="lg:hidden text-gray-500 hover:text-white p-1 rounded transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Nav */}
       <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
         {navItems.filter(item => !item.adminOnly || isAdmin).map(({ to, icon: Icon, label }) => (
           <NavLink key={to} to={to}
+            onClick={onClose}
             className={({ isActive }) =>
               `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
                 isActive ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'
