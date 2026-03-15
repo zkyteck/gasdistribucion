@@ -34,7 +34,13 @@ export default function Vales() {
   const [form, setForm] = useState({ cantidad_20: '', cantidad_43: '', fecha: new Date().toISOString().split('T')[0], notas: '' })
   const [retiroForm, setRetiroForm] = useState({ monto: '', motivo: '', fecha: new Date().toISOString().split('T')[0] })
 
-  useEffect(() => { cargar() }, [filtroFecha])
+  useEffect(() => {
+    cargar()
+    const canal = supabase.channel('vales-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vales_fise' }, () => cargar())
+      .subscribe()
+    return () => supabase.removeChannel(canal)
+  }, [filtroFecha])
 
   async function cargar() {
     setLoading(true)
