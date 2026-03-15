@@ -59,7 +59,13 @@ export default function Deudas() {
   const [mostrarSugerencias, setMostrarSugerencias] = useState(false)
   const [editForm, setEditForm] = useState({ monto_pendiente: '', balones_pendiente: '', vales_20_pendiente: '', vales_43_pendiente: '', fecha_deuda: '', notas: '' })
 
-  useEffect(() => { cargar(); cargarClientes() }, [filtroEstado])
+  useEffect(() => {
+    cargar(); cargarClientes()
+    const canal = supabase.channel('deudas-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'deudas' }, () => cargar())
+      .subscribe()
+    return () => supabase.removeChannel(canal)
+  }, [filtroEstado])
 
   async function cargar() {
     setLoading(true)

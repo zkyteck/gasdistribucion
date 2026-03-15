@@ -46,7 +46,14 @@ export default function Clientes() {
   const [clienteForm, setClienteForm] = useState({ nombre: '', dni: '', telefono: '', tipo: 'general', direccion: '' })
   const [deudaClienteModal, setDeudaClienteModal] = useState(null) // deuda activa a mostrar
 
-  useEffect(() => { cargar() }, [filtroEstado, tab])
+  useEffect(() => {
+    cargar()
+    const canal = supabase.channel('clientes-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'clientes' }, () => cargar())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'deudas' }, () => cargar())
+      .subscribe()
+    return () => supabase.removeChannel(canal)
+  }, [filtroEstado, tab])
 
   async function cargar() {
     setLoading(true)
