@@ -1,0 +1,16 @@
+{
+  "projectId": "prj_dthDbhTw6HYpxi3t9gepYaSxBUdY",
+  "orgId": "team_TddhqDTJEe44eNyIybvlIyNY",
+  "projectName": "gasdistribucion",
+  "settings": {
+    "createdAt": 1773280297871,
+    "framework": "vite",
+    "devCommand": null,
+    "installCommand": null,
+    "buildCommand": null,
+    "outputDirectory": null,
+    "rootDirectory": null,
+    "directoryListing": false,
+    "nodeVersion": "24.x"
+  }
+}

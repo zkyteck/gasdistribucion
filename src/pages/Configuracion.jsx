@@ -1,0 +1,540 @@
+import { useState, useEffect } from 'react'
+import { supabase, supabaseAdmin } from '../lib/supabase'
+import { Plus, X, AlertCircle, Edit2, Eye, EyeOff, Save } from 'lucide-react'
+
+const TIPOS_BALON = ['5kg', '10kg', '45kg']
+
+function Modal({ title, onClose, children }) {
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
+          <h3 className="text-white font-semibold">{title}</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="px-6 py-5">{children}</div>
+      </div>
+    </div>
+  )
+}
+
+export default function Configuracion() {
+  const [tab, setTab] = useState('precios')
+  const [precios, setPrecios] = useState([])
+  const [preciosPorTipo, setPreciosPorTipo] = useState([])
+  const [proveedores, setProveedores] = useState([])
+  const [usuarios, setUsuarios] = useState([])
+  const [distribuidores, setDistribuidores] = useState([])
+  const [preciosDistTipo, setPreciosDistTipo] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [modal, setModal] = useState(null)
+  const [selected, setSelected] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [showPass, setShowPass] = useState(false)
+  const [editandoPrecios, setEditandoPrecios] = useState({})
+  const [editandoDistPrecios, setEditandoDistPrecios] = useState({})
+
+  const [provForm, setProvForm] = useState({ nombre: '', telefono: '', direccion: '', ruc: '' })
+  const [usuarioForm, setUsuarioForm] = useState({ nombre: '', email: '', password: '', rol: 'trabajador' })
+  const [permisos, setPermisos] = useState({ ventas:false, vales:false, acuenta:false, clientes:false, deudas:false, inventario:false, distribuidores:false, almacenes:false, reportes:false, configuracion:false })
+  const [editUsuarioSelected, setEditUsuarioSelected] = useState(null)
+  const [editPermisos, setEditPermisos] = useState({})
+
+  useEffect(() => { cargar() }, [tab])
+
+  const MODULOS_LABELS = [
+    ['ventas','🛒 Ventas'], ['vales','🎫 Vales FISE'], ['acuenta','📋 A Cuenta'],
+    ['clientes','👥 Clientes'], ['deudas','⚠️ Deudas'], ['inventario','📦 Inventario'],
+    ['distribuidores','🚛 Distribuidores'], ['almacenes','🏪 Almacenes'],
+    ['reportes','📊 Reportes'], ['configuracion','⚙️ Configuración']
+  ]
+
+  async function cargar() {
+    setLoading(true)
+    if (tab === 'precios') {
+      const [{ data: pt }, { data: ptb }] = await Promise.all([
+        supabase.from('precio_tipos').select('*').order('precio'),
+        supabase.from('precio_tipo_balon').select('*')
+      ])
+      setPrecios(pt || [])
+      // Construir mapa editable
+      const mapa = {}
+      pt?.forEach(p => {
+        mapa[p.id] = {}
+        TIPOS_BALON.forEach(tipo => {
+          const found = ptb?.find(x => x.precio_tipo_id === p.id && x.tipo_balon === tipo)
+          mapa[p.id][tipo] = found?.precio ?? ''
+        })
+      })
+      setEditandoPrecios(mapa)
+      setPreciosPorTipo(ptb || [])
+    } else if (tab === 'distribuidores_precios') {
+      const [{ data: d }, { data: pdt }] = await Promise.all([
+        supabase.from('distribuidores').select('*').eq('activo', true).order('nombre'),
+        supabase.from('precio_distribuidor_tipo').select('*')
+      ])
+      setDistribuidores(d || [])
+      const mapa = {}
+      d?.forEach(dist => {
+        mapa[dist.id] = {}
+        TIPOS_BALON.forEach(tipo => {
+          const found = pdt?.find(x => x.distribuidor_id === dist.id && x.tipo_balon === tipo)
+          mapa[dist.id][tipo] = found?.precio ?? ''
+        })
+      })
+      setEditandoDistPrecios(mapa)
+      setPreciosDistTipo(pdt || [])
+    } else if (tab === 'proveedores') {
+      const { data } = await supabase.from('proveedores').select('*').eq('activo', true).order('nombre')
+      setProveedores(data || [])
+    } else if (tab === 'usuarios') {
+      const { data } = await supabase.from('usuarios').select('*').order('nombre')
+      setUsuarios(data || [])
+    }
+    setLoading(false)
+  }
+
+  async function guardarPreciosTienda() {
+    setSaving(true); setError('')
+    for (const precioTipoId of Object.keys(editandoPrecios)) {
+      for (const tipo of TIPOS_BALON) {
+        const val = editandoPrecios[precioTipoId][tipo]
+        if (val === '' || val === null) continue
+        const existing = preciosPorTipo.find(p => p.precio_tipo_id === precioTipoId && p.tipo_balon === tipo)
+        if (existing) {
+          await supabase.from('precio_tipo_balon').update({ precio: parseFloat(val), updated_at: new Date().toISOString() }).eq('id', existing.id)
+        } else {
+          await supabase.from('precio_tipo_balon').insert({ precio_tipo_id: precioTipoId, tipo_balon: tipo, precio: parseFloat(val) })
+        }
+      }
+    }
+    setSaving(false)
+    alert('✅ Precios guardados correctamente')
+    cargar()
+  }
+
+  async function guardarPreciosDistribuidor() {
+    setSaving(true); setError('')
+    for (const distId of Object.keys(editandoDistPrecios)) {
+      for (const tipo of TIPOS_BALON) {
+        const val = editandoDistPrecios[distId][tipo]
+        if (val === '' || val === null) continue
+        const existing = preciosDistTipo.find(p => p.distribuidor_id === distId && p.tipo_balon === tipo)
+        if (existing) {
+          await supabase.from('precio_distribuidor_tipo').update({ precio: parseFloat(val), updated_at: new Date().toISOString() }).eq('id', existing.id)
+        } else {
+          await supabase.from('precio_distribuidor_tipo').insert({ distribuidor_id: distId, tipo_balon: tipo, precio: parseFloat(val) })
+        }
+      }
+    }
+    setSaving(false)
+    alert('✅ Precios de distribuidores guardados')
+    cargar()
+  }
+
+  async function guardarProveedor() {
+    if (!provForm.nombre) { setError('El nombre es obligatorio'); return }
+    setSaving(true); setError('')
+    const op = selected
+      ? supabase.from('proveedores').update({ ...provForm, updated_at: new Date().toISOString() }).eq('id', selected.id)
+      : supabase.from('proveedores').insert(provForm)
+    const { error: e } = await op
+    setSaving(false)
+    if (e) { setError(e.message); return }
+    setModal(null); cargar()
+  }
+
+  async function guardarUsuario() {
+    if (!usuarioForm.nombre || !usuarioForm.email || !usuarioForm.password) { setError('Completa nombre, email y contraseña'); return }
+    if (usuarioForm.password.length < 6) { setError('La contraseña debe tener al menos 6 caracteres'); return }
+    setSaving(true); setError('')
+    try {
+      // Crear auth user — el trigger fn_crear_perfil_usuario inserta en usuarios automáticamente
+      const serviceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY
+      if (!serviceKey) { setError('Service key no configurada'); setSaving(false); return }
+      const permisosToSave = usuarioForm.rol === 'admin' ? null : permisos
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/admin/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': serviceKey, 'Authorization': `Bearer ${serviceKey}` },
+        body: JSON.stringify({
+          email: usuarioForm.email,
+          password: usuarioForm.password,
+          email_confirm: true,
+          user_metadata: {
+            nombre: usuarioForm.nombre,
+            rol: usuarioForm.rol,
+            permisos: permisosToSave ? JSON.stringify(permisosToSave) : null
+          }
+        })
+      })
+      const authData = await resp.json()
+      if (!resp.ok) { setError(authData.msg || authData.message || JSON.stringify(authData)); setSaving(false); return }
+      // El trigger ya creó el perfil — solo actualizamos por si acaso
+      const newAuthId = (authData.user || authData).id
+      await supabase.from('usuarios').update({ nombre: usuarioForm.nombre, rol: usuarioForm.rol, permisos: permisosToSave }).eq('auth_id', newAuthId)
+      setModal(null); cargar()
+    } catch(e) { setError(e.message) }
+    setSaving(false)
+  }
+
+  async function eliminarUsuario() {
+    if (!editUsuarioSelected) return
+    if (editUsuarioSelected.rol === 'admin') { setError('No puedes eliminar un administrador'); return }
+    if (!confirm(`¿Eliminar al usuario ${editUsuarioSelected.nombre}? No podrá iniciar sesión.`)) return
+    setSaving(true); setError('')
+    // Delete from public.usuarios
+    const { error: e } = await supabase.from('usuarios').delete().eq('id', editUsuarioSelected.id)
+    if (e) { setError(e.message); setSaving(false); return }
+    // Delete from auth via REST
+    const serviceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY
+    if (serviceKey && editUsuarioSelected.auth_id) {
+      await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/admin/users/${editUsuarioSelected.auth_id}`, {
+        method: 'DELETE',
+        headers: { 'apikey': serviceKey, 'Authorization': `Bearer ${serviceKey}` }
+      })
+    }
+    setSaving(false)
+    setModal(null)
+    cargar()
+  }
+
+  async function guardarEditUsuario() {
+    if (!editUsuarioSelected) return
+    setSaving(true); setError('')
+    const permisosToSave = editUsuarioSelected.rol === 'admin' ? null : editPermisos
+    const { error: e } = await supabase.from('usuarios').update({
+      nombre: editUsuarioSelected.nombre,
+      rol: editUsuarioSelected.rol,
+      permisos: permisosToSave
+    }).eq('id', editUsuarioSelected.id)
+    setSaving(false)
+    if (e) { setError(e.message); return }
+    setModal(null)
+    cargar()
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-white">Configuración</h2>
+        <p className="text-gray-500 text-sm">Precios, proveedores y usuarios del sistema</p>
+      </div>
+
+      <div className="flex gap-2 border-b border-gray-800 overflow-x-auto">
+        {[
+          ['precios','💰 Precios tienda'],
+          ['distribuidores_precios','🚛 Precios distribuidores'],
+          ['proveedores','🚚 Proveedores'],
+          ['usuarios','👤 Usuarios']
+        ].map(([key, label]) => (
+          <button key={key} onClick={() => setTab(key)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${tab === key ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Precios tienda */}
+      {tab === 'precios' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <p className="text-gray-400 text-sm">Precio por tipo de cliente y tamaño de balón</p>
+            <button onClick={guardarPreciosTienda} disabled={saving} className="btn-primary">
+              <Save className="w-4 h-4" />{saving ? 'Guardando...' : 'Guardar cambios'}
+            </button>
+          </div>
+          <div className="card p-0 overflow-hidden">
+            <table className="w-full">
+              <thead><tr className="border-b border-gray-800">
+                <th className="text-left text-xs font-semibold text-gray-500 uppercase px-6 py-3">Tipo de cliente</th>
+                {TIPOS_BALON.map(t => <th key={t} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">🔵 {t}</th>)}
+              </tr></thead>
+              <tbody className="divide-y divide-gray-800/50">
+                {precios.map(p => (
+                  <tr key={p.id} className="table-row-hover">
+                    <td className="px-6 py-4">
+                      <p className="text-white font-semibold text-sm">{p.nombre}</p>
+                      <p className="text-gray-500 text-xs">Base: S/{p.precio}</p>
+                    </td>
+                    {TIPOS_BALON.map(tipo => (
+                      <td key={tipo} className="px-4 py-4">
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs">S/</span>
+                          <input type="number" className="input pl-7 w-28 text-sm"
+                            value={editandoPrecios[p.id]?.[tipo] ?? ''}
+                            onChange={e => setEditandoPrecios(prev => ({
+                              ...prev, [p.id]: { ...prev[p.id], [tipo]: e.target.value }
+                            }))}
+                            placeholder="0" />
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-gray-600 text-xs">💡 Los precios se usarán automáticamente al registrar ventas según el tipo de cliente y tamaño de balón.</p>
+        </div>
+      )}
+
+      {/* Tab Precios distribuidores */}
+      {tab === 'distribuidores_precios' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <p className="text-gray-400 text-sm">Precio por distribuidor y tamaño de balón</p>
+            <button onClick={guardarPreciosDistribuidor} disabled={saving} className="btn-primary">
+              <Save className="w-4 h-4" />{saving ? 'Guardando...' : 'Guardar cambios'}
+            </button>
+          </div>
+          <div className="card p-0 overflow-hidden">
+            <table className="w-full">
+              <thead><tr className="border-b border-gray-800">
+                <th className="text-left text-xs font-semibold text-gray-500 uppercase px-6 py-3">Distribuidor</th>
+                {TIPOS_BALON.map(t => <th key={t} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">🔵 {t}</th>)}
+              </tr></thead>
+              <tbody className="divide-y divide-gray-800/50">
+                {distribuidores.map(d => (
+                  <tr key={d.id} className="table-row-hover">
+                    <td className="px-6 py-4 text-white font-semibold text-sm">{d.nombre}</td>
+                    {TIPOS_BALON.map(tipo => (
+                      <td key={tipo} className="px-4 py-4">
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs">S/</span>
+                          <input type="number" className="input pl-7 w-28 text-sm"
+                            value={editandoDistPrecios[d.id]?.[tipo] ?? ''}
+                            onChange={e => setEditandoDistPrecios(prev => ({
+                              ...prev, [d.id]: { ...prev[d.id], [tipo]: e.target.value }
+                            }))}
+                            placeholder="0" />
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-gray-600 text-xs">💡 Estos precios se usarán al registrar reposiciones y rendiciones de distribuidores.</p>
+        </div>
+      )}
+
+      {/* Tab Proveedores */}
+      {tab === 'proveedores' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <p className="text-gray-400 text-sm">Empresas proveedoras de balones</p>
+            <button onClick={() => { setSelected(null); setProvForm({ nombre: '', telefono: '', direccion: '', ruc: '' }); setError(''); setModal('proveedor') }} className="btn-primary">
+              <Plus className="w-4 h-4" />Nuevo proveedor
+            </button>
+          </div>
+          <div className="card p-0 overflow-hidden">
+            <table className="w-full">
+              <thead><tr className="border-b border-gray-800">
+                {['Proveedor','Teléfono','RUC','Dirección',''].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-6 py-3">{h}</th>
+                ))}
+              </tr></thead>
+              <tbody className="divide-y divide-gray-800/50">
+                {proveedores.map(p => (
+                  <tr key={p.id} className="table-row-hover">
+                    <td className="px-6 py-4 text-white font-medium text-sm">{p.nombre}</td>
+                    <td className="px-6 py-4 text-gray-400 text-sm">{p.telefono || '-'}</td>
+                    <td className="px-6 py-4 text-gray-400 text-sm font-mono">{p.ruc || '-'}</td>
+                    <td className="px-6 py-4 text-gray-500 text-sm">{p.direccion || '-'}</td>
+                    <td className="px-6 py-4">
+                      <button onClick={() => { setSelected(p); setProvForm({ nombre: p.nombre, telefono: p.telefono||'', direccion: p.direccion||'', ruc: p.ruc||'' }); setError(''); setModal('proveedor') }}
+                        className="text-gray-500 hover:text-blue-400 transition-colors"><Edit2 className="w-4 h-4" /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab Usuarios */}
+      {tab === 'usuarios' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <p className="text-gray-400 text-sm">Personas con acceso al sistema</p>
+            <button onClick={() => { setUsuarioForm({ nombre: '', email: '', password: '', rol: 'trabajador' }); setPermisos({ ventas:false, vales:false, acuenta:false, clientes:false, deudas:false, inventario:false, distribuidores:false, almacenes:false, reportes:false, configuracion:false }); setError(''); setModal('usuario') }} className="btn-primary">
+              <Plus className="w-4 h-4" />Nuevo usuario
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {usuarios.map(u => (
+              <div key={u.id} className="card border border-gray-700/50">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 ${u.rol === 'admin' ? 'bg-gradient-to-br from-blue-500 to-indigo-600' : 'bg-gradient-to-br from-emerald-500 to-teal-600'}`}>
+                    {u.nombre?.charAt(0)?.toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-semibold text-sm">{u.nombre}</p>
+                    <p className="text-gray-500 text-xs truncate">{u.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={u.rol === 'admin' ? 'badge-blue' : 'badge-green'}>{u.rol === 'admin' ? '👑 Admin' : '👷 Trabajador'}</span>
+                    <button onClick={() => { setEditUsuarioSelected({...u}); setEditPermisos(u.permisos || {}); setError(''); setModal('editUsuario') }}
+                      className="text-xs bg-gray-700/50 hover:bg-gray-700 border border-gray-600 text-gray-300 px-2 py-1 rounded-lg transition-all">
+                      ✏️
+                    </button>
+                  </div>
+                </div>
+                {u.rol !== 'admin' && (
+                  <div className="flex flex-wrap gap-1">
+                    {MODULOS_LABELS.map(([key, label]) => (
+                      <span key={key} className={`text-xs px-2 py-0.5 rounded-full border ${u.permisos?.[key] ? 'bg-emerald-900/30 border-emerald-700/50 text-emerald-400' : 'bg-gray-800/50 border-gray-700/50 text-gray-600 line-through'}`}>
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {u.rol === 'admin' && <p className="text-xs text-gray-500">Acceso completo a todos los módulos</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {modal === 'usuario' && (
+        <Modal title="Nuevo usuario" onClose={() => setModal(null)}>
+          <div className="space-y-4">
+            {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
+            <div><label className="label">Nombre completo *</label><input className="input" value={usuarioForm.nombre} onChange={e => setUsuarioForm(f => ({...f, nombre: e.target.value}))} placeholder="Ej: Juan Pérez" /></div>
+            <div><label className="label">Email *</label><input type="email" className="input" value={usuarioForm.email} onChange={e => setUsuarioForm(f => ({...f, email: e.target.value}))} placeholder="correo@ejemplo.com" /></div>
+            <div>
+              <label className="label">Contraseña *</label>
+              <div className="relative">
+                <input type={showPass ? 'text' : 'password'} className="input pr-10" value={usuarioForm.password}
+                  onChange={e => setUsuarioForm(f => ({...f, password: e.target.value}))} placeholder="Mínimo 6 caracteres" />
+                <button type="button" onClick={() => setShowPass(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="label">Rol</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => setUsuarioForm(f => ({...f, rol: 'trabajador'}))}
+                  className={`py-3 px-4 rounded-xl border text-sm font-medium transition-all text-left ${usuarioForm.rol === 'trabajador' ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                  <p className="font-bold">👷 Trabajador</p>
+                  <p className="text-xs mt-1 opacity-70">Registra ventas, vales y operaciones diarias</p>
+                </button>
+                <button onClick={() => setUsuarioForm(f => ({...f, rol: 'admin'}))}
+                  className={`py-3 px-4 rounded-xl border text-sm font-medium transition-all text-left ${usuarioForm.rol === 'admin' ? 'bg-blue-600/20 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                  <p className="font-bold">👑 Admin</p>
+                  <p className="text-xs mt-1 opacity-70">Acceso completo: precios, reportes y configuración</p>
+                </button>
+              </div>
+            </div>
+            {usuarioForm.rol === 'trabajador' && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="label mb-0">Módulos con acceso</label>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setPermisos({ ventas:true, vales:true, acuenta:true, clientes:true, deudas:true, inventario:true, distribuidores:true, almacenes:true, reportes:true, configuracion:false })}
+                      className="text-xs text-blue-400 hover:text-blue-300">✓ Todos</button>
+                    <button type="button" onClick={() => setPermisos({ ventas:false, vales:false, acuenta:false, clientes:false, deudas:false, inventario:false, distribuidores:false, almacenes:false, reportes:false, configuracion:false })}
+                      className="text-xs text-gray-500 hover:text-gray-400">✗ Ninguno</button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {MODULOS_LABELS.map(([key, label]) => (
+                    <button key={key} onClick={() => setPermisos(p => ({...p, [key]: !p[key]}))}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all text-left ${permisos[key] ? 'bg-emerald-900/30 border-emerald-600/50 text-emerald-300' : 'bg-gray-800/50 border-gray-700 text-gray-500'}`}>
+                      <span className={`w-3 h-3 rounded-sm border flex-shrink-0 flex items-center justify-center text-xs ${permisos[key] ? 'bg-emerald-500 border-emerald-500' : 'border-gray-600'}`}>
+                        {permisos[key] ? '✓' : ''}
+                      </span>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setModal(null)} className="btn-secondary flex-1">Cancelar</button>
+              <button onClick={guardarUsuario} disabled={saving} className="btn-primary flex-1 justify-center">{saving ? 'Creando...' : '✓ Crear usuario'}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {modal === 'editUsuario' && editUsuarioSelected && (
+        <Modal title="Editar usuario" onClose={() => setModal(null)}>
+          <div className="space-y-4">
+            {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
+            <div><label className="label">Nombre</label>
+              <input className="input" value={editUsuarioSelected.nombre} onChange={e => setEditUsuarioSelected(u => ({...u, nombre: e.target.value}))} />
+            </div>
+            <div>
+              <label className="label">Rol</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => setEditUsuarioSelected(u => ({...u, rol: 'trabajador'}))}
+                  className={`py-3 px-4 rounded-xl border text-sm font-medium transition-all text-left ${editUsuarioSelected.rol === 'trabajador' ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                  <p className="font-bold">👷 Trabajador</p>
+                  <p className="text-xs mt-1 opacity-70">Solo módulos asignados</p>
+                </button>
+                <button onClick={() => setEditUsuarioSelected(u => ({...u, rol: 'admin'}))}
+                  className={`py-3 px-4 rounded-xl border text-sm font-medium transition-all text-left ${editUsuarioSelected.rol === 'admin' ? 'bg-blue-600/20 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                  <p className="font-bold">👑 Admin</p>
+                  <p className="text-xs mt-1 opacity-70">Acceso completo</p>
+                </button>
+              </div>
+            </div>
+            {editUsuarioSelected.rol === 'trabajador' && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="label mb-0">Módulos con acceso</label>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setEditPermisos({ ventas:true, vales:true, acuenta:true, clientes:true, deudas:true, inventario:true, distribuidores:true, almacenes:true, reportes:true, configuracion:false })}
+                      className="text-xs text-blue-400 hover:text-blue-300">✓ Todos</button>
+                    <button type="button" onClick={() => setEditPermisos({ ventas:false, vales:false, acuenta:false, clientes:false, deudas:false, inventario:false, distribuidores:false, almacenes:false, reportes:false, configuracion:false })}
+                      className="text-xs text-gray-500 hover:text-gray-400">✗ Ninguno</button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {MODULOS_LABELS.map(([key, label]) => (
+                    <button key={key} onClick={() => setEditPermisos(p => ({...p, [key]: !p[key]}))}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all text-left ${editPermisos[key] ? 'bg-emerald-900/30 border-emerald-600/50 text-emerald-300' : 'bg-gray-800/50 border-gray-700 text-gray-500'}`}>
+                      <span className={`w-3 h-3 rounded-sm border flex-shrink-0 flex items-center justify-center text-xs ${editPermisos[key] ? 'bg-emerald-500 border-emerald-500' : 'border-gray-600'}`}>
+                        {editPermisos[key] ? '✓' : ''}
+                      </span>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setModal(null)} className="btn-secondary">Cancelar</button>
+              <button onClick={eliminarUsuario} disabled={saving || editUsuarioSelected?.rol === 'admin'}
+                className="px-4 py-2 rounded-xl border border-red-600/40 bg-red-900/20 text-red-400 text-sm font-medium hover:bg-red-900/30 transition-all disabled:opacity-30">
+                🗑️ Eliminar
+              </button>
+              <button onClick={guardarEditUsuario} disabled={saving} className="btn-primary flex-1 justify-center">{saving ? 'Guardando...' : '✓ Guardar'}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {modal === 'proveedor' && (
+        <Modal title={selected ? 'Editar proveedor' : 'Nuevo proveedor'} onClose={() => setModal(null)}>
+          <div className="space-y-4">
+            {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
+            <div><label className="label">Nombre *</label><input className="input" value={provForm.nombre} onChange={e => setProvForm(f => ({...f, nombre: e.target.value}))} /></div>
+            <div><label className="label">Teléfono</label><input className="input" value={provForm.telefono} onChange={e => setProvForm(f => ({...f, telefono: e.target.value}))} /></div>
+            <div><label className="label">RUC</label><input className="input" value={provForm.ruc} onChange={e => setProvForm(f => ({...f, ruc: e.target.value}))} /></div>
+            <div><label className="label">Dirección</label><input className="input" value={provForm.direccion} onChange={e => setProvForm(f => ({...f, direccion: e.target.value}))} /></div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setModal(null)} className="btn-secondary flex-1">Cancelar</button>
+              <button onClick={guardarProveedor} disabled={saving} className="btn-primary flex-1 justify-center">{saving ? 'Guardando...' : 'Guardar'}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  )
+}
