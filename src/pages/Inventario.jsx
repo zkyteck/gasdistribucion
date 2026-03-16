@@ -56,20 +56,23 @@ export default function Inventario() {
 
 
   const [balonesEnCalle, setBalonesEnCalle] = useState(0)
+  const [stockPorTipo, setStockPorTipo] = useState([])
 
   async function cargar() {
     setLoading(true)
-    const [{ data: a }, { data: p }, { data: m }, { data: c }, { data: mv }, { data: dl }, { data: deudasBal }] = await Promise.all([
+    const [{ data: a }, { data: p }, { data: m }, { data: c }, { data: mv }, { data: dl }, { data: deudasBal }, { data: spt }] = await Promise.all([
       supabase.from('almacenes').select('*').eq('activo', true).order('nombre'),
       supabase.from('proveedores').select('*').eq('activo', true),
       supabase.from('marcas_gas').select('*').eq('activo', true).order('nombre'),
       supabase.from('compras').select('*, proveedores(nombre), marcas_gas(nombre)').order('fecha', { ascending: false }).limit(30),
       supabase.from('movimientos_stock').select('*, almacenes(nombre)').not('almacen_id', 'is', null).order('created_at', { ascending: false }).limit(50),
       supabase.from('distribuidores').select('id, nombre').eq('activo', true).order('nombre'),
-      supabase.from('deudas').select('balones_pendiente').neq('estado', 'liquidada')
+      supabase.from('deudas').select('balones_pendiente').neq('estado', 'liquidada'),
+      supabase.from('stock_por_tipo').select('*')
     ])
     const totalEnCalle = (deudasBal || []).reduce((s, d) => s + (parseInt(d.balones_pendiente) || 0), 0)
     setBalonesEnCalle(totalEnCalle)
+    setStockPorTipo(spt || [])
     // Enrich almacenes: match distribuidor almacenes with distribuidor names
     const distAlmacenes = (a || []).filter(alm => alm.nombre?.toLowerCase().includes('distribuidor') || alm.nombre?.toLowerCase().includes('dist'))
     const tiendaAlmacenes = (a || []).filter(alm => !alm.nombre?.toLowerCase().includes('distribuidor') && !alm.nombre?.toLowerCase().includes('dist'))
@@ -321,13 +324,17 @@ export default function Inventario() {
 
       {/* Stock por almacén */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {almacenes.map(a => (
+        {almacenes.map(a => {
+          const spt5 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '5kg')
+          const spt10 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '10kg')
+          const spt45 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '45kg')
+          return (
           <div key={a.id} className="stat-card border border-gray-700/50">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-8 h-8 bg-blue-500/10 rounded-lg flex items-center justify-center"><Package className="w-4 h-4 text-blue-400" /></div>
               <p className="text-gray-300 text-sm font-medium">{a.nombre}</p>
             </div>
-            <div className="flex gap-4 mt-1">
+            <div className="flex gap-3 mt-1">
               <div>
                 <p className={`text-2xl font-bold ${a.stock_actual > 100 ? 'text-emerald-400' : a.stock_actual > 30 ? 'text-yellow-400' : 'text-red-400'}`}>{a.stock_actual}</p>
                 <p className="text-xs text-gray-500">🟢 llenos</p>
@@ -337,9 +344,16 @@ export default function Inventario() {
                 <p className="text-xs text-gray-500">⚪ vacíos</p>
               </div>
             </div>
+            {/* Desglose por tipo */}
+            <div className="flex gap-2 mt-2 flex-wrap">
+              {(spt5?.stock_actual || 0) > 0 && <span className="text-xs bg-blue-900/30 text-blue-300 px-2 py-0.5 rounded-lg">🔵 5kg: {spt5.stock_actual}</span>}
+              {(spt10?.stock_actual || 0) > 0 && <span className="text-xs bg-yellow-900/30 text-yellow-300 px-2 py-0.5 rounded-lg">🟡 10kg: {spt10.stock_actual}</span>}
+              {(spt45?.stock_actual || 0) > 0 && <span className="text-xs bg-red-900/30 text-red-300 px-2 py-0.5 rounded-lg">🔴 45kg: {spt45.stock_actual}</span>}
+              {!spt5 && !spt10 && !spt45 && <span className="text-xs text-gray-600">Sin desglose por tipo</span>}
+            </div>
             <p className="text-xs text-gray-500 mt-1">Responsable: {a.responsable}</p>
           </div>
-        ))}
+        )})}
       </div>
 
       {/* Tabs */}
@@ -362,18 +376,30 @@ export default function Inventario() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr className="border-b border-gray-800">
-                {['Almacén','Responsable','🟢 Llenos','⚪ Vacíos','🔵 En calle','Estado',''].map(h => (
+                {['Almacén','Responsable','🟢 Llenos (por tipo)','⚪ Vacíos','🔵 En calle','Estado',''].map(h => (
                   <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-6 py-3">{h}</th>
                 ))}
               </tr></thead>
               <tbody className="divide-y divide-gray-800/50">
                 {almacenes.map(a => {
                   const esTienda = !a.nombre?.toLowerCase().includes('distribuidor') && !a.nombre?.toLowerCase().includes('dist')
+                  const spt5 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '5kg')
+                  const spt10 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '10kg')
+                  const spt45 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '45kg')
                   return (
                   <tr key={a.id} className="table-row-hover">
                     <td className="px-6 py-4 text-white font-medium text-sm">{a.nombre}</td>
                     <td className="px-6 py-4 text-gray-400 text-sm">{a.responsable}</td>
-                    <td className="px-6 py-4"><span className={`text-lg font-bold ${a.stock_actual > 100 ? 'text-emerald-400' : a.stock_actual > 30 ? 'text-yellow-400' : 'text-red-400'}`}>{a.stock_actual} bal.</span></td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1">
+                        <span className={`text-lg font-bold ${a.stock_actual > 100 ? 'text-emerald-400' : a.stock_actual > 30 ? 'text-yellow-400' : 'text-red-400'}`}>{a.stock_actual} bal.</span>
+                        <div className="flex gap-1 flex-wrap">
+                          {(spt5?.stock_actual || 0) > 0 && <span className="text-xs bg-blue-900/30 text-blue-300 px-1.5 py-0.5 rounded">5kg: {spt5.stock_actual}</span>}
+                          {(spt10?.stock_actual || 0) > 0 && <span className="text-xs bg-yellow-900/30 text-yellow-300 px-1.5 py-0.5 rounded">10kg: {spt10.stock_actual}</span>}
+                          {(spt45?.stock_actual || 0) > 0 && <span className="text-xs bg-red-900/30 text-red-300 px-1.5 py-0.5 rounded">45kg: {spt45.stock_actual}</span>}
+                        </div>
+                      </div>
+                    </td>
                     <td className="px-6 py-4">
                       {editVacios === a.id ? (
                         <div className="flex items-center gap-2">
