@@ -201,6 +201,21 @@ export default function Inventario() {
 
   const totalCompra = ['5kg','10kg','45kg'].reduce((s,t) => s + (parseInt(compraForm.cantidades[t])||0), 0)
 
+  const distPorAlmacen = almacenes.map(a => ({
+    ...a,
+    tipos: ['5kg','10kg','45kg'].map(tipo => {
+      const idx = compraForm.distribucion.findIndex(d => d.almacen_id === a.id && d.tipo_balon === tipo)
+      return { tipo, idx, cantidad: idx >= 0 ? (compraForm.distribucion[idx].cantidad || 0) : 0 }
+    })
+  }))
+
+  function setDistCantidad(idx, val) {
+    if (idx < 0) return
+    const dist = [...compraForm.distribucion]
+    dist[idx] = { ...dist[idx], cantidad: parseInt(val) || 0 }
+    setCompraForm(f => ({ ...f, distribucion: dist }))
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
