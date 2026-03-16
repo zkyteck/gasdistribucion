@@ -43,7 +43,8 @@ export default function Ventas() {
   const [form, setForm] = useState({
     cliente_id: '', cliente_nombre: '', es_varios: false,
     almacen_id: '', precio_tipo_id: '', tipo_balon: '10kg',
-    cantidad: '', precio_unitario: '', metodo_pago: 'efectivo', notas: ''
+    cantidad: '', precio_unitario: '', metodo_pago: 'efectivo', notas: '',
+    fecha: new Date().toISOString().split('T')[0]
   })
 
   useEffect(() => { cargar() }, [filtroFecha])
@@ -150,7 +151,7 @@ export default function Ventas() {
       almacen_id: form.almacen_id,
       precio_tipo_id: form.precio_tipo_id || null,
       tipo_balon: form.tipo_balon,
-      fecha: new Date().toISOString(),
+      fecha: form.fecha ? form.fecha + 'T12:00:00' : new Date().toISOString(),
       cantidad: parseInt(form.cantidad),
       precio_unitario: parseFloat(form.precio_unitario),
       metodo_pago: form.metodo_pago,
@@ -339,6 +340,7 @@ export default function Ventas() {
                 ))}
               </div>
             </div>
+            <div><label className="label">Fecha</label><input type="date" className="input" value={form.fecha} onChange={e => setForm(f => ({...f, fecha: e.target.value}))} /></div>
             <div><label className="label">Notas</label><input className="input" placeholder="Observaciones..." value={form.notas} onChange={e => setForm(f => ({...f, notas: e.target.value}))} /></div>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setModal(false)} className="btn-secondary flex-1">Cancelar</button>
