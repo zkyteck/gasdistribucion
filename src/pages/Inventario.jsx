@@ -191,7 +191,8 @@ export default function Inventario() {
   function iniciarDistribucion() {
     const dist = []
     almacenes.forEach(a => {
-      ;['5kg', '10kg', '45kg'].forEach(t => {
+      const tipos = ['5kg', '10kg', '45kg']
+      tipos.forEach(t => {
         dist.push({ almacen_id: a.id, nombre: a.nombre, responsable: a.responsable, tipo_balon: t, cantidad: 0 })
       })
     })
