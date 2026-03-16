@@ -604,18 +604,40 @@ export default function Inventario() {
               <button onClick={() => setEditStockAlmacen(null)} className="text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
-              <div className="bg-gray-800/50 rounded-lg p-3 text-sm flex justify-between">
-                <span className="text-gray-400">Stock actual:</span>
-                <span className="text-white font-bold">{editStockAlmacen.stock_actual} bal.</span>
-              </div>
-              <div>
-                <label className="label">Nuevo stock (balones llenos)</label>
-                <input type="number" min="0" className="input text-center text-2xl font-bold"
-                  value={editStockVal} onChange={e => setEditStockVal(e.target.value)} autoFocus />
+              <p className="text-xs text-gray-500">Ingresa el stock actual por tipo de balón:</p>
+              <div className="grid grid-cols-3 gap-3">
+                {[['5kg','🔵','blue'],['10kg','🟡','yellow'],['45kg','🔴','red']].map(([tipo, icon, color]) => {
+                  const sptVal = stockPorTipo.find(s => s.almacen_id === editStockAlmacen.id && s.tipo_balon === tipo)
+                  return (
+                    <div key={tipo} className={`bg-${color}-900/20 border border-${color}-800/40 rounded-xl p-3 text-center`}>
+                      <p className={`text-${color}-400 font-bold text-xs mb-2`}>{icon} {tipo}</p>
+                      <input type="number" min="0"
+                        className="input text-center font-bold py-2"
+                        defaultValue={sptVal?.stock_actual || 0}
+                        id={`stock-edit-${tipo}`} />
+                    </div>
+                  )
+                })}
               </div>
               <div className="flex gap-3">
                 <button onClick={() => setEditStockAlmacen(null)} className="btn-secondary flex-1">Cancelar</button>
-                <button onClick={guardarEditStock} disabled={saving} className="btn-primary flex-1 justify-center">
+                <button onClick={async () => {
+                  setSaving(true)
+                  const tipos = ['5kg','10kg','45kg']
+                  let totalNuevo = 0
+                  for (const tipo of tipos) {
+                    const val = parseInt(document.getElementById(`stock-edit-${tipo}`)?.value) || 0
+                    totalNuevo += val
+                    const existing = stockPorTipo.find(s => s.almacen_id === editStockAlmacen.id && s.tipo_balon === tipo)
+                    if (existing) {
+                      await supabase.from('stock_por_tipo').update({ stock_actual: val }).eq('id', existing.id)
+                    } else if (val > 0) {
+                      await supabase.from('stock_por_tipo').insert({ almacen_id: editStockAlmacen.id, tipo_balon: tipo, stock_actual: val })
+                    }
+                  }
+                  await supabase.from('almacenes').update({ stock_actual: totalNuevo }).eq('id', editStockAlmacen.id)
+                  setSaving(false); setEditStockAlmacen(null); cargar()
+                }} disabled={saving} className="btn-primary flex-1 justify-center">
                   {saving ? 'Guardando...' : '✓ Guardar'}
                 </button>
               </div>
