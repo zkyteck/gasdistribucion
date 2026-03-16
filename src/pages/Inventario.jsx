@@ -51,16 +51,21 @@ export default function Inventario() {
   useEffect(() => { cargar() }, [])
 
 
+  const [balonesEnCalle, setBalonesEnCalle] = useState(0)
+
   async function cargar() {
     setLoading(true)
-    const [{ data: a }, { data: p }, { data: m }, { data: c }, { data: mv }, { data: dl }] = await Promise.all([
+    const [{ data: a }, { data: p }, { data: m }, { data: c }, { data: mv }, { data: dl }, { data: deudasBal }] = await Promise.all([
       supabase.from('almacenes').select('*').eq('activo', true).order('nombre'),
       supabase.from('proveedores').select('*').eq('activo', true),
       supabase.from('marcas_gas').select('*').eq('activo', true).order('nombre'),
       supabase.from('compras').select('*, proveedores(nombre), marcas_gas(nombre)').order('fecha', { ascending: false }).limit(30),
       supabase.from('movimientos_stock').select('*, almacenes(nombre)').not('almacen_id', 'is', null).order('created_at', { ascending: false }).limit(30),
-      supabase.from('distribuidores').select('id, nombre').eq('activo', true).order('nombre')
+      supabase.from('distribuidores').select('id, nombre').eq('activo', true).order('nombre'),
+      supabase.from('deudas').select('balones_pendiente').neq('estado', 'liquidada')
     ])
+    const totalEnCalle = (deudasBal || []).reduce((s, d) => s + (parseInt(d.balones_pendiente) || 0), 0)
+    setBalonesEnCalle(totalEnCalle)
     // Enrich almacenes: match distribuidor almacenes with distribuidor names
     const distAlmacenes = (a || []).filter(alm => alm.nombre?.toLowerCase().includes('distribuidor') || alm.nombre?.toLowerCase().includes('dist'))
     const tiendaAlmacenes = (a || []).filter(alm => !alm.nombre?.toLowerCase().includes('distribuidor') && !alm.nombre?.toLowerCase().includes('dist'))
@@ -292,12 +297,14 @@ export default function Inventario() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead><tr className="border-b border-gray-800">
-                {['Almacén','Responsable','🟢 Llenos','⚪ Vacíos','Estado',''].map(h => (
+                {['Almacén','Responsable','🟢 Llenos','⚪ Vacíos','🔵 En calle','Estado',''].map(h => (
                   <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-6 py-3">{h}</th>
                 ))}
               </tr></thead>
               <tbody className="divide-y divide-gray-800/50">
-                {almacenes.map(a => (
+                {almacenes.map(a => {
+                  const esTienda = !a.nombre?.toLowerCase().includes('distribuidor') && !a.nombre?.toLowerCase().includes('dist')
+                  return (
                   <tr key={a.id} className="table-row-hover">
                     <td className="px-6 py-4 text-white font-medium text-sm">{a.nombre}</td>
                     <td className="px-6 py-4 text-gray-400 text-sm">{a.responsable}</td>
@@ -320,6 +327,13 @@ export default function Inventario() {
                         <span className="text-gray-300 font-bold text-lg">{a.balones_vacios || 0} bal.</span>
                       )}
                     </td>
+                    <td className="px-6 py-4">
+                      {esTienda ? (
+                        <span className="text-orange-400 font-bold text-lg">{balonesEnCalle} bal.</span>
+                      ) : (
+                        <span className="text-gray-600 text-sm">—</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4"><span className={a.stock_actual > 50 ? 'badge-green' : a.stock_actual > 10 ? 'badge-yellow' : 'badge-red'}>{a.stock_actual > 50 ? 'Bien' : a.stock_actual > 10 ? 'Bajo' : 'Crítico'}</span></td>
                     <td className="px-6 py-4">
                       <button onClick={() => { setEditVacios(a.id); setEditVaciosVal(a.balones_vacios || 0) }}
@@ -328,7 +342,7 @@ export default function Inventario() {
                       </button>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>
