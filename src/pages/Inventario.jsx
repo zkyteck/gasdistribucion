@@ -31,12 +31,12 @@ export default function Inventario() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [tab, setTab] = useState('stock')
-  const [editVacios, setEditVacios] = useState(null) // almacen id
-  const [editVaciosVal, setEditVaciosVal] = useState(0)
+  const [editVacios, setEditVacios] = useState(null) // almacen object
+  const [editVaciosVal, setEditVaciosVal] = useState({ '5kg': 0, '10kg': 0, '45kg': 0 })
   const [editStockAlmacen, setEditStockAlmacen] = useState(null)
   const [editStockVal, setEditStockVal] = useState(0)
   const [movimientoForm, setMovimientoForm] = useState({ origen_id: '', destino_id: '', cantidad: '', tipo_balon: '10kg', notas: '', fecha: new Date().toISOString().split('T')[0] })
-  const [vaciosForm, setVaciosForm] = useState({ almacen_id: '', cantidad: '', notas: '', fecha: new Date().toISOString().split('T')[0] })
+  const [vaciosForm, setVaciosForm] = useState({ almacen_id: '', cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, notas: '', fecha: new Date().toISOString().split('T')[0] })
 
   // Ganancias
   const [quickModal, setQuickModal] = useState(null) // 'marca' | 'proveedor'
@@ -224,17 +224,26 @@ export default function Inventario() {
   }
 
   async function guardarVacios() {
-    if (!vaciosForm.almacen_id || !vaciosForm.cantidad) { setError('Completa todos los campos'); return }
-    const cant = parseInt(vaciosForm.cantidad) || 0
+    if (!vaciosForm.almacen_id) { setError('Selecciona un almacén'); return }
+    const total = Object.values(vaciosForm.cantidades).reduce((s, v) => s + (parseInt(v) || 0), 0)
+    if (total === 0) { setError('Ingresa al menos una cantidad'); return }
     const alm = almacenes.find(a => a.id === vaciosForm.almacen_id)
     setSaving(true); setError('')
-    await supabase.from('almacenes').update({ balones_vacios: (alm?.balones_vacios || 0) + cant }).eq('id', vaciosForm.almacen_id)
+    const v5 = parseInt(vaciosForm.cantidades['5kg']) || 0
+    const v10 = parseInt(vaciosForm.cantidades['10kg']) || 0
+    const v45 = parseInt(vaciosForm.cantidades['45kg']) || 0
+    await supabase.from('almacenes').update({
+      balones_vacios: (alm?.balones_vacios || 0) + total,
+      vacios_5kg: (alm?.vacios_5kg || 0) + v5,
+      vacios_10kg: (alm?.vacios_10kg || 0) + v10,
+      vacios_45kg: (alm?.vacios_45kg || 0) + v45,
+    }).eq('id', vaciosForm.almacen_id)
     await supabase.from('movimientos_stock').insert({
       almacen_id: vaciosForm.almacen_id, tipo: 'entrada_vacios',
-      cantidad: cant, notas: vaciosForm.notas || null, fecha: vaciosForm.fecha
+      cantidad: total, notas: vaciosForm.notas || null, fecha: vaciosForm.fecha
     })
     setSaving(false); setModal(null)
-    setVaciosForm({ almacen_id: '', cantidad: '', notas: '', fecha: new Date().toISOString().split('T')[0] })
+    setVaciosForm({ almacen_id: '', cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, notas: '', fecha: new Date().toISOString().split('T')[0] })
     cargar()
   }
 
@@ -344,13 +353,20 @@ export default function Inventario() {
                 <p className="text-xs text-gray-500">⚪ vacíos</p>
               </div>
             </div>
-            {/* Desglose por tipo */}
-            <div className="flex gap-2 mt-2 flex-wrap">
+            {/* Desglose llenos por tipo */}
+            <div className="flex gap-2 mt-1 flex-wrap">
               {(spt5?.stock_actual || 0) > 0 && <span className="text-xs bg-blue-900/30 text-blue-300 px-2 py-0.5 rounded-lg">🔵 5kg: {spt5.stock_actual}</span>}
               {(spt10?.stock_actual || 0) > 0 && <span className="text-xs bg-yellow-900/30 text-yellow-300 px-2 py-0.5 rounded-lg">🟡 10kg: {spt10.stock_actual}</span>}
               {(spt45?.stock_actual || 0) > 0 && <span className="text-xs bg-red-900/30 text-red-300 px-2 py-0.5 rounded-lg">🔴 45kg: {spt45.stock_actual}</span>}
-              {!spt5 && !spt10 && !spt45 && <span className="text-xs text-gray-600">Sin desglose por tipo</span>}
             </div>
+            {/* Desglose vacíos por tipo */}
+            {(a.balones_vacios || 0) > 0 && (
+              <div className="flex gap-2 mt-1 flex-wrap">
+                {(a.vacios_5kg || 0) > 0 && <span className="text-xs bg-gray-700/50 text-gray-400 px-2 py-0.5 rounded-lg">⚪ 5kg: {a.vacios_5kg}</span>}
+                {(a.vacios_10kg || 0) > 0 && <span className="text-xs bg-gray-700/50 text-gray-400 px-2 py-0.5 rounded-lg">⚪ 10kg: {a.vacios_10kg}</span>}
+                {(a.vacios_45kg || 0) > 0 && <span className="text-xs bg-gray-700/50 text-gray-400 px-2 py-0.5 rounded-lg">⚪ 45kg: {a.vacios_45kg}</span>}
+              </div>
+            )}
             <p className="text-xs text-gray-500 mt-1">Responsable: {a.responsable}</p>
           </div>
         )})}
@@ -401,21 +417,43 @@ export default function Inventario() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      {editVacios === a.id ? (
-                        <div className="flex items-center gap-2">
-                          <input type="number" min="0" className="input w-20 py-1 text-sm text-center"
-                            value={editVaciosVal}
-                            onChange={e => setEditVaciosVal(e.target.value)}
-                            autoFocus
-                          />
-                          <button onClick={async () => {
-                            await supabase.from('almacenes').update({ balones_vacios: parseInt(editVaciosVal) || 0 }).eq('id', a.id)
-                            setEditVacios(null); cargar()
-                          }} className="text-xs bg-emerald-600/30 border border-emerald-600/40 text-emerald-400 px-2 py-1 rounded-lg">✓</button>
-                          <button onClick={() => setEditVacios(null)} className="text-xs text-gray-500 hover:text-gray-300 px-1">✕</button>
+                      {editVacios?.id === a.id ? (
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-3 gap-1">
+                            {[['5kg','blue'],['10kg','yellow'],['45kg','red']].map(([tipo, color]) => (
+                              <div key={tipo} className="text-center">
+                                <p className="text-xs text-gray-500 mb-1">{tipo}</p>
+                                <input type="number" min="0" className="input text-center text-sm py-1 px-1"
+                                  value={editVaciosVal[tipo]}
+                                  onChange={e => setEditVaciosVal(v => ({...v, [tipo]: parseInt(e.target.value)||0}))} />
+                              </div>
+                            ))}
+                          </div>
+                          <div className="flex gap-1">
+                            <button onClick={async () => {
+                              const total = Object.values(editVaciosVal).reduce((s,v) => s+(v||0), 0)
+                              await supabase.from('almacenes').update({
+                                balones_vacios: total,
+                                vacios_5kg: editVaciosVal['5kg'] || 0,
+                                vacios_10kg: editVaciosVal['10kg'] || 0,
+                                vacios_45kg: editVaciosVal['45kg'] || 0,
+                              }).eq('id', a.id)
+                              setEditVacios(null); cargar()
+                            }} className="text-xs bg-emerald-600/30 border border-emerald-600/40 text-emerald-400 px-2 py-1 rounded-lg flex-1">✓</button>
+                            <button onClick={() => setEditVacios(null)} className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1 border border-gray-700 rounded-lg">✕</button>
+                          </div>
                         </div>
                       ) : (
-                        <span className="text-gray-300 font-bold text-lg">{a.balones_vacios || 0} bal.</span>
+                        <div>
+                          <span className="text-gray-300 font-bold text-lg">{a.balones_vacios || 0} bal.</span>
+                          {(a.balones_vacios || 0) > 0 && (
+                            <div className="flex gap-1 mt-1 flex-wrap">
+                              {(a.vacios_5kg||0) > 0 && <span className="text-xs text-gray-500">5kg:{a.vacios_5kg}</span>}
+                              {(a.vacios_10kg||0) > 0 && <span className="text-xs text-gray-500">10kg:{a.vacios_10kg}</span>}
+                              {(a.vacios_45kg||0) > 0 && <span className="text-xs text-gray-500">45kg:{a.vacios_45kg}</span>}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="px-6 py-4">
@@ -428,7 +466,7 @@ export default function Inventario() {
                     <td className="px-6 py-4"><span className={a.stock_actual > 50 ? 'badge-green' : a.stock_actual > 10 ? 'badge-yellow' : 'badge-red'}>{a.stock_actual > 50 ? 'Bien' : a.stock_actual > 10 ? 'Bajo' : 'Crítico'}</span></td>
                     <td className="px-6 py-4">
                       <div className="flex gap-1">
-                        <button onClick={() => { setEditVacios(a.id); setEditVaciosVal(a.balones_vacios || 0) }}
+                        <button onClick={() => { setEditVacios(a); setEditVaciosVal({ '5kg': a.vacios_5kg||0, '10kg': a.vacios_10kg||0, '45kg': a.vacios_45kg||0 }) }}
                           className="text-gray-500 hover:text-blue-400 transition-colors p-1" title="Editar vacíos">
                           <Edit2 className="w-4 h-4" />
                         </button>
@@ -710,9 +748,23 @@ export default function Inventario() {
               </select>
             </div>
             <div>
-              <label className="label">Cantidad de vacíos recibidos</label>
-              <input type="number" min="1" className="input text-center text-2xl font-bold py-3"
-                value={vaciosForm.cantidad} onChange={e => setVaciosForm(f => ({...f, cantidad: e.target.value}))} placeholder="0" />
+              <label className="label">Cantidad por tipo de balón</label>
+              <div className="grid grid-cols-3 gap-3">
+                {[['5kg','🔵','blue'],['10kg','🟡','yellow'],['45kg','🔴','red']].map(([tipo, icon, color]) => (
+                  <div key={tipo} className={`bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-center`}>
+                    <p className="text-gray-300 font-bold text-xs mb-2">{icon} {tipo}</p>
+                    <input type="number" min="0" className="input text-center font-bold py-2"
+                      value={vaciosForm.cantidades[tipo] || ''}
+                      placeholder="0"
+                      onChange={e => setVaciosForm(f => ({...f, cantidades: {...f.cantidades, [tipo]: parseInt(e.target.value)||0}}))} />
+                  </div>
+                ))}
+              </div>
+              {Object.values(vaciosForm.cantidades).reduce((s,v) => s+(parseInt(v)||0), 0) > 0 && (
+                <p className="text-xs text-gray-400 mt-2 text-right">
+                  Total: <span className="text-white font-bold">{Object.values(vaciosForm.cantidades).reduce((s,v) => s+(parseInt(v)||0), 0)} bal.</span>
+                </p>
+              )}
             </div>
             <div><label className="label">Fecha</label>
               <input type="date" className="input" value={vaciosForm.fecha} onChange={e => setVaciosForm(f => ({...f, fecha: e.target.value}))} /></div>
