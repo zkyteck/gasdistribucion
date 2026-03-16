@@ -33,6 +33,10 @@ export default function Inventario() {
   const [tab, setTab] = useState('stock')
   const [editVacios, setEditVacios] = useState(null) // almacen id
   const [editVaciosVal, setEditVaciosVal] = useState(0)
+  const [editStockAlmacen, setEditStockAlmacen] = useState(null)
+  const [editStockVal, setEditStockVal] = useState(0)
+  const [movimientoForm, setMovimientoForm] = useState({ origen_id: '', destino_id: '', cantidad: '', tipo_balon: '10kg', notas: '', fecha: new Date().toISOString().split('T')[0] })
+  const [vaciosForm, setVaciosForm] = useState({ almacen_id: '', cantidad: '', notas: '', fecha: new Date().toISOString().split('T')[0] })
 
   // Ganancias
   const [quickModal, setQuickModal] = useState(null) // 'marca' | 'proveedor'
@@ -60,7 +64,7 @@ export default function Inventario() {
       supabase.from('proveedores').select('*').eq('activo', true),
       supabase.from('marcas_gas').select('*').eq('activo', true).order('nombre'),
       supabase.from('compras').select('*, proveedores(nombre), marcas_gas(nombre)').order('fecha', { ascending: false }).limit(30),
-      supabase.from('movimientos_stock').select('*, almacenes(nombre)').not('almacen_id', 'is', null).order('created_at', { ascending: false }).limit(30),
+      supabase.from('movimientos_stock').select('*, almacenes(nombre)').not('almacen_id', 'is', null).order('created_at', { ascending: false }).limit(50),
       supabase.from('distribuidores').select('id, nombre').eq('activo', true).order('nombre'),
       supabase.from('deudas').select('balones_pendiente').neq('estado', 'liquidada')
     ])
@@ -193,6 +197,55 @@ export default function Inventario() {
     cargar()
   }
 
+  async function guardarMovimiento() {
+    if (!movimientoForm.origen_id || !movimientoForm.destino_id || !movimientoForm.cantidad) { setError('Completa todos los campos'); return }
+    if (movimientoForm.origen_id === movimientoForm.destino_id) { setError('Origen y destino deben ser distintos'); return }
+    const cant = parseInt(movimientoForm.cantidad) || 0
+    const origen = almacenes.find(a => a.id === movimientoForm.origen_id)
+    if (origen && origen.stock_actual < cant) { setError(`Stock insuficiente. Disponible: ${origen.stock_actual} bal.`); return }
+    setSaving(true); setError('')
+    await supabase.from('almacenes').update({ stock_actual: (origen?.stock_actual || 0) - cant }).eq('id', movimientoForm.origen_id)
+    const destino = almacenes.find(a => a.id === movimientoForm.destino_id)
+    await supabase.from('almacenes').update({ stock_actual: (destino?.stock_actual || 0) + cant }).eq('id', movimientoForm.destino_id)
+    await supabase.from('movimientos_stock').insert({
+      almacen_id: movimientoForm.origen_id,
+      almacen_destino_id: movimientoForm.destino_id,
+      tipo: 'traslado', cantidad: cant,
+      tipo_balon: movimientoForm.tipo_balon,
+      notas: movimientoForm.notas || null,
+      fecha: movimientoForm.fecha
+    })
+    setSaving(false); setModal(null)
+    setMovimientoForm({ origen_id: '', destino_id: '', cantidad: '', tipo_balon: '10kg', notas: '', fecha: new Date().toISOString().split('T')[0] })
+    cargar()
+  }
+
+  async function guardarVacios() {
+    if (!vaciosForm.almacen_id || !vaciosForm.cantidad) { setError('Completa todos los campos'); return }
+    const cant = parseInt(vaciosForm.cantidad) || 0
+    const alm = almacenes.find(a => a.id === vaciosForm.almacen_id)
+    setSaving(true); setError('')
+    await supabase.from('almacenes').update({ balones_vacios: (alm?.balones_vacios || 0) + cant }).eq('id', vaciosForm.almacen_id)
+    await supabase.from('movimientos_stock').insert({
+      almacen_id: vaciosForm.almacen_id, tipo: 'entrada_vacios',
+      cantidad: cant, notas: vaciosForm.notas || null, fecha: vaciosForm.fecha
+    })
+    setSaving(false); setModal(null)
+    setVaciosForm({ almacen_id: '', cantidad: '', notas: '', fecha: new Date().toISOString().split('T')[0] })
+    cargar()
+  }
+
+  async function guardarEditStock() {
+    if (!editStockAlmacen) return
+    setSaving(true)
+    await supabase.from('almacenes').update({ stock_actual: parseInt(editStockVal) || 0 }).eq('id', editStockAlmacen.id)
+    await supabase.from('movimientos_stock').insert({
+      almacen_id: editStockAlmacen.id, tipo: 'ajuste_manual',
+      cantidad: parseInt(editStockVal) || 0, notas: 'Ajuste manual de stock'
+    })
+    setSaving(false); setEditStockAlmacen(null); cargar()
+  }
+
   function iniciarDistribucion() {
     const dist = []
     almacenes.forEach(a => {
@@ -254,6 +307,18 @@ export default function Inventario() {
         </button>
       </div>
 
+      {/* Botones de acción secundarios */}
+      <div className="flex gap-2 flex-wrap">
+        <button onClick={() => { setError(''); setMovimientoForm({ origen_id: '', destino_id: '', cantidad: '', tipo_balon: '10kg', notas: '', fecha: new Date().toISOString().split('T')[0] }); setModal('movimiento') }}
+          className="btn-secondary text-xs">
+          🔄 Mover entre almacenes
+        </button>
+        <button onClick={() => { setError(''); setVaciosForm({ almacen_id: '', cantidad: '', notas: '', fecha: new Date().toISOString().split('T')[0] }); setModal('vacios') }}
+          className="btn-secondary text-xs">
+          ⚪ Registrar vacíos recibidos
+        </button>
+      </div>
+
       {/* Stock por almacén */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {almacenes.map(a => (
@@ -278,10 +343,10 @@ export default function Inventario() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-800">
-        {[['stock','📦 Stock'],['compras','🛒 Compras'],['historial','📋 Historial']].map(([key, label]) => (
+      <div className="flex gap-2 border-b border-gray-800 overflow-x-auto">
+        {[['stock','📦 Stock'],['compras','🛒 Compras'],['movimientos','🔄 Movimientos'],['historial','📋 Historial']].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-all ${tab === key ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${tab === key ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
             {label}
           </button>
         ))}
@@ -336,10 +401,16 @@ export default function Inventario() {
                     </td>
                     <td className="px-6 py-4"><span className={a.stock_actual > 50 ? 'badge-green' : a.stock_actual > 10 ? 'badge-yellow' : 'badge-red'}>{a.stock_actual > 50 ? 'Bien' : a.stock_actual > 10 ? 'Bajo' : 'Crítico'}</span></td>
                     <td className="px-6 py-4">
-                      <button onClick={() => { setEditVacios(a.id); setEditVaciosVal(a.balones_vacios || 0) }}
-                        className="text-gray-500 hover:text-blue-400 transition-colors p-1" title="Editar vacíos">
-                        <Edit2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex gap-1">
+                        <button onClick={() => { setEditVacios(a.id); setEditVaciosVal(a.balones_vacios || 0) }}
+                          className="text-gray-500 hover:text-blue-400 transition-colors p-1" title="Editar vacíos">
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => { setEditStockAlmacen(a); setEditStockVal(a.stock_actual || 0) }}
+                          className="text-gray-500 hover:text-emerald-400 transition-colors p-1" title="Editar stock llenos">
+                          <Package className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )})}
@@ -411,27 +482,74 @@ export default function Inventario() {
       )}
 
       {/* Tab: GANANCIAS */}
+      {/* Tab: Movimientos entre almacenes */}
+      {tab === 'movimientos' && (
+        <div className="card p-0 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-white">Movimientos entre almacenes</h3>
+            <button onClick={() => { setError(''); setMovimientoForm({ origen_id: '', destino_id: '', cantidad: '', tipo_balon: '10kg', notas: '', fecha: new Date().toISOString().split('T')[0] }); setModal('movimiento') }}
+              className="btn-primary text-xs py-1.5">
+              <Plus className="w-3.5 h-3.5" />Nuevo movimiento
+            </button>
+          </div>
+          {movimientos.filter(m => m.tipo === 'traslado').length === 0 ? (
+            <div className="flex items-center justify-center h-32 text-gray-500 text-sm">Sin movimientos registrados</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead><tr className="border-b border-gray-800">
+                  {['Fecha','Origen','Destino','Cantidad','Tipo balón','Notas'].map(h => (
+                    <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-6 py-3">{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody className="divide-y divide-gray-800/50">
+                  {movimientos.filter(m => m.tipo === 'traslado').map(m => (
+                    <tr key={m.id} className="table-row-hover">
+                      <td className="px-6 py-4 text-gray-400 text-xs">{m.fecha ? format(new Date(m.fecha + 'T12:00:00'), 'dd/MM/yyyy', { locale: es }) : format(new Date(m.created_at), 'dd/MM/yy', { locale: es })}</td>
+                      <td className="px-6 py-4 text-white text-sm">{almacenes.find(a => a.id === m.almacen_id)?.nombre || '-'}</td>
+                      <td className="px-6 py-4 text-emerald-400 text-sm">{almacenes.find(a => a.id === m.almacen_destino_id)?.nombre || '-'}</td>
+                      <td className="px-6 py-4 text-yellow-400 font-bold">{m.cantidad} bal.</td>
+                      <td className="px-6 py-4 text-gray-400 text-sm">{m.tipo_balon || '10kg'}</td>
+                      <td className="px-6 py-4 text-gray-500 text-xs">{m.notas || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Tab: Historial */}
       {tab === 'historial' && (
         <div className="card p-0 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-800"><h3 className="text-sm font-semibold text-white">Movimientos de stock</h3></div>
+          <div className="px-6 py-4 border-b border-gray-800"><h3 className="text-sm font-semibold text-white">Todos los movimientos</h3></div>
           {movimientos.length === 0 ? <div className="flex items-center justify-center h-32 text-gray-500 text-sm">Sin movimientos</div> : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="border-b border-gray-800">
-                  {['Fecha','Almacén','Tipo','Cantidad','Antes','Después','Notas',''].map(h => (
+                  {['Fecha','Almacén','Tipo','Cantidad','Notas',''].map(h => (
                     <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-6 py-3">{h}</th>
                   ))}
                 </tr></thead>
                 <tbody className="divide-y divide-gray-800/50">
                   {movimientos.map(m => (
                     <tr key={m.id} className="table-row-hover">
-                      <td className="px-6 py-4 text-gray-500 text-xs">{format(new Date(m.created_at), 'dd/MM/yy HH:mm', { locale: es })}</td>
+                      <td className="px-6 py-4 text-gray-400 text-xs">{format(new Date(m.created_at), 'dd/MM/yy HH:mm', { locale: es })}</td>
                       <td className="px-6 py-4 text-gray-300 text-sm">{m.almacenes?.nombre || '-'}</td>
-                      <td className="px-6 py-4"><span className="badge-blue capitalize">{m.tipo_movimiento.replace(/_/g,' ')}</span></td>
-                      <td className="px-6 py-4"><span className={`font-bold text-sm ${m.cantidad > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{m.cantidad > 0 ? '+' : ''}{m.cantidad}</span></td>
-                      <td className="px-6 py-4 text-gray-500 text-sm">{m.stock_anterior}</td>
-                      <td className="px-6 py-4 text-white font-semibold text-sm">{m.stock_nuevo}</td>
+                      <td className="px-6 py-4">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          m.tipo === 'traslado' ? 'bg-blue-900/40 text-blue-300' :
+                          m.tipo === 'entrada_vacios' ? 'bg-gray-700 text-gray-300' :
+                          m.tipo === 'ajuste_manual' ? 'bg-yellow-900/40 text-yellow-300' :
+                          'bg-emerald-900/40 text-emerald-300'
+                        }`}>
+                          {m.tipo === 'traslado' ? '🔄 Traslado' :
+                           m.tipo === 'entrada_vacios' ? '⚪ Vacíos' :
+                           m.tipo === 'ajuste_manual' ? '✏️ Ajuste' : m.tipo || 'movimiento'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-white font-bold text-sm">{m.cantidad} bal.</td>
                       <td className="px-6 py-4 text-gray-500 text-xs">{m.notas || '-'}</td>
                       <td className="px-6 py-4">
                         <button onClick={() => eliminarMovimiento(m.id)}
@@ -446,6 +564,120 @@ export default function Inventario() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Modal editar stock manual */}
+      {editStockAlmacen && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+              <div>
+                <h3 className="text-white font-semibold text-sm">✏️ Editar stock llenos</h3>
+                <p className="text-gray-500 text-xs mt-0.5">{editStockAlmacen.nombre}</p>
+              </div>
+              <button onClick={() => setEditStockAlmacen(null)} className="text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="bg-gray-800/50 rounded-lg p-3 text-sm flex justify-between">
+                <span className="text-gray-400">Stock actual:</span>
+                <span className="text-white font-bold">{editStockAlmacen.stock_actual} bal.</span>
+              </div>
+              <div>
+                <label className="label">Nuevo stock (balones llenos)</label>
+                <input type="number" min="0" className="input text-center text-2xl font-bold"
+                  value={editStockVal} onChange={e => setEditStockVal(e.target.value)} autoFocus />
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setEditStockAlmacen(null)} className="btn-secondary flex-1">Cancelar</button>
+                <button onClick={guardarEditStock} disabled={saving} className="btn-primary flex-1 justify-center">
+                  {saving ? 'Guardando...' : '✓ Guardar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal mover entre almacenes */}
+      {modal === 'movimiento' && (
+        <Modal title="🔄 Mover balones entre almacenes" onClose={() => setModal(null)}>
+          <div className="space-y-4">
+            {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
+            <div>
+              <label className="label">Almacén origen</label>
+              <select className="input" value={movimientoForm.origen_id} onChange={e => setMovimientoForm(f => ({...f, origen_id: e.target.value}))}>
+                <option value="">Seleccionar...</option>
+                {almacenes.map(a => <option key={a.id} value={a.id}>{a.nombre} ({a.stock_actual} bal.)</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Almacén destino</label>
+              <select className="input" value={movimientoForm.destino_id} onChange={e => setMovimientoForm(f => ({...f, destino_id: e.target.value}))}>
+                <option value="">Seleccionar...</option>
+                {almacenes.filter(a => a.id !== movimientoForm.origen_id).map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Cantidad</label>
+                <input type="number" min="1" className="input" placeholder="0"
+                  value={movimientoForm.cantidad} onChange={e => setMovimientoForm(f => ({...f, cantidad: e.target.value}))} />
+              </div>
+              <div>
+                <label className="label">Tipo balón</label>
+                <div className="flex gap-1 mt-1">
+                  {['5kg','10kg','45kg'].map(t => (
+                    <button key={t} type="button" onClick={() => setMovimientoForm(f => ({...f, tipo_balon: t}))}
+                      className={`flex-1 py-2 rounded-lg text-xs font-medium border transition-all ${movimientoForm.tipo_balon === t ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'border-gray-700 text-gray-500'}`}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div><label className="label">Fecha</label>
+              <input type="date" className="input" value={movimientoForm.fecha} onChange={e => setMovimientoForm(f => ({...f, fecha: e.target.value}))} /></div>
+            <div><label className="label">Notas (opcional)</label>
+              <input className="input" placeholder="Motivo del traslado..." value={movimientoForm.notas} onChange={e => setMovimientoForm(f => ({...f, notas: e.target.value}))} /></div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setModal(null)} className="btn-secondary flex-1">Cancelar</button>
+              <button onClick={guardarMovimiento} disabled={saving} className="btn-primary flex-1 justify-center">
+                {saving ? 'Guardando...' : '✓ Registrar movimiento'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal registrar vacíos recibidos */}
+      {modal === 'vacios' && (
+        <Modal title="⚪ Registrar balones vacíos recibidos" onClose={() => setModal(null)}>
+          <div className="space-y-4">
+            {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
+            <div>
+              <label className="label">Almacén</label>
+              <select className="input" value={vaciosForm.almacen_id} onChange={e => setVaciosForm(f => ({...f, almacen_id: e.target.value}))}>
+                <option value="">Seleccionar...</option>
+                {almacenes.map(a => <option key={a.id} value={a.id}>{a.nombre} ({a.balones_vacios || 0} vacíos)</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">Cantidad de vacíos recibidos</label>
+              <input type="number" min="1" className="input text-center text-2xl font-bold py-3"
+                value={vaciosForm.cantidad} onChange={e => setVaciosForm(f => ({...f, cantidad: e.target.value}))} placeholder="0" />
+            </div>
+            <div><label className="label">Fecha</label>
+              <input type="date" className="input" value={vaciosForm.fecha} onChange={e => setVaciosForm(f => ({...f, fecha: e.target.value}))} /></div>
+            <div><label className="label">Notas (opcional)</label>
+              <input className="input" placeholder="De quién se recibieron..." value={vaciosForm.notas} onChange={e => setVaciosForm(f => ({...f, notas: e.target.value}))} /></div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setModal(null)} className="btn-secondary flex-1">Cancelar</button>
+              <button onClick={guardarVacios} disabled={saving} className="btn-primary flex-1 justify-center">
+                {saving ? 'Guardando...' : '✓ Registrar vacíos'}
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {/* Modal compra */}
