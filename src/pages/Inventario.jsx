@@ -188,6 +188,15 @@ export default function Inventario() {
     cargar()
   }
 
+  function iniciarDistribucion() {
+    const dist = []
+    almacenes.forEach(a => {
+      ;['5kg', '10kg', '45kg'].forEach(t => {
+        dist.push({ almacen_id: a.id, nombre: a.nombre, responsable: a.responsable, tipo_balon: t, cantidad: 0 })
+      })
+    })
+    setCompraForm(f => ({ ...f, distribucion: dist }))
+  }
 
   return (
     <div className="space-y-6">
