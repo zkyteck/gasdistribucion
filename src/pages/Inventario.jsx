@@ -202,6 +202,10 @@ export default function Inventario() {
   const totalCompra = ['5kg','10kg','45kg'].reduce((s,t) => s + (parseInt(compraForm.cantidades[t])||0), 0)
 
   return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-white">Inventario</h2>
           <p className="text-gray-500 text-sm">Compras, stock e historial</p>
         </div>
         <button onClick={() => { iniciarDistribucion(); setError(''); setModal('compra') }} className="btn-primary">
