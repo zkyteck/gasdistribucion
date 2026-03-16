@@ -216,6 +216,27 @@ export default function Inventario() {
     setCompraForm(f => ({ ...f, distribucion: dist }))
   }
 
+  const distribOk = totalCompra === 0 || ['5kg','10kg','45kg'].every(t => {
+    const comp = parseInt(compraForm.cantidades[t]) || 0
+    const dist = compraForm.distribucion.filter(d => d.tipo_balon === t).reduce((s,d) => s + (d.cantidad||0), 0)
+    return dist === comp
+  })
+
+  async function guardarQuick() {
+    if (!quickNombre.trim()) return
+    setSavingQuick(true)
+    if (quickModal === 'marca') {
+      const { data } = await supabase.from('marcas_gas').insert({ nombre: quickNombre.trim(), activo: true }).select().single()
+      if (data) setCompraForm(f => ({ ...f, marca_id: data.id }))
+    } else {
+      const { data } = await supabase.from('proveedores').insert({ nombre: quickNombre.trim(), telefono: quickTel.trim() || null, activo: true }).select().single()
+      if (data) setCompraForm(f => ({ ...f, proveedor_id: data.id }))
+    }
+    setSavingQuick(false)
+    setQuickModal(null)
+    cargar()
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
