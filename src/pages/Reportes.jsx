@@ -421,7 +421,7 @@ async function calcularGanancias() {
                   S/ {(vistaFin === 'ingreso' ? finData.ingTotal : finData.ganTotal).toFixed(2)}
                 </p>
                 {vistaFin === 'ganancia' && (
-                  <p className="text-emerald-400/70 text-sm mt-1">{finData.margen.toFixed(1)}% margen · costo prom. S/{finData.costoPromedio.toFixed(2)}/bal.</p>
+                  <p className="text-emerald-400/70 text-sm mt-1">{finData.margen.toFixed(1)}% margen · costo prom. S/{finData.costoPromedio?.toFixed(2) ?? "0.00"}/bal.</p>
                 )}
               </div>
               <div className="flex gap-8 text-center">
@@ -475,7 +475,7 @@ async function calcularGanancias() {
                 <p className="text-xs font-semibold text-gray-400 uppercase mb-3">Por distribuidor</p>
                 <div className="space-y-2">
                   {Object.entries(finData.porDist).map(([nombre, d]) => {
-                    const val = vistaFin === 'ingreso' ? d.ingreso : d.ingreso - d.balones * finData.costoPromedio
+                    const val = vistaFin === 'ingreso' ? d.ingreso : d.ingreso - d.balones * (finData.costoPromedio||0)
                     const pct = finData.ingDist > 0 ? (d.ingreso / finData.ingDist) * 100 : 0
                     return (
                       <div key={nombre} className="bg-gray-800/40 rounded-xl px-4 py-3">
@@ -506,7 +506,7 @@ async function calcularGanancias() {
                   ? <p className="text-gray-600 text-sm text-center py-4">Sin ventas</p>
                   : <div className="space-y-2">
                     {Object.entries(finData.porPago).sort((a,b) => b[1].ingreso - a[1].ingreso).map(([tipo, d], i) => {
-                      const val = vistaFin === 'ingreso' ? d.ingreso : d.ingreso - d.count * finData.costoPromedio
+                      const val = vistaFin === 'ingreso' ? d.ingreso : d.ingreso - d.count * (finData.costoPromedio||0)
                       const maxVal = Math.max(...Object.values(finData.porPago).map(x => x.ingreso))
                       const pct = maxVal > 0 ? (d.ingreso / maxVal) * 100 : 0
                       return (
@@ -530,7 +530,7 @@ async function calcularGanancias() {
                   ? <p className="text-gray-600 text-sm text-center py-4">Sin ventas</p>
                   : <div className="space-y-2">
                     {Object.entries(finData.porBalon).sort((a,b) => b[1].ingreso - a[1].ingreso).map(([tipo, d], i) => {
-                      const val = vistaFin === 'ingreso' ? d.ingreso : d.ingreso - d.count * finData.costoPromedio
+                      const val = vistaFin === 'ingreso' ? d.ingreso : d.ingreso - d.count * (finData.costoPromedio||0)
                       const maxVal = Math.max(...Object.values(finData.porBalon).map(x => x.ingreso))
                       const pct = maxVal > 0 ? (d.ingreso / maxVal) * 100 : 0
                       return (
@@ -740,17 +740,17 @@ async function calcularGanancias() {
               <div className="bg-gradient-to-r from-emerald-900/30 to-blue-900/30 border border-emerald-500/30 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div>
                   <p className="text-gray-400 text-sm">Ganancia bruta total (tienda + distribuidores)</p>
-                  <p className="text-4xl font-bold text-emerald-400 mt-1">S/ {gananciasData.gananciaTotalBruta.toFixed(2)}</p>
-                  <p className="text-emerald-400/70 text-sm mt-1">{gananciasData.margenTotal.toFixed(1)}% margen sobre S/ {gananciasData.totalGeneral.toFixed(2)} vendido</p>
+                  <p className="text-4xl font-bold text-emerald-400 mt-1">S/ {(gananciasData.gananciaTotalBruta||0).toFixed(2)}</p>
+                  <p className="text-emerald-400/70 text-sm mt-1">{(gananciasData.margenTotal||0).toFixed(1)}% margen sobre S/ {(gananciasData.totalGeneral||0).toFixed(2)} vendido</p>
                 </div>
                 <div className="flex gap-6 text-center">
                   <div>
-                    <p className="text-blue-400 font-bold text-lg">S/ {gananciasData.gananciaBruta.toFixed(2)}</p>
+                    <p className="text-blue-400 font-bold text-lg">S/ {(gananciasData.gananciaBruta||0).toFixed(2)}</p>
                     <p className="text-gray-500 text-xs">Tienda</p>
                   </div>
                   <div className="w-px bg-gray-700" />
                   <div>
-                    <p className="text-orange-400 font-bold text-lg">S/ {gananciasData.gananciaDist.toFixed(2)}</p>
+                    <p className="text-orange-400 font-bold text-lg">S/ {(gananciasData.gananciaDist||0).toFixed(2)}</p>
                     <p className="text-gray-500 text-xs">Distribuidores</p>
                   </div>
                 </div>
@@ -758,21 +758,21 @@ async function calcularGanancias() {
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="stat-card border border-blue-500/30">
-                  <p className="text-2xl font-bold text-blue-400">S/ {gananciasData.totalVentas.toFixed(2)}</p>
+                  <p className="text-2xl font-bold text-blue-400">S/ {(gananciasData.totalVentas||0).toFixed(2)}</p>
                   <p className="text-xs text-gray-500 mt-1">Ventas tienda</p>
                 </div>
                 <div className="stat-card border border-orange-500/30">
-                  <p className="text-2xl font-bold text-orange-400">S/ {gananciasData.totalRecaudadoDist.toFixed(2)}</p>
+                  <p className="text-2xl font-bold text-orange-400">S/ {(gananciasData.totalRecaudadoDist||0).toFixed(2)}</p>
                   <p className="text-xs text-gray-500 mt-1">Rendido distribuidores</p>
                 </div>
                 <div className="stat-card border border-red-500/30">
-                  <p className="text-2xl font-bold text-red-400">S/ {gananciasData.costoTotal.toFixed(2)}</p>
+                  <p className="text-2xl font-bold text-red-400">S/ {(gananciasData.costoTotal||0).toFixed(2)}</p>
                   <p className="text-xs text-gray-500 mt-1">Costo total</p>
-                  <p className="text-xs text-gray-600 mt-0.5">S/{gananciasData.costoPromedio.toFixed(2)}/bal.</p>
+                  <p className="text-xs text-gray-600 mt-0.5">S/{(gananciasData.costoPromedio||0).toFixed(2)}/bal.</p>
                 </div>
                 <div className="stat-card border border-yellow-500/30">
-                  <p className="text-2xl font-bold text-yellow-400">S/ {gananciasData.totalInvertido.toFixed(2)}</p>
-                  <p className="text-xs text-gray-500 mt-1">Invertido en compras</p>
+                  <p className="text-2xl font-bold text-yellow-400">S/ {(gananciasData.costoEstimado||0).toFixed(2)}</p>
+                  <p className="text-xs text-gray-500 mt-1">Costo estimado ventas</p>
                 </div>
               </div>
 
@@ -788,7 +788,7 @@ async function calcularGanancias() {
                           <div key={tipo}>
                             <div className="flex justify-between text-sm mb-1">
                               <span className="text-gray-300">{labelPago[tipo] || tipo}</span>
-                              <span className="text-white font-semibold">S/ {d.total.toFixed(2)} <span className="text-gray-500 font-normal">({d.count} ventas)</span></span>
+                              <span className="text-white font-semibold">S/ {(d.total||0).toFixed(2)} <span className="text-gray-500 font-normal">({d.count} ventas)</span></span>
                             </div>
                             <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
                               <div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
@@ -810,7 +810,7 @@ async function calcularGanancias() {
                           <div key={tipo}>
                             <div className="flex justify-between text-sm mb-1">
                               <span className="text-gray-300">{labelBalon[tipo] || tipo}</span>
-                              <span className="text-white font-semibold">S/ {d.total.toFixed(2)} <span className="text-gray-500 font-normal">({d.count} ventas)</span></span>
+                              <span className="text-white font-semibold">S/ {(d.total||0).toFixed(2)} <span className="text-gray-500 font-normal">({d.count} ventas)</span></span>
                             </div>
                             <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
                               <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
@@ -871,11 +871,11 @@ async function calcularGanancias() {
                       <span className="text-white font-semibold text-sm">Total distribuidores</span>
                       <div className="flex gap-6 text-right">
                         <div>
-                          <p className="text-orange-400 font-bold">S/ {gananciasData.totalRecaudadoDist.toFixed(2)}</p>
+                          <p className="text-orange-400 font-bold">S/ {(gananciasData.totalRecaudadoDist||0).toFixed(2)}</p>
                           <p className="text-gray-600 text-xs">recaudado</p>
                         </div>
                         <div>
-                          <p className="text-emerald-400 font-bold">S/ {gananciasData.gananciaDist.toFixed(2)}</p>
+                          <p className="text-emerald-400 font-bold">S/ {(gananciasData.gananciaDist||0).toFixed(2)}</p>
                           <p className="text-gray-600 text-xs">ganancia est.</p>
                         </div>
                       </div>
