@@ -197,6 +197,12 @@ export default function Inventario() {
     setSaving(false)
     setModal(null)
     setCompraForm({ proveedor_id: '', marca_id: '', fecha: new Date().toISOString().split('T')[0], cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, precios: { '5kg': '', '10kg': '', '45kg': '' }, notas: '', distribucion: [] })
+    // Actualizar costos de compra en configuracion
+    for (const tipo of ['5kg','10kg','45kg']) {
+      if (parseFloat(compraForm.precios[tipo]) > 0) {
+        await supabase.from('configuracion').upsert({ clave: `costo_${tipo.replace('kg','')}kg`, valor: compraForm.precios[tipo].toString(), updated_at: new Date().toISOString() }, { onConflict: 'clave' })
+      }
+    }
     cargar()
   }
 

@@ -34,6 +34,8 @@ export default function Configuracion() {
   const [showPass, setShowPass] = useState(false)
   const [editandoPrecios, setEditandoPrecios] = useState({})
   const [editandoDistPrecios, setEditandoDistPrecios] = useState({})
+  const [costosCompra, setCostosCompra] = useState({ '5kg': '', '10kg': '', '45kg': '' })
+  const [savingCostos, setSavingCostos] = useState(false)
 
   const [provForm, setProvForm] = useState({ nombre: '', telefono: '', direccion: '', ruc: '' })
   const [usuarioForm, setUsuarioForm] = useState({ nombre: '', email: '', password: '', rol: 'trabajador' })
@@ -85,6 +87,15 @@ export default function Configuracion() {
       })
       setEditandoDistPrecios(mapa)
       setPreciosDistTipo(pdt || [])
+    } else if (tab === 'costos') {
+      const { data } = await supabase.from('configuracion').select('*').in('clave', ['costo_5kg','costo_10kg','costo_45kg'])
+      const mapa = { '5kg': '', '10kg': '', '45kg': '' }
+      data?.forEach(r => {
+        if (r.clave === 'costo_5kg') mapa['5kg'] = r.valor || ''
+        if (r.clave === 'costo_10kg') mapa['10kg'] = r.valor || ''
+        if (r.clave === 'costo_45kg') mapa['45kg'] = r.valor || ''
+      })
+      setCostosCompra(mapa)
     } else if (tab === 'proveedores') {
       const { data } = await supabase.from('proveedores').select('*').eq('activo', true).order('nombre')
       setProveedores(data || [])
@@ -93,6 +104,17 @@ export default function Configuracion() {
       setUsuarios(data || [])
     }
     setLoading(false)
+  }
+
+  async function guardarCostos() {
+    setSavingCostos(true)
+    await Promise.all([
+      supabase.from('configuracion').upsert({ clave: 'costo_5kg', valor: costosCompra['5kg']?.toString() || '0', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
+      supabase.from('configuracion').upsert({ clave: 'costo_10kg', valor: costosCompra['10kg']?.toString() || '0', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
+      supabase.from('configuracion').upsert({ clave: 'costo_45kg', valor: costosCompra['45kg']?.toString() || '0', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
+    ])
+    setSavingCostos(false)
+    alert('✅ Costos guardados correctamente')
   }
 
   async function guardarPreciosTienda() {
@@ -225,6 +247,7 @@ export default function Configuracion() {
         {[
           ['precios','💰 Precios tienda'],
           ['distribuidores_precios','🚛 Precios distribuidores'],
+          ['costos','💲 Costos compra'],
           ['proveedores','🚚 Proveedores'],
           ['usuarios','👤 Usuarios']
         ].map(([key, label]) => (
@@ -317,6 +340,51 @@ export default function Configuracion() {
             </table>
           </div>
           <p className="text-gray-600 text-xs">💡 Estos precios se usarán al registrar reposiciones y rendiciones de distribuidores.</p>
+        </div>
+      )}
+
+      {/* Tab Costos compra */}
+      {tab === 'costos' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <p className="text-gray-400 text-sm">Precio de compra por tipo de balón — usado para calcular ganancias</p>
+            <button onClick={guardarCostos} disabled={savingCostos} className="btn-primary">
+              <Save className="w-4 h-4" />{savingCostos ? 'Guardando...' : 'Guardar costos'}
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[['5kg','🔵','blue'],['10kg','🟡','yellow'],['45kg','🔴','red']].map(([tipo, icon, color]) => (
+              <div key={tipo} className={`card border border-${color}-800/40`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-2xl">{icon}</span>
+                  <div>
+                    <p className="text-white font-bold">{tipo}</p>
+                    <p className="text-gray-500 text-xs">Precio de compra</p>
+                  </div>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium text-sm">S/</span>
+                  <input type="number" min="0" step="0.50" className="input pl-9 text-xl font-bold text-center"
+                    value={costosCompra[tipo]}
+                    onChange={e => setCostosCompra(c => ({...c, [tipo]: e.target.value}))}
+                    placeholder="0.00" />
+                </div>
+                {parseFloat(costosCompra[tipo]) > 0 && (
+                  <div className="mt-3 bg-gray-800/50 rounded-lg p-2 text-xs text-center">
+                    <p className="text-gray-400">Si vendes a S/50 → ganancia</p>
+                    <p className={`text-${color}-400 font-bold text-lg`}>S/ {(50 - parseFloat(costosCompra[tipo])).toFixed(2)}</p>
+                    <p className="text-gray-600">por balón de ejemplo</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="bg-blue-900/20 border border-blue-800/40 rounded-xl p-4 text-sm text-gray-400">
+            <p className="text-blue-300 font-medium mb-1">💡 ¿Cómo funciona?</p>
+            <p>• Cuando registras una <strong className="text-white">compra nueva</strong>, estos precios se actualizan automáticamente.</p>
+            <p className="mt-1">• El reporte de <strong className="text-white">Ganancias</strong> usa estos precios para calcular cuánto ganaste por cada balón vendido.</p>
+            <p className="mt-1">• Se calcula por separado para <strong className="text-white">Tienda</strong> y <strong className="text-white">Distribuidores</strong>.</p>
+          </div>
         </div>
       )}
 

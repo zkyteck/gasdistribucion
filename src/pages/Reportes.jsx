@@ -72,25 +72,28 @@ export default function Reportes() {
       const desdeDate = desdeISO.split('T')[0]
       const hastaDate = hastaISO.split('T')[0]
 
-      const [{ data: vp }, { data: cd }, { data: tc }] = await Promise.all([
-        supabase.from('ventas').select('total, tipo_pago, tipo_balon, fecha, created_at').gte('created_at', desdeISO).lte('created_at', hastaISO),
+      const [{ data: vp }, { data: cd }, { data: costosCfg }] = await Promise.all([
+        supabase.from('ventas').select('cantidad, precio_unitario, tipo_balon, fecha, metodo_pago, created_at').gte('created_at', desdeISO).lte('created_at', hastaISO),
         supabase.from('cuentas_distribuidor').select('*, distribuidores(nombre)').gte('periodo_fin', desdeDate).lte('periodo_fin', hastaDate),
-        supabase.from('compras').select('cantidad_total, precio_unitario')
+        supabase.from('configuracion').select('clave, valor').in('clave', ['costo_5kg','costo_10kg','costo_45kg'])
       ])
 
-      // Costo promedio ponderado
-      const costoPromedio = (() => {
-        if (!tc?.length) return 0
-        const cant = tc.reduce((s,c) => s + c.cantidad_total, 0)
-        const costo = tc.reduce((s,c) => s + c.cantidad_total * c.precio_unitario, 0)
-        return cant > 0 ? costo / cant : 0
-      })()
+      // Costos por tipo desde configuracion
+      const costos = { '5kg': 0, '10kg': 0, '45kg': 0 }
+      costosCfg?.forEach(r => {
+        if (r.clave === 'costo_5kg') costos['5kg'] = parseFloat(r.valor) || 0
+        if (r.clave === 'costo_10kg') costos['10kg'] = parseFloat(r.valor) || 0
+        if (r.clave === 'costo_45kg') costos['45kg'] = parseFloat(r.valor) || 0
+      })
+      const costoPromedio = (costos['5kg'] + costos['10kg'] + costos['45kg']) / 3
 
-      // Tienda
-      const ingTienda = vp?.reduce((s,v) => s + (v.total||0), 0) || 0
-      const balTienda = vp?.length || 0
-      const costoTienda = balTienda * costoPromedio
-      const ganTienda = ingTienda - costoTienda
+      // Tienda — ingreso y ganancia por tipo de balón
+      const ingTienda = vp?.reduce((s,v) => s + (v.cantidad||1) * (v.precio_unitario||0), 0) || 0
+      const ganTienda = vp?.reduce((s,v) => {
+        const costo = costos[v.tipo_balon || '10kg'] || costoPromedio
+        return s + ((v.cantidad||1) * ((v.precio_unitario||0) - costo))
+      }, 0) || 0
+      const balTienda = vp?.reduce((s,v) => s + (v.cantidad||1), 0) || 0
 
       // Distribuidores
       const ingDist = cd?.reduce((s,c) => s + (c.total_esperado||0), 0) || 0
@@ -111,19 +114,22 @@ export default function Reportes() {
       // Por pago
       const porPago = {}
       vp?.forEach(v => {
-        const t = v.tipo_pago || 'efectivo'
+        const t = v.metodo_pago || 'efectivo'
         if (!porPago[t]) porPago[t] = { ingreso: 0, count: 0 }
-        porPago[t].ingreso += v.total || 0
+        porPago[t].ingreso += (v.cantidad||1) * (v.precio_unitario||0)
         porPago[t].count++
       })
 
-      // Por balón
+      // Por balón con ganancia
       const porBalon = {}
       vp?.forEach(v => {
         const t = v.tipo_balon || '10kg'
-        if (!porBalon[t]) porBalon[t] = { ingreso: 0, count: 0 }
-        porBalon[t].ingreso += v.total || 0
-        porBalon[t].count++
+        if (!porBalon[t]) porBalon[t] = { ingreso: 0, ganancia: 0, count: 0 }
+        const ing = (v.cantidad||1) * (v.precio_unitario||0)
+        const gan = (v.cantidad||1) * ((v.precio_unitario||0) - (costos[t]||0))
+        porBalon[t].ingreso += ing
+        porBalon[t].ganancia += gan
+        porBalon[t].count += (v.cantidad||1)
       })
 
       // Gráfica diaria
@@ -132,9 +138,9 @@ export default function Reportes() {
         const ds = dia.toISOString().split('T')[0]
         const vDia = vp?.filter(v => (v.fecha || v.created_at?.split('T')[0]) === ds) || []
         const cDia = cd?.filter(c => c.periodo_fin === ds) || []
-        const iT = vDia.reduce((s,v) => s+(v.total||0), 0)
+        const iT = vDia.reduce((s,v) => s+(v.cantidad||1)*(v.precio_unitario||0), 0)
         const iD = cDia.reduce((s,c) => s+(c.total_esperado||0), 0)
-        const gT = iT - vDia.length * costoPromedio
+        const gT = vDia.reduce((s,v) => s+(v.cantidad||1)*((v.precio_unitario||0)-(costos[v.tipo_balon||'10kg']||0)), 0)
         const gD = iD - cDia.reduce((s,c) => s+(c.balones_vendidos||0),0) * costoPromedio
         return {
           dia: format(dia, dias.length > 15 ? 'dd/MM' : 'EEE dd', { locale: es }),
@@ -145,7 +151,7 @@ export default function Reportes() {
       })
 
       setFinData({
-        costoPromedio, ingTienda, ganTienda, balTienda, costoTienda,
+        costos, costoPromedio, ingTienda, ganTienda, balTienda,
         ingDist, ganDist, balDist,
         ingTotal: ingTienda + ingDist,
         ganTotal: ganTienda + ganDist,
@@ -232,76 +238,62 @@ async function calcularGanancias() {
     const desdeISO = desde.toISOString()
     const hastaISO = hasta.toISOString()
 
-    // Ventas en el periodo
-    const { data: ventasPeriodo } = await supabase.from('ventas')
-      .select('total, tipo_pago, tipo_precio, tipo_balon, created_at')
-      .gte('created_at', desdeISO).lte('created_at', hastaISO)
+    const [{ data: ventasPeriodo }, { data: costosCfg }, { data: cuentasDist }] = await Promise.all([
+      supabase.from('ventas').select('cantidad, precio_unitario, metodo_pago, tipo_balon, fecha, created_at').gte('created_at', desdeISO).lte('created_at', hastaISO),
+      supabase.from('configuracion').select('clave, valor').in('clave', ['costo_5kg','costo_10kg','costo_45kg']),
+      supabase.from('cuentas_distribuidor').select('*, distribuidores(nombre)').gte('periodo_fin', desdeISO.split('T')[0]).lte('periodo_fin', hastaISO.split('T')[0])
+    ])
 
-    // Compras en el periodo (para calcular costo promedio)
-    const { data: comprasPeriodo } = await supabase.from('compras')
-      .select('cantidad_total, precio_unitario, fecha, marcas_gas(nombre)')
-      .gte('fecha', desdeISO.split('T')[0]).lte('fecha', hastaISO.split('T')[0])
+    // Costos por tipo
+    const costos = { '5kg': 0, '10kg': 0, '45kg': 0 }
+    costosCfg?.forEach(r => {
+      if (r.clave === 'costo_5kg') costos['5kg'] = parseFloat(r.valor) || 0
+      if (r.clave === 'costo_10kg') costos['10kg'] = parseFloat(r.valor) || 0
+      if (r.clave === 'costo_45kg') costos['45kg'] = parseFloat(r.valor) || 0
+    })
+    const costoPromedio = Object.values(costos).filter(v=>v>0).reduce((s,v,_,a)=>s+v/a.length, 0) || 0
 
-    // Todas las compras para costo promedio global
-    const { data: todasCompras } = await supabase.from('compras')
-      .select('cantidad_total, precio_unitario').lte('fecha', hastaISO.split('T')[0])
-
-    const totalVentas = ventasPeriodo?.reduce((s, v) => s + (v.total || 0), 0) || 0
-    const totalBalonesVendidos = ventasPeriodo?.length || 0
-
-    // Costo promedio ponderado
-    const costoPromedio = (() => {
-      if (!todasCompras?.length) return 0
-      const totalCantidad = todasCompras.reduce((s, c) => s + c.cantidad_total, 0)
-      const totalCosto = todasCompras.reduce((s, c) => s + (c.cantidad_total * c.precio_unitario), 0)
-      return totalCantidad > 0 ? totalCosto / totalCantidad : 0
-    })()
-
-    const costoEstimado = totalBalonesVendidos * costoPromedio
+    // Totales tienda
+    const totalVentas = ventasPeriodo?.reduce((s,v) => s + (v.cantidad||1)*(v.precio_unitario||0), 0) || 0
+    const totalBalonesVendidos = ventasPeriodo?.reduce((s,v) => s + (v.cantidad||1), 0) || 0
+    const costoEstimado = ventasPeriodo?.reduce((s,v) => s + (v.cantidad||1)*(costos[v.tipo_balon||'10kg']||costoPromedio), 0) || 0
     const gananciaBruta = totalVentas - costoEstimado
     const margen = totalVentas > 0 ? (gananciaBruta / totalVentas) * 100 : 0
 
-    // Desglose por tipo de pago
+    // Por pago
     const porPago = {}
     ventasPeriodo?.forEach(v => {
-      const t = v.tipo_pago || 'efectivo'
+      const t = v.metodo_pago || 'efectivo'
       if (!porPago[t]) porPago[t] = { count: 0, total: 0 }
-      porPago[t].count++
-      porPago[t].total += v.total || 0
+      porPago[t].count += (v.cantidad||1)
+      porPago[t].total += (v.cantidad||1)*(v.precio_unitario||0)
     })
 
-    // Desglose por tipo de balón
+    // Por tipo de balón con ganancia detallada
     const porBalon = {}
     ventasPeriodo?.forEach(v => {
       const t = v.tipo_balon || '10kg'
-      if (!porBalon[t]) porBalon[t] = { count: 0, total: 0 }
-      porBalon[t].count++
-      porBalon[t].total += v.total || 0
+      if (!porBalon[t]) porBalon[t] = { count: 0, total: 0, ganancia: 0, costoUnit: costos[t]||0 }
+      const ing = (v.cantidad||1)*(v.precio_unitario||0)
+      const gan = (v.cantidad||1)*((v.precio_unitario||0)-(costos[t]||0))
+      porBalon[t].count += (v.cantidad||1)
+      porBalon[t].total += ing
+      porBalon[t].ganancia += gan
     })
 
-    // Compras del periodo
-    const totalInvertido = comprasPeriodo?.reduce((s, c) => s + (c.cantidad_total * c.precio_unitario), 0) || 0
-    const totalBalonesCom = comprasPeriodo?.reduce((s, c) => s + c.cantidad_total, 0) || 0
-
-    // Rendiciones de distribuidores en el periodo
-    const { data: cuentasDist } = await supabase.from('cuentas_distribuidor')
-      .select('*, distribuidores(nombre)')
-      .gte('periodo_fin', desdeISO.split('T')[0])
-      .lte('periodo_fin', hastaISO.split('T')[0])
-
-    const totalRecaudadoDist = cuentasDist?.reduce((s, c) => s + (c.total_esperado || 0), 0) || 0
-    const costoBalonesDistribuidos = (cuentasDist?.reduce((s, c) => s + (c.balones_vendidos || 0), 0) || 0) * costoPromedio
+    // Distribuidores
+    const totalRecaudadoDist = cuentasDist?.reduce((s,c) => s+(c.total_esperado||0), 0) || 0
+    const balonesDistribuidos = cuentasDist?.reduce((s,c) => s+(c.balones_vendidos||0), 0) || 0
+    const costoBalonesDistribuidos = balonesDistribuidos * costoPromedio
     const gananciaDist = totalRecaudadoDist - costoBalonesDistribuidos
 
-    // Por distribuidor
     const porDistribuidor = {}
     cuentasDist?.forEach(c => {
       const nombre = c.distribuidores?.nombre || 'Sin nombre'
-      if (!porDistribuidor[nombre]) porDistribuidor[nombre] = { totalEsperado: 0, balones: 0, rendiciones: 0, canceladas: 0 }
+      if (!porDistribuidor[nombre]) porDistribuidor[nombre] = { totalEsperado: 0, balones: 0, rendiciones: 0 }
       porDistribuidor[nombre].totalEsperado += c.total_esperado || 0
       porDistribuidor[nombre].balones += c.balones_vendidos || 0
       porDistribuidor[nombre].rendiciones++
-      if (c.estado === 'cancelado') porDistribuidor[nombre].canceladas++
     })
 
     const totalGeneral = totalVentas + totalRecaudadoDist
@@ -310,14 +302,11 @@ async function calcularGanancias() {
     const margenTotal = totalGeneral > 0 ? (gananciaTotalBruta / totalGeneral) * 100 : 0
 
     setGananciasData({
-      totalVentas, totalBalonesVendidos, costoPromedio, costoEstimado,
-      gananciaBruta, margen, porPago, porBalon,
-      totalInvertido, totalBalonesCom,
-      cantCompras: comprasPeriodo?.length || 0,
-      // distribuidores
-      totalRecaudadoDist, gananciaDist, porDistribuidor,
+      costos, costoPromedio,
+      totalVentas, totalBalonesVendidos, costoEstimado, gananciaBruta, margen,
+      porPago, porBalon,
+      totalRecaudadoDist, gananciaDist, balonesDistribuidos, porDistribuidor,
       cantRendiciones: cuentasDist?.length || 0,
-      // totales combinados
       totalGeneral, costoTotal, gananciaTotalBruta, margenTotal
     })
     setLoadingGanancias(false)
