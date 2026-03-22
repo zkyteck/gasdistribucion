@@ -116,11 +116,18 @@ export default function Ventas() {
 
   async function eliminarVenta(venta) {
     if (!confirm(`¿Eliminar venta de ${venta.clientes?.nombre || 'Cliente Varios'} — S/${(venta.cantidad * venta.precio_unitario).toFixed(2)}?`)) return
-    // Restaurar stock
+    // Restaurar stock_por_tipo (por tipo de balón)
     const stockActual = getStock(venta.almacen_id, venta.tipo_balon || '10kg')
     await supabase.from('stock_por_tipo')
       .update({ stock_actual: stockActual + venta.cantidad, updated_at: new Date().toISOString() })
       .eq('almacen_id', venta.almacen_id).eq('tipo_balon', venta.tipo_balon || '10kg')
+    // Restaurar stock_actual en almacenes (total general)
+    const almacen = almacenes.find(a => a.id === venta.almacen_id)
+    if (almacen) {
+      await supabase.from('almacenes')
+        .update({ stock_actual: (almacen.stock_actual || 0) + venta.cantidad })
+        .eq('id', venta.almacen_id)
+    }
     await supabase.from('ventas').delete().eq('id', venta.id)
     cargar()
   }
@@ -159,9 +166,17 @@ export default function Ventas() {
       usuario_id: perfil?.id || null
     })
     if (e) { setError(e.message); setSaving(false); return }
+    // Descontar stock_por_tipo (por tipo de balón)
     await supabase.from('stock_por_tipo')
       .update({ stock_actual: stockDisp - parseInt(form.cantidad), updated_at: new Date().toISOString() })
       .eq('almacen_id', form.almacen_id).eq('tipo_balon', form.tipo_balon)
+    // Descontar stock_actual en almacenes (total general)
+    const almacen = almacenes.find(a => a.id === form.almacen_id)
+    if (almacen) {
+      await supabase.from('almacenes')
+        .update({ stock_actual: Math.max(0, (almacen.stock_actual || 0) - parseInt(form.cantidad)) })
+        .eq('id', form.almacen_id)
+    }
     setSaving(false); setModal(false); cargar()
   }
 
