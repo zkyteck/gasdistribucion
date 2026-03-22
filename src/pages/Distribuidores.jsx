@@ -280,10 +280,14 @@ export default function Distribuidores() {
               </div>
 
               {/* Stock y precio */}
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                <div className="bg-gray-800/50 rounded-lg p-3 text-center">
-                  <p className={`text-xl font-bold ${d.stock_actual > 100 ? 'text-emerald-400' : d.stock_actual > 30 ? 'text-yellow-400' : 'text-red-400'}`}>{d.stock_actual}</p>
-                  <p className="text-xs text-gray-500">Balones</p>
+              <div className="grid grid-cols-4 gap-2 mb-4">
+                <div className="bg-emerald-900/20 border border-emerald-700/30 rounded-lg p-3 text-center">
+                  <p className={`text-xl font-bold ${d.stock_actual > 50 ? 'text-emerald-400' : d.stock_actual > 10 ? 'text-yellow-400' : 'text-red-400'}`}>{d.stock_actual}</p>
+                  <p className="text-xs text-gray-500">🟢 Llenos</p>
+                </div>
+                <div className="bg-gray-700/30 border border-gray-600/30 rounded-lg p-3 text-center">
+                  <p className="text-xl font-bold text-gray-300">{almacenes.find(a => a.id === d.almacen_id)?.balones_vacios || 0}</p>
+                  <p className="text-xs text-gray-500">⚪ Vacíos</p>
                 </div>
                 <div className="bg-gray-800/50 rounded-lg p-3 text-center">
                   <p className="text-xl font-bold text-blue-400">S/{d.precio_base}</p>
@@ -347,14 +351,27 @@ export default function Distribuidores() {
         <Modal title={`Reponer stock — ${selected.nombre}`} onClose={() => setModal(null)}>
           <div className="space-y-4">
             {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
-            <div className="bg-gray-800/50 rounded-lg p-4 grid grid-cols-2 gap-4">
-              <div><p className="text-xs text-gray-500">Stock actual distribuidor</p><p className="text-xl font-bold text-white">{selected.stock_actual} bal.</p></div>
-              <div><p className="text-xs text-gray-500">Stock en almacén</p><p className="text-xl font-bold text-blue-400">{almacenes.find(a => a.id === selected.almacen_id)?.stock_actual || 0} bal.</p></div>
+            {/* Resumen distribuidor */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-emerald-900/20 border border-emerald-700/40 rounded-xl p-3 text-center">
+                <p className="text-xs text-emerald-400 mb-1">🟢 Llenos (distribuidor)</p>
+                <p className="text-2xl font-bold text-emerald-400">{selected.stock_actual}</p>
+                <p className="text-xs text-gray-500">balones listos para vender</p>
+              </div>
+              <div className="bg-gray-700/30 border border-gray-600/40 rounded-xl p-3 text-center">
+                <p className="text-xs text-gray-400 mb-1">⚪ Vacíos (distribuidor)</p>
+                <p className="text-2xl font-bold text-gray-300">{almacenes.find(a => a.id === selected.almacen_id)?.balones_vacios || 0}</p>
+                <p className="text-xs text-gray-500">balones vacíos para devolver</p>
+              </div>
             </div>
-            <div><label className="label">Cantidad a entregar</label><input type="number" className="input" placeholder="50" value={repoForm.cantidad} onChange={e => setRepoForm({...repoForm, cantidad: e.target.value})} /></div>
+            <div className="bg-blue-900/20 border border-blue-700/40 rounded-xl p-3 text-center">
+              <p className="text-xs text-blue-400 mb-1">📦 Stock llenos en almacén disponible</p>
+              <p className="text-2xl font-bold text-blue-400">{almacenes.find(a => a.id === selected.almacen_id)?.stock_actual || 0} bal.</p>
+            </div>
+            <div><label className="label">Cantidad a entregar (llenos)</label><input type="number" className="input" placeholder="50" value={repoForm.cantidad} onChange={e => setRepoForm({...repoForm, cantidad: e.target.value})} /></div>
             {repoForm.cantidad && (
               <div className="bg-emerald-900/20 border border-emerald-800/50 rounded-lg p-3 text-sm">
-                <p className="text-emerald-400">Stock nuevo del distribuidor: <span className="font-bold">{selected.stock_actual + (parseInt(repoForm.cantidad) || 0)} balones</span></p>
+                <p className="text-emerald-400">🟢 Llenos nuevos del distribuidor: <span className="font-bold">{selected.stock_actual + (parseInt(repoForm.cantidad) || 0)} balones</span></p>
               </div>
             )}
             <div><label className="label">Notas (opcional)</label><textarea className="input" rows={2} placeholder="Observaciones..." value={repoForm.notas} onChange={e => setRepoForm({...repoForm, notas: e.target.value})} /></div>
