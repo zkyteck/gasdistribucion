@@ -33,6 +33,7 @@ export default function Distribuidores() {
   const [error, setError] = useState('')
   const [expandido, setExpandido] = useState(null)
   const [valesDist, setValesDist] = useState([])
+  const [rendiciones, setRendiciones] = useState([])
   const [clientes, setClientes] = useState([])
   const [valeForm, setValeForm] = useState({ nombre_cliente: '', cliente_id: '', tipo_vale: '20', fecha: new Date().toISOString().split('T')[0], notas: '' })
   const [clienteRapidoForm, setClienteRapidoForm] = useState({ nombre: '', telefono: '' })
@@ -68,9 +69,14 @@ export default function Distribuidores() {
   }
 
   async function cargarHistorial(distId) {
-    const { data } = await supabase.from('reposiciones_distribuidor')
-      .select('*, almacenes(nombre)').eq('distribuidor_id', distId).order('fecha', { ascending: false }).limit(20)
-    setHistorial(data || [])
+    const [{ data: repos }, { data: rends }] = await Promise.all([
+      supabase.from('reposiciones_distribuidor')
+        .select('*, almacenes(nombre)').eq('distribuidor_id', distId).order('fecha', { ascending: false }).limit(20),
+      supabase.from('cuentas_distribuidor')
+        .select('*').eq('distribuidor_id', distId).order('created_at', { ascending: false }).limit(30)
+    ])
+    setHistorial(repos || [])
+    setRendiciones(rends || [])
   }
 
   async function cargarMovimientos(distId) {
@@ -594,15 +600,63 @@ export default function Distribuidores() {
       {/* Modal historial */}
       {modal === 'historial' && selected && (
         <Modal title={`Historial — ${selected.nombre}`} onClose={() => setModal(null)} wide>
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-gray-800/50 rounded-lg p-3 text-center"><p className="text-xl font-bold text-white">{selected.stock_actual}</p><p className="text-xs text-gray-500">Stock actual</p></div>
               <div className="bg-gray-800/50 rounded-lg p-3 text-center"><p className="text-xl font-bold text-blue-400">S/{selected.precio_base}</p><p className="text-xs text-gray-500">Precio/bal.</p></div>
               <div className="bg-gray-800/50 rounded-lg p-3 text-center"><p className="text-xl font-bold text-yellow-400">S/{(selected.stock_actual * selected.precio_base).toLocaleString()}</p><p className="text-xs text-gray-500">Valor campo</p></div>
             </div>
 
+            {/* Rendiciones */}
             <div>
-              <h4 className="text-sm font-semibold text-white mb-3">Reposiciones recientes</h4>
+              <h4 className="text-sm font-semibold text-white mb-3">📋 Historial de rendiciones</h4>
+              {rendiciones.length === 0 ? (
+                <p className="text-gray-600 text-sm text-center py-4">Sin rendiciones registradas</p>
+              ) : (
+                <div className="space-y-3">
+                  {rendiciones.map(r => {
+                    const v20count = r.total_vales > 0 ? Math.round((r.total_vales * 20/63) / 20) : 0
+                    const saldo = (r.total_esperado||0) - (r.total_vales||0) - (r.total_adelantos||0)
+                    return (
+                      <div key={r.id} className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <p className="text-white font-semibold text-sm">📅 {format(new Date(r.periodo_fin + 'T12:00:00'), 'dd/MM/yyyy', { locale: es })}</p>
+                            <p className="text-gray-500 text-xs mt-0.5">{r.balones_vendidos || r.balones_entregados} balones vendidos · S/{r.precio_por_balon}/bal.</p>
+                          </div>
+                          <span className={`text-xs px-2 py-1 rounded-full font-bold ${r.estado === 'cancelado' ? 'bg-emerald-900/50 text-emerald-400 border border-emerald-600/50' : 'bg-yellow-900/50 text-yellow-400 border border-yellow-600/50'}`}>
+                            {r.estado === 'cancelado' ? '✅ CANCELADO' : '⏳ POR COBRAR'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                          <div className="bg-blue-900/20 rounded-lg p-2">
+                            <p className="text-blue-400 font-bold text-sm">S/ {(r.total_esperado||0).toLocaleString()}</p>
+                            <p className="text-xs text-gray-500">Total esperado</p>
+                          </div>
+                          <div className="bg-yellow-900/20 rounded-lg p-2">
+                            <p className="text-yellow-400 font-bold text-sm">S/ {(r.total_vales||0).toLocaleString()}</p>
+                            <p className="text-xs text-gray-500">Vales</p>
+                          </div>
+                          <div className="bg-orange-900/20 rounded-lg p-2">
+                            <p className="text-orange-400 font-bold text-sm">S/ {(r.total_adelantos||0).toLocaleString()}</p>
+                            <p className="text-xs text-gray-500">Adelantos</p>
+                          </div>
+                          <div className={`rounded-lg p-2 ${saldo > 0 ? 'bg-emerald-900/20' : 'bg-gray-800/50'}`}>
+                            <p className={`font-bold text-sm ${saldo > 0 ? 'text-emerald-400' : 'text-gray-400'}`}>S/ {saldo.toLocaleString()}</p>
+                            <p className="text-xs text-gray-500">💰 Saldo efectivo</p>
+                          </div>
+                        </div>
+                        {r.notas && <p className="text-xs text-gray-500 mt-2">📝 {r.notas}</p>}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Reposiciones */}
+            <div>
+              <h4 className="text-sm font-semibold text-white mb-3">📦 Reposiciones recientes</h4>
               {historial.length === 0 ? <p className="text-gray-600 text-sm text-center py-4">Sin reposiciones registradas</p> : (
                 <div className="space-y-2">
                   {historial.map(r => (
@@ -613,26 +667,6 @@ export default function Distribuidores() {
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-gray-500">{r.stock_antes_dist} → <span className="text-emerald-400 font-semibold">{r.stock_despues_dist}</span></p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <h4 className="text-sm font-semibold text-white mb-3">Movimientos de stock</h4>
-              {movimientos.length === 0 ? <p className="text-gray-600 text-sm text-center py-4">Sin movimientos</p> : (
-                <div className="space-y-2">
-                  {movimientos.map(m => (
-                    <div key={m.id} className="flex items-center justify-between bg-gray-800/40 rounded-lg px-4 py-3">
-                      <div>
-                        <p className="text-white text-sm font-medium capitalize">{m.tipo_movimiento.replace('_', ' ')}</p>
-                        <p className="text-gray-500 text-xs">{format(new Date(m.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className={`font-bold text-sm ${m.cantidad > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{m.cantidad > 0 ? '+' : ''}{m.cantidad}</p>
-                        <p className="text-xs text-gray-500">{m.stock_anterior} → {m.stock_nuevo}</p>
                       </div>
                     </div>
                   ))}
