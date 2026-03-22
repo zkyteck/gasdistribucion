@@ -219,10 +219,26 @@ export default function Distribuidores() {
     if (v43 > 0) detalles.push({ cuenta_id: cuenta.id, tipo: 'vale_43', cantidad: v43, monto: v43 * 43, fecha: hoy })
     if (adelantos > 0) detalles.push({ cuenta_id: cuenta.id, tipo: 'adelanto', monto: adelantos, fecha: hoy })
     if (detalles.length > 0) await supabase.from('cuenta_distribuidor_detalles').insert(detalles)
-    // Resetear stock del distribuidor a los balones no vendidos (devueltos)
+    // Resetear stock distribuidor: llenos = devueltos, vacíos acumulados
     await supabase.from('distribuidores')
-      .update({ stock_actual: balonesDevueltos, updated_at: new Date().toISOString() })
+      .update({ 
+        stock_actual: balonesDevueltos,
+        balones_vacios: (selected.balones_vacios || 0) + balonesVendidos,
+        updated_at: new Date().toISOString() 
+      })
       .eq('id', selected.id)
+    // Sincronizar vacíos al almacén del distribuidor
+    if (selected.almacen_id && balonesVendidos > 0) {
+      const almacen = almacenes.find(a => a.id === selected.almacen_id)
+      if (almacen) {
+        await supabase.from('almacenes')
+          .update({
+            balones_vacios: (almacen.balones_vacios || 0) + balonesVendidos,
+            vacios_10kg: (almacen.vacios_10kg || 0) + balonesVendidos
+          })
+          .eq('id', selected.almacen_id)
+      }
+    }
     setSaving(false); setModal(null); cargar()
     const icono = estadoCuenta === 'cancelado' ? '✅ CANCELADO' : '⏳ POR COBRAR'
     const msgBalones = balonesFaltantes > 0 ? `\n⚠️ Balones faltantes: ${balonesFaltantes}` : '\n✅ Balones completos'
@@ -280,15 +296,17 @@ export default function Distribuidores() {
               </div>
 
               {/* Stock y precio */}
-              <div className="grid grid-cols-4 gap-2 mb-4">
+              <div className="grid grid-cols-2 gap-2 mb-2">
                 <div className="bg-emerald-900/20 border border-emerald-700/30 rounded-lg p-3 text-center">
-                  <p className={`text-xl font-bold ${d.stock_actual > 50 ? 'text-emerald-400' : d.stock_actual > 10 ? 'text-yellow-400' : 'text-red-400'}`}>{d.stock_actual}</p>
-                  <p className="text-xs text-gray-500">🟢 Llenos</p>
+                  <p className={`text-2xl font-bold ${d.stock_actual > 50 ? 'text-emerald-400' : d.stock_actual > 10 ? 'text-yellow-400' : 'text-red-400'}`}>{d.stock_actual}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">🟢 Llenos</p>
                 </div>
                 <div className="bg-gray-700/30 border border-gray-600/30 rounded-lg p-3 text-center">
-                  <p className="text-xl font-bold text-gray-300">{almacenes.find(a => a.id === d.almacen_id)?.balones_vacios || 0}</p>
-                  <p className="text-xs text-gray-500">⚪ Vacíos</p>
+                  <p className="text-2xl font-bold text-gray-300">{d.balones_vacios || 0}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">⚪ Vacíos</p>
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 mb-4">
                 <div className="bg-gray-800/50 rounded-lg p-3 text-center">
                   <p className="text-xl font-bold text-blue-400">S/{d.precio_base}</p>
                   <p className="text-xs text-gray-500">Precio/bal.</p>
