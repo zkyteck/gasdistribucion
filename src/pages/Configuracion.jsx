@@ -90,7 +90,10 @@ export default function Configuracion() {
       setEditandoDistPrecios(mapa)
       setPreciosDistTipo(pdt || [])
     } else if (tab === 'costos') {
-      const { data } = await supabase.from('configuracion').select('*').in('clave', ['costo_5kg','costo_10kg','costo_45kg'])
+      const [{ data }, { data: dists }] = await Promise.all([
+        supabase.from('configuracion').select('*').in('clave', ['costo_5kg','costo_10kg','costo_45kg']),
+        supabase.from('distribuidores').select('id, nombre, precio_base').eq('activo', true).order('nombre')
+      ])
       const mapa = { '5kg': '', '10kg': '', '45kg': '' }
       data?.forEach(r => {
         if (r.clave === 'costo_5kg') mapa['5kg'] = r.valor || ''
@@ -98,6 +101,7 @@ export default function Configuracion() {
         if (r.clave === 'costo_45kg') mapa['45kg'] = r.valor || ''
       })
       setCostosCompra(mapa)
+      setDistribuidores(dists || [])
     } else if (tab === 'proveedores') {
       const { data } = await supabase.from('proveedores').select('*').eq('activo', true).order('nombre')
       setProveedores(data || [])
@@ -141,6 +145,7 @@ export default function Configuracion() {
   async function guardarPreciosDistribuidor() {
     setSaving(true); setError('')
     for (const distId of Object.keys(editandoDistPrecios)) {
+      // Guardar en tabla precio_distribuidor_tipo
       for (const tipo of TIPOS_BALON) {
         const val = editandoDistPrecios[distId][tipo]
         if (val === '' || val === null) continue
@@ -151,9 +156,16 @@ export default function Configuracion() {
           await supabase.from('precio_distribuidor_tipo').insert({ distribuidor_id: distId, tipo_balon: tipo, precio: parseFloat(val) })
         }
       }
+      // Actualizar precio_base en distribuidores usando el precio de 10kg (principal)
+      const precio10kg = editandoDistPrecios[distId]['10kg']
+      if (precio10kg !== '' && precio10kg !== null) {
+        await supabase.from('distribuidores')
+          .update({ precio_base: parseFloat(precio10kg), updated_at: new Date().toISOString() })
+          .eq('id', distId)
+      }
     }
     setSaving(false)
-    alert('✅ Precios de distribuidores guardados')
+    alert('✅ Precios de distribuidores guardados y actualizados')
     cargar()
   }
 
@@ -373,7 +385,7 @@ export default function Configuracion() {
                 </div>
                 {parseFloat(costosCompra[tipo]) > 0 && (
                   <div className="mt-3 bg-gray-800/50 rounded-lg p-3 text-xs space-y-1">
-                    <p className="text-gray-400 font-medium mb-2">Ganancia estimada por tipo:</p>
+                    <p className="text-gray-400 font-medium mb-2">🏪 Tienda — Ganancia por tipo:</p>
                     {precios.map(p => {
                       const precioVenta = preciosPorTipo.find(x => x.precio_tipo_id === p.id && x.tipo_balon === tipo)?.precio || p.precio || 0
                       const gan = precioVenta - parseFloat(costosCompra[tipo])
@@ -386,6 +398,22 @@ export default function Configuracion() {
                         </div>
                       )
                     })}
+                    {distribuidores.length > 0 && (
+                      <>
+                        <p className="text-gray-400 font-medium mt-3 mb-1 pt-2 border-t border-gray-700">🚛 Distribuidores — Ganancia por precio:</p>
+                        {distribuidores.map(d => {
+                          const gan = (d.precio_base || 0) - parseFloat(costosCompra[tipo])
+                          return (
+                            <div key={d.id} className="flex justify-between items-center">
+                              <span className="text-gray-500">{d.nombre}</span>
+                              <span className={`font-bold ${gan > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                S/{d.precio_base} → +S/{gan.toFixed(2)}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </>
+                    )}
                   </div>
                 )}
               </div>
