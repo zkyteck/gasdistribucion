@@ -121,11 +121,17 @@ export default function Ventas() {
     await supabase.from('stock_por_tipo')
       .update({ stock_actual: stockActual + venta.cantidad, updated_at: new Date().toISOString() })
       .eq('almacen_id', venta.almacen_id).eq('tipo_balon', venta.tipo_balon || '10kg')
-    // Restaurar stock_actual en almacenes (total general)
+    // Restaurar stock_actual y restar vacíos en almacenes
     const almacen = almacenes.find(a => a.id === venta.almacen_id)
     if (almacen) {
+      const tipo = venta.tipo_balon || '10kg'
+      const campoVacios = tipo === '5kg' ? 'vacios_5kg' : tipo === '10kg' ? 'vacios_10kg' : 'vacios_45kg'
       await supabase.from('almacenes')
-        .update({ stock_actual: (almacen.stock_actual || 0) + venta.cantidad })
+        .update({
+          stock_actual: (almacen.stock_actual || 0) + venta.cantidad,
+          balones_vacios: Math.max(0, (almacen.balones_vacios || 0) - venta.cantidad),
+          [campoVacios]: Math.max(0, (almacen[campoVacios] || 0) - venta.cantidad)
+        })
         .eq('id', venta.almacen_id)
     }
     await supabase.from('ventas').delete().eq('id', venta.id)
@@ -170,11 +176,17 @@ export default function Ventas() {
     await supabase.from('stock_por_tipo')
       .update({ stock_actual: stockDisp - parseInt(form.cantidad), updated_at: new Date().toISOString() })
       .eq('almacen_id', form.almacen_id).eq('tipo_balon', form.tipo_balon)
-    // Descontar stock_actual en almacenes (total general)
+    // Descontar stock_actual en almacenes y sumar vacíos automáticamente
     const almacen = almacenes.find(a => a.id === form.almacen_id)
     if (almacen) {
+      const cant = parseInt(form.cantidad)
+      const campoVacios = form.tipo_balon === '5kg' ? 'vacios_5kg' : form.tipo_balon === '10kg' ? 'vacios_10kg' : 'vacios_45kg'
       await supabase.from('almacenes')
-        .update({ stock_actual: Math.max(0, (almacen.stock_actual || 0) - parseInt(form.cantidad)) })
+        .update({
+          stock_actual: Math.max(0, (almacen.stock_actual || 0) - cant),
+          balones_vacios: (almacen.balones_vacios || 0) + cant,
+          [campoVacios]: (almacen[campoVacios] || 0) + cant
+        })
         .eq('id', form.almacen_id)
     }
     setSaving(false); setModal(false); cargar()
