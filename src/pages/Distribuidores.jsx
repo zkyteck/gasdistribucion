@@ -26,7 +26,7 @@ export default function Distribuidores() {
   const [selected, setSelected] = useState(null)
   const [form, setForm] = useState({ nombre: '', telefono: '', almacen_id: '', precio_base: '' })
   const [repoForm, setRepoForm] = useState({ cantidad: '', notas: '' })
-  const [cuentaForm, setCuentaForm] = useState({ vales20: '', vales43: '', adelantos: '', balones_devueltos: '', notas: '' })
+  const [cuentaForm, setCuentaForm] = useState({ vales20: '', vales43: '', adelantos: '', balones_devueltos: '', balones_vendidos: '', notas: '' })
   const [historial, setHistorial] = useState([])
   const [movimientos, setMovimientos] = useState([])
   const [saving, setSaving] = useState(false)
@@ -160,8 +160,16 @@ export default function Distribuidores() {
       notas: repoForm.notas,
       fecha: new Date().toISOString()
     })
+    if (e) { setError(e.message); setSaving(false); return }
+    // Actualizar stock del distribuidor
+    await supabase.from('distribuidores')
+      .update({ stock_actual: selected.stock_actual + cant, updated_at: new Date().toISOString() })
+      .eq('id', selected.id)
+    // Descontar del almacén origen
+    await supabase.from('almacenes')
+      .update({ stock_actual: almacen.stock_actual - cant })
+      .eq('id', selected.almacen_id)
     setSaving(false)
-    if (e) { setError(e.message); return }
     setModal(null); setRepoForm({ cantidad: '', notas: '' }); cargar()
   }
 
@@ -170,7 +178,7 @@ export default function Distribuidores() {
   }
 
   async function abrirCuenta(d) {
-    setSelected(d); setCuentaForm({ vales20: '', vales43: '', adelantos: '', balones_devueltos: '', notas: '' }); setError(''); setModal('cuenta')
+    setSelected(d); setCuentaForm({ vales20: '', vales43: '', adelantos: '', balones_devueltos: '', balones_vendidos: '', notas: '' }); setError(''); setModal('cuenta')
   }
 
   async function guardarCuenta() {
@@ -178,9 +186,10 @@ export default function Distribuidores() {
     const v43 = parseInt(cuentaForm.vales43) || 0
     const adelantos = parseFloat(cuentaForm.adelantos) || 0
     const balonesDevueltos = parseInt(cuentaForm.balones_devueltos) || 0
-    const balonesFaltantes = selected.stock_actual - balonesDevueltos
+    const balonesVendidos = parseInt(cuentaForm.balones_vendidos) || selected.stock_actual
+    const balonesFaltantes = balonesVendidos - balonesDevueltos
     const totalVales = (v20 * 20) + (v43 * 43)
-    const totalEsperado = selected.stock_actual * selected.precio_base
+    const totalEsperado = balonesVendidos * selected.precio_base
     const saldoEfectivo = totalEsperado - totalVales - adelantos
     const estadoCuenta = saldoEfectivo <= 0 && balonesFaltantes <= 0 ? 'cancelado' : 'por_cobrar'
     setSaving(true); setError('')
@@ -189,7 +198,7 @@ export default function Distribuidores() {
       distribuidor_id: selected.id,
       periodo_inicio: hoy, periodo_fin: hoy,
       balones_entregados: selected.stock_actual,
-      balones_vendidos: selected.stock_actual,
+      balones_vendidos: balonesVendidos,
       precio_por_balon: selected.precio_base,
       total_esperado: totalEsperado,
       total_vales: totalVales,
@@ -204,6 +213,10 @@ export default function Distribuidores() {
     if (v43 > 0) detalles.push({ cuenta_id: cuenta.id, tipo: 'vale_43', cantidad: v43, monto: v43 * 43, fecha: hoy })
     if (adelantos > 0) detalles.push({ cuenta_id: cuenta.id, tipo: 'adelanto', monto: adelantos, fecha: hoy })
     if (detalles.length > 0) await supabase.from('cuenta_distribuidor_detalles').insert(detalles)
+    // Resetear stock del distribuidor a los balones no vendidos (devueltos)
+    await supabase.from('distribuidores')
+      .update({ stock_actual: balonesDevueltos, updated_at: new Date().toISOString() })
+      .eq('id', selected.id)
     setSaving(false); setModal(null); cargar()
     const icono = estadoCuenta === 'cancelado' ? '✅ CANCELADO' : '⏳ POR COBRAR'
     const msgBalones = balonesFaltantes > 0 ? `\n⚠️ Balones faltantes: ${balonesFaltantes}` : '\n✅ Balones completos'
@@ -357,6 +370,7 @@ export default function Distribuidores() {
               <p className="text-lg font-bold text-white">{selected.stock_actual} bal. × S/{selected.precio_base} = <span className="text-yellow-400">S/{(selected.stock_actual * selected.precio_base).toLocaleString()}</span></p>
             </div>
             <div className="grid grid-cols-2 gap-4">
+            <div><label className="label">Balones vendidos</label><input type="number" className="input" placeholder={`Máx: ${selected.stock_actual}`} value={cuentaForm.balones_vendidos || ""} onChange={e => setCuentaForm({...cuentaForm, balones_vendidos: e.target.value})} /><p className="text-xs text-gray-500 mt-1">Balones que salieron a vender ({selected.stock_actual} en campo)</p></div>
               <div><label className="label">Vales de S/ 20</label><input type="number" className="input" placeholder="0" value={cuentaForm.vales20} onChange={e => setCuentaForm({...cuentaForm, vales20: e.target.value})} /></div>
               <div><label className="label">Vales de S/ 43</label><input type="number" className="input" placeholder="0" value={cuentaForm.vales43} onChange={e => setCuentaForm({...cuentaForm, vales43: e.target.value})} /></div>
             </div>
