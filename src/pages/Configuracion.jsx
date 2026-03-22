@@ -54,23 +54,25 @@ export default function Configuracion() {
 
   async function cargar() {
     setLoading(true)
-    if (tab === 'precios') {
-      const [{ data: pt }, { data: ptb }] = await Promise.all([
-        supabase.from('precio_tipos').select('*').order('precio'),
-        supabase.from('precio_tipo_balon').select('*')
-      ])
-      setPrecios(pt || [])
-      // Construir mapa editable
-      const mapa = {}
-      pt?.forEach(p => {
-        mapa[p.id] = {}
-        TIPOS_BALON.forEach(tipo => {
-          const found = ptb?.find(x => x.precio_tipo_id === p.id && x.tipo_balon === tipo)
-          mapa[p.id][tipo] = found?.precio ?? ''
-        })
+    // Siempre cargar precios base (necesarios para calcular ganancias en costos)
+    const [{ data: pt }, { data: ptb }] = await Promise.all([
+      supabase.from('precio_tipos').select('*').order('precio'),
+      supabase.from('precio_tipo_balon').select('*')
+    ])
+    setPrecios(pt || [])
+    setPreciosPorTipo(ptb || [])
+    const mapa = {}
+    pt?.forEach(p => {
+      mapa[p.id] = {}
+      TIPOS_BALON.forEach(tipo => {
+        const found = ptb?.find(x => x.precio_tipo_id === p.id && x.tipo_balon === tipo)
+        mapa[p.id][tipo] = found?.precio ?? ''
       })
-      setEditandoPrecios(mapa)
-      setPreciosPorTipo(ptb || [])
+    })
+    setEditandoPrecios(mapa)
+
+    if (tab === 'precios') {
+      // ya cargado arriba
     } else if (tab === 'distribuidores_precios') {
       const [{ data: d }, { data: pdt }] = await Promise.all([
         supabase.from('distribuidores').select('*').eq('activo', true).order('nombre'),
@@ -370,10 +372,20 @@ export default function Configuracion() {
                     placeholder="0.00" />
                 </div>
                 {parseFloat(costosCompra[tipo]) > 0 && (
-                  <div className="mt-3 bg-gray-800/50 rounded-lg p-2 text-xs text-center">
-                    <p className="text-gray-400">Si vendes a S/50 → ganancia</p>
-                    <p className={`text-${color}-400 font-bold text-lg`}>S/ {(50 - parseFloat(costosCompra[tipo])).toFixed(2)}</p>
-                    <p className="text-gray-600">por balón de ejemplo</p>
+                  <div className="mt-3 bg-gray-800/50 rounded-lg p-3 text-xs space-y-1">
+                    <p className="text-gray-400 font-medium mb-2">Ganancia estimada por tipo:</p>
+                    {precios.map(p => {
+                      const precioVenta = preciosPorTipo.find(x => x.precio_tipo_id === p.id && x.tipo_balon === tipo)?.precio || p.precio || 0
+                      const gan = precioVenta - parseFloat(costosCompra[tipo])
+                      return (
+                        <div key={p.id} className="flex justify-between items-center">
+                          <span className="text-gray-500">{p.nombre}</span>
+                          <span className={`font-bold ${gan > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            S/{precioVenta} → +S/{gan.toFixed(2)}
+                          </span>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
