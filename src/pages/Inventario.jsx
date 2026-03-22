@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { hoyPeru } from '../lib/fechas'
 import { Package, Plus, X, AlertCircle, TrendingUp, DollarSign, ShoppingCart, Edit2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -35,8 +36,8 @@ export default function Inventario() {
   const [editVaciosVal, setEditVaciosVal] = useState({ '5kg': 0, '10kg': 0, '45kg': 0 })
   const [editStockAlmacen, setEditStockAlmacen] = useState(null)
   const [editStockVal, setEditStockVal] = useState(0)
-  const [movimientoForm, setMovimientoForm] = useState({ origen_id: '', destino_id: '', cantidad: '', tipo_balon: '10kg', notas: '', fecha: new Date().toISOString().split('T')[0] })
-  const [vaciosForm, setVaciosForm] = useState({ almacen_id: '', cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, notas: '', fecha: new Date().toISOString().split('T')[0] })
+  const [movimientoForm, setMovimientoForm] = useState({ origen_id: '', destino_id: '', cantidad: '', tipo_balon: '10kg', notas: '', fecha: hoyPeru() })
+  const [vaciosForm, setVaciosForm] = useState({ almacen_id: '', cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, notas: '', fecha: hoyPeru() })
 
   // Ganancias
   const [quickModal, setQuickModal] = useState(null) // 'marca' | 'proveedor'
@@ -48,7 +49,7 @@ export default function Inventario() {
   const [editCompraForm, setEditCompraForm] = useState({ fecha: '', notas: '', proveedor_id: '', marca_id: '' })
   const [editDist, setEditDist] = useState([]) // [{almacen_id, nombre, responsable, tipo_balon, cantidad, detalle_id}]
   const [compraForm, setCompraForm] = useState({
-    proveedor_id: '', marca_id: '', fecha: new Date().toISOString().split('T')[0],
+    proveedor_id: '', marca_id: '', fecha: hoyPeru(),
     cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, precios: { '5kg': '', '10kg': '', '45kg': '' }, notas: '', distribucion: []
   })
 
@@ -196,7 +197,7 @@ export default function Inventario() {
     }
     setSaving(false)
     setModal(null)
-    setCompraForm({ proveedor_id: '', marca_id: '', fecha: new Date().toISOString().split('T')[0], cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, precios: { '5kg': '', '10kg': '', '45kg': '' }, notas: '', distribucion: [] })
+    setCompraForm({ proveedor_id: '', marca_id: '', fecha: hoyPeru(), cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, precios: { '5kg': '', '10kg': '', '45kg': '' }, notas: '', distribucion: [] })
     // Actualizar costos de compra en configuracion
     for (const tipo of ['5kg','10kg','45kg']) {
       if (parseFloat(compraForm.precios[tipo]) > 0) {
@@ -225,7 +226,7 @@ export default function Inventario() {
       fecha: movimientoForm.fecha
     })
     setSaving(false); setModal(null)
-    setMovimientoForm({ origen_id: '', destino_id: '', cantidad: '', tipo_balon: '10kg', notas: '', fecha: new Date().toISOString().split('T')[0] })
+    setMovimientoForm({ origen_id: '', destino_id: '', cantidad: '', tipo_balon: '10kg', notas: '', fecha: hoyPeru() })
     cargar()
   }
 
@@ -249,7 +250,7 @@ export default function Inventario() {
       cantidad: total, notas: vaciosForm.notas || null, fecha: vaciosForm.fecha
     })
     setSaving(false); setModal(null)
-    setVaciosForm({ almacen_id: '', cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, notas: '', fecha: new Date().toISOString().split('T')[0] })
+    setVaciosForm({ almacen_id: '', cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, notas: '', fecha: hoyPeru() })
     cargar()
   }
 
@@ -327,11 +328,11 @@ export default function Inventario() {
 
       {/* Botones de acción secundarios */}
       <div className="flex gap-2 flex-wrap">
-        <button onClick={() => { setError(''); setMovimientoForm({ origen_id: '', destino_id: '', cantidad: '', tipo_balon: '10kg', notas: '', fecha: new Date().toISOString().split('T')[0] }); setModal('movimiento') }}
+        <button onClick={() => { setError(''); setMovimientoForm({ origen_id: '', destino_id: '', cantidad: '', tipo_balon: '10kg', notas: '', fecha: hoyPeru() }); setModal('movimiento') }}
           className="btn-secondary text-xs">
           🔄 Mover entre almacenes
         </button>
-        <button onClick={() => { setError(''); setVaciosForm({ almacen_id: '', cantidad: '', notas: '', fecha: new Date().toISOString().split('T')[0] }); setModal('vacios') }}
+        <button onClick={() => { setError(''); setVaciosForm({ almacen_id: '', cantidad: '', notas: '', fecha: hoyPeru() }); setModal('vacios') }}
           className="btn-secondary text-xs">
           ⚪ Registrar vacíos recibidos
         </button>
@@ -557,7 +558,7 @@ export default function Inventario() {
         <div className="card p-0 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-white">Movimientos entre almacenes</h3>
-            <button onClick={() => { setError(''); setMovimientoForm({ origen_id: '', destino_id: '', cantidad: '', tipo_balon: '10kg', notas: '', fecha: new Date().toISOString().split('T')[0] }); setModal('movimiento') }}
+            <button onClick={() => { setError(''); setMovimientoForm({ origen_id: '', destino_id: '', cantidad: '', tipo_balon: '10kg', notas: '', fecha: hoyPeru() }); setModal('movimiento') }}
               className="btn-primary text-xs py-1.5">
               <Plus className="w-3.5 h-3.5" />Nuevo movimiento
             </button>

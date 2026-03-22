@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { hoyPeru } from '../lib/fechas'
 import { Users, X, AlertCircle, Search, Clock } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -32,12 +33,12 @@ const emptyDeudaForm = {
   nombre_deudor: '', cliente_id: '',
   monto: '', balones: '', tipo_balon: '10kg', vales_20: '', vales_43: '',
   precio_balon: '',
-  fecha: new Date().toISOString().split('T')[0], notas: ''
+  fecha: hoyPeru(), notas: ''
 }
 
 const emptyPagoForm = {
   monto: '', balones: '', vales_20: '', vales_43: '',
-  metodo_pago: 'efectivo', fecha: new Date().toISOString().split('T')[0], notas: ''
+  metodo_pago: 'efectivo', fecha: hoyPeru(), notas: ''
 }
 
 export default function Deudas() {

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { hoyPeru, inicioDiaPeru, finDiaPeru, nowPeru } from '../lib/fechas'
 import { ShoppingCart, Plus, X, AlertCircle, Trash2, Search } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -38,13 +39,13 @@ export default function Ventas() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [busqueda, setBusqueda] = useState('')
-  const [filtroFecha, setFiltroFecha] = useState(new Date().toISOString().split('T')[0])
+  const [filtroFecha, setFiltroFecha] = useState(hoyPeru())
 
   const [form, setForm] = useState({
     cliente_id: '', cliente_nombre: '', es_varios: false,
     almacen_id: '', precio_tipo_id: '', tipo_balon: '10kg',
     cantidad: '', precio_unitario: '', metodo_pago: 'efectivo', notas: '',
-    fecha: new Date().toISOString().split('T')[0]
+    fecha: hoyPeru()
   })
 
   useEffect(() => { cargar() }, [filtroFecha])

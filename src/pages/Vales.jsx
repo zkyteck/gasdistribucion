@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { hoyPeru } from '../lib/fechas'
 import { Ticket, Plus, X, AlertCircle, DollarSign, CheckCircle, RefreshCw } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -28,11 +29,11 @@ export default function Vales() {
   const [modal, setModal] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [filtroFecha, setFiltroFecha] = useState(new Date().toISOString().split('T')[0])
+  const [filtroFecha, setFiltroFecha] = useState(hoyPeru())
   const [reloadKey, setReloadKey] = useState(0)
 
-  const [form, setForm] = useState({ cantidad_20: '', cantidad_43: '', fecha: new Date().toISOString().split('T')[0], notas: '' })
-  const [retiroForm, setRetiroForm] = useState({ monto: '', motivo: '', fecha: new Date().toISOString().split('T')[0] })
+  const [form, setForm] = useState({ cantidad_20: '', cantidad_43: '', fecha: hoyPeru(), notas: '' })
+  const [retiroForm, setRetiroForm] = useState({ monto: '', motivo: '', fecha: hoyPeru() })
 
   useEffect(() => {
     cargar()
@@ -91,7 +92,7 @@ export default function Vales() {
     })
     setSaving(false)
     if (e) { setError(e.message); return }
-    setModal(null); setRetiroForm({ monto: '', motivo: '', fecha: new Date().toISOString().split('T')[0] }); cargar()
+    setModal(null); setRetiroForm({ monto: '', motivo: '', fecha: hoyPeru() }); cargar()
   }
 
   async function eliminarValesPorTipo(tipo) {
@@ -126,7 +127,7 @@ export default function Vales() {
           <p className="text-gray-500 text-sm">Control de vales S/20 y S/43</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => { setRetiroForm({ monto: '', motivo: '', fecha: new Date().toISOString().split('T')[0] }); setError(''); setModal('retiro') }} className="btn-secondary">
+          <button onClick={() => { setRetiroForm({ monto: '', motivo: '', fecha: hoyPeru() }); setError(''); setModal('retiro') }} className="btn-secondary">
             <DollarSign className="w-4 h-4" />Registrar retiro
           </button>
           <button onClick={() => { setForm({ cantidad_20: '', cantidad_43: '', fecha: filtroFecha, notas: '' }); setError(''); setModal('nuevo') }} className="btn-primary">

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { hoyPeru, inicioDiaPeru, finDiaPeru, nowPeru } from '../lib/fechas'
 import { Truck, Plus, Edit2, Package, X, AlertCircle, History, ChevronDown, ChevronUp, DollarSign, RefreshCw, Ticket, Clock, CheckCircle } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -35,7 +36,7 @@ export default function Distribuidores() {
   const [valesDist, setValesDist] = useState([])
   const [rendiciones, setRendiciones] = useState([])
   const [clientes, setClientes] = useState([])
-  const [valeForm, setValeForm] = useState({ nombre_cliente: '', cliente_id: '', tipo_vale: '20', fecha: new Date().toISOString().split('T')[0], notas: '' })
+  const [valeForm, setValeForm] = useState({ nombre_cliente: '', cliente_id: '', tipo_vale: '20', fecha: hoyPeru(), notas: '' })
   const [clienteRapidoForm, setClienteRapidoForm] = useState({ nombre: '', telefono: '' })
   const [subModal, setSubModal] = useState(null) // 'clienteRapido'
 
@@ -87,7 +88,7 @@ export default function Distribuidores() {
 
   async function abrirVales(d) {
     setSelected(d)
-    setValeForm({ nombre_cliente: '', cliente_id: '', tipo_vale: '20', fecha: new Date().toISOString().split('T')[0], notas: '' })
+    setValeForm({ nombre_cliente: '', cliente_id: '', tipo_vale: '20', fecha: hoyPeru(), notas: '' })
     setError('')
     await cargarValesDist(d.id)
     await cargarClientes()
@@ -110,12 +111,12 @@ export default function Distribuidores() {
     })
     setSaving(false)
     if (e) { setError(e.message); return }
-    setValeForm({ nombre_cliente: '', cliente_id: '', tipo_vale: '20', fecha: new Date().toISOString().split('T')[0], notas: '' })
+    setValeForm({ nombre_cliente: '', cliente_id: '', tipo_vale: '20', fecha: hoyPeru(), notas: '' })
     await cargarValesDist(selected.id)
   }
 
   async function marcarValeCobrado(vale) {
-    await supabase.from('vales_distribuidor').update({ estado: 'cobrado', fecha_cobro: new Date().toISOString().split('T')[0], updated_at: new Date().toISOString() }).eq('id', vale.id)
+    await supabase.from('vales_distribuidor').update({ estado: 'cobrado', fecha_cobro: hoyPeru(), updated_at: new Date().toISOString() }).eq('id', vale.id)
     await cargarValesDist(selected.id)
   }
 
@@ -199,7 +200,7 @@ export default function Distribuidores() {
     const saldoEfectivo = totalEsperado - totalVales - adelantos
     const estadoCuenta = saldoEfectivo <= 0 && balonesFaltantes <= 0 ? 'cancelado' : 'por_cobrar'
     setSaving(true); setError('')
-    const hoy = new Date().toISOString().split('T')[0]
+    const hoy = hoyPeru()
     const { data: cuenta, error: e1 } = await supabase.from('cuentas_distribuidor').insert({
       distribuidor_id: selected.id,
       periodo_inicio: hoy, periodo_fin: hoy,

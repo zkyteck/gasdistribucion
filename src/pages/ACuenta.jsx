@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { hoyPeru } from '../lib/fechas'
 import { ClipboardList, Plus, X, AlertCircle, Search, Printer, CheckCircle, Clock } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -120,7 +121,7 @@ function Ticket({ data, onClose }) {
 }
 
 const emptyForm = {
-  nombre_cliente: '', fecha: new Date().toISOString().split('T')[0], tipo_balon: '10kg',
+  nombre_cliente: '', fecha: hoyPeru(), tipo_balon: '10kg',
   vales_20: 0, vales_43: 0, balones: 0, dinero: '', notas: ''
 }
 
@@ -139,7 +140,7 @@ export default function ACuenta() {
   const [filtroFechaDesde, setFiltroFechaDesde] = useState('')
   const [filtroFechaHasta, setFiltroFechaHasta] = useState('')
   const [form, setForm] = useState(emptyForm)
-  const [entregaForm, setEntregaForm] = useState({ fecha_entrega: new Date().toISOString().split('T')[0], quien_recoge: '', vales_20: 0, vales_43: 0, balones: 0, dinero: '' })
+  const [entregaForm, setEntregaForm] = useState({ fecha_entrega: hoyPeru(), quien_recoge: '', vales_20: 0, vales_43: 0, balones: 0, dinero: '' })
   const [ticketData, setTicketData] = useState(null)
   const [clientes, setClientes] = useState([])
   const [depositoForm, setDepositoForm] = useState({ vales_20: 0, vales_43: 0, balones: 0, dinero: '', notas: '' })
@@ -199,7 +200,7 @@ export default function ACuenta() {
     const { count } = await supabase.from('a_cuenta').select('*', { count: 'exact', head: true })
     const numero = (count || 0) + 1
     const entradaHistorial = {
-      fecha: form.fecha || new Date().toISOString().split('T')[0],
+      fecha: form.fecha || hoyPeru(),
       vales_20: parseInt(form.vales_20) || 0,
       vales_43: parseInt(form.vales_43) || 0,
       balones: parseInt(form.balones) || 0,
@@ -240,7 +241,7 @@ export default function ACuenta() {
     const din = parseFloat(form.dinero) || 0
     setSaving(true); setError('')
     const entradaHistorial = {
-      fecha: form.fecha || new Date().toISOString().split('T')[0],
+      fecha: form.fecha || hoyPeru(),
       vales_20: v20, vales_43: v43, balones: bal, dinero: din,
       notas: form.notas || null,
       tipo: 'deposito'
@@ -252,7 +253,7 @@ export default function ACuenta() {
       balones: (registroPendiente.balones || 0) + bal,
       dinero: (parseFloat(registroPendiente.dinero) || 0) + din,
       historial_cambios: [...historialAnterior, entradaHistorial],
-      fecha_actualizacion: new Date().toISOString().split('T')[0],
+      fecha_actualizacion: hoyPeru(),
       updated_at: new Date().toISOString()
     }).eq('id', registroPendiente.id)
     setSaving(false)
@@ -347,7 +348,7 @@ export default function ACuenta() {
   async function guardarEdicionAC() {
     if (!selected) return
     setSaving(true); setError('')
-    const hoy = new Date().toISOString().split('T')[0]
+    const hoy = hoyPeru()
     // Build historial entry
     const entradaHistorial = {
       fecha_cambio: hoy,
@@ -386,7 +387,7 @@ export default function ACuenta() {
     if (v20 === 0 && v43 === 0 && bal === 0 && din === 0) { setError('Ingresa al menos un ítem'); return }
     setSaving(true); setError('')
     const entradaHistorial = {
-      fecha: new Date().toISOString().split('T')[0],
+      fecha: hoyPeru(),
       vales_20: v20, vales_43: v43, balones: bal, dinero: din,
       notas: depositoForm.notas || null,
       tipo: 'deposito'
@@ -543,7 +544,7 @@ export default function ACuenta() {
                           </button>
                         )}
                         {r.estado === 'pendiente' && (
-                          <button onClick={() => { setSelected(r); setEntregaForm({ fecha_entrega: new Date().toISOString().split('T')[0], quien_recoge: '', vales_20: 0, vales_43: 0, balones: 0, dinero: '' }); setError(''); setModal('entrega') }}
+                          <button onClick={() => { setSelected(r); setEntregaForm({ fecha_entrega: hoyPeru(), quien_recoge: '', vales_20: 0, vales_43: 0, balones: 0, dinero: '' }); setError(''); setModal('entrega') }}
                             className="text-xs bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 px-2 py-1 rounded-lg transition-all">
                             ✓ Entregar
                           </button>
