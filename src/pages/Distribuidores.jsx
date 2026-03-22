@@ -366,8 +366,8 @@ export default function Distribuidores() {
           <div className="space-y-4">
             {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
             <div className="bg-gray-800/50 rounded-lg p-4">
-              <p className="text-xs text-gray-500 mb-1">Balones en campo × Precio</p>
-              <p className="text-lg font-bold text-white">{selected.stock_actual} bal. × S/{selected.precio_base} = <span className="text-yellow-400">S/{(selected.stock_actual * selected.precio_base).toLocaleString()}</span></p>
+              <p className="text-xs text-gray-500 mb-1">Precio por balón · Balones en campo: {selected.stock_actual}</p>
+              <p className="text-lg font-bold text-white">S/{selected.precio_base}/bal. · <span className="text-blue-400">Ingresa los balones vendidos abajo ↓</span></p>
             </div>
             <div className="grid grid-cols-2 gap-4">
             <div><label className="label">Balones vendidos</label><input type="number" className="input" placeholder={`Máx: ${selected.stock_actual}`} value={cuentaForm.balones_vendidos || ""} onChange={e => setCuentaForm({...cuentaForm, balones_vendidos: e.target.value})} /><p className="text-xs text-gray-500 mt-1">Balones que salieron a vender ({selected.stock_actual} en campo)</p></div>
@@ -397,13 +397,14 @@ export default function Distribuidores() {
             </div>
 
             {/* Cálculo automático */}
-            {(cuentaForm.vales20 || cuentaForm.vales43 || cuentaForm.adelantos || cuentaForm.balones_devueltos) && (() => {
+            {(cuentaForm.balones_vendidos || cuentaForm.vales20 || cuentaForm.vales43 || cuentaForm.adelantos || cuentaForm.balones_devueltos) && (() => {
+              const vendidos = parseInt(cuentaForm.balones_vendidos) || 0
               const v20 = (parseInt(cuentaForm.vales20) || 0) * 20
               const v43 = (parseInt(cuentaForm.vales43) || 0) * 43
               const adel = parseFloat(cuentaForm.adelantos) || 0
               const devueltos = parseInt(cuentaForm.balones_devueltos) || 0
-              const faltantes = selected.stock_actual - devueltos
-              const total = selected.stock_actual * selected.precio_base
+              const faltantes = vendidos - devueltos
+              const total = vendidos * selected.precio_base
               const saldo = total - v20 - v43 - adel
               return (
                 <div className="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4 space-y-2 text-sm">
