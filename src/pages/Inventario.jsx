@@ -405,7 +405,7 @@ export default function Inventario() {
               </tr></thead>
               <tbody className="divide-y divide-gray-800/50">
                 {almacenes.map(a => {
-                  const esTienda = !a.nombre?.toLowerCase().includes('distribuidor') && !a.nombre?.toLowerCase().includes('dist')
+                  const esTienda = a.nombre?.toLowerCase().includes('tienda') || a.nombre?.toLowerCase().includes('principal')
                   const spt5 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '5kg')
                   const spt10 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '10kg')
                   const spt45 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '45kg')
