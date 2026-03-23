@@ -60,6 +60,8 @@ export default function Deudas() {
   const [sugerencias, setSugerencias] = useState([])
   const [mostrarSugerencias, setMostrarSugerencias] = useState(false)
   const [editForm, setEditForm] = useState({ monto_pendiente: '', balones_pendiente: '', vales_20_pendiente: '', vales_43_pendiente: '', fecha_deuda: '', notas: '' })
+  const [historialCompleto, setHistorialCompleto] = useState([])
+  const [loadingHistorial, setLoadingHistorial] = useState(false)
 
   useEffect(() => {
     cargar(); cargarClientes()
@@ -77,6 +79,39 @@ export default function Deudas() {
     const { data } = await query
     setDeudas(data || [])
     setLoading(false)
+  }
+
+  async function cargarHistorialCompleto(nombreDeudor) {
+    setLoadingHistorial(true)
+    // Buscar todas las deudas del cliente (por nombre)
+    const { data } = await supabase.from('deudas')
+      .select('*')
+      .ilike('nombre_deudor', nombreDeudor)
+      .order('created_at', { ascending: false })
+    
+    // Combinar todos los movimientos de todas las deudas
+    const todosMovimientos = []
+    ;(data || []).forEach(deuda => {
+      const movimientos = deuda.historial || []
+      movimientos.forEach(m => {
+        todosMovimientos.push({
+          ...m,
+          deuda_id: deuda.id,
+          deuda_estado: deuda.estado,
+          deuda_fecha: deuda.fecha_deuda
+        })
+      })
+    })
+    
+    // Ordenar por fecha descendente
+    todosMovimientos.sort((a, b) => {
+      const fa = new Date(a.fecha || a.deuda_fecha || '2000-01-01')
+      const fb = new Date(b.fecha || b.deuda_fecha || '2000-01-01')
+      return fb - fa
+    })
+    
+    setHistorialCompleto({ deudas: data || [], movimientos: todosMovimientos })
+    setLoadingHistorial(false)
   }
 
   async function cargarClientes() {
@@ -346,7 +381,7 @@ export default function Deudas() {
                       </div>
                       {d.notas && <p className="text-amber-400/80 text-xs mt-1 italic">📝 "{d.notas}"</p>}
                       <div className="flex flex-wrap gap-2 mt-2">
-                        <button onClick={() => { setSelected(d); setError(''); setModal('historial') }}
+                        <button onClick={() => { setSelected(d); setError(''); cargarHistorialCompleto(d.nombre_deudor); setModal('historial') }}
                           className="text-xs bg-blue-600/20 border border-blue-600/30 text-blue-400 px-2 py-1 rounded-lg">📋 Historial</button>
                         {d.estado !== 'liquidada' && (
                           <button onClick={() => { setSelected(d); setPagoForm(emptyPagoForm); setError(''); setModal('pago') }}
@@ -618,83 +653,107 @@ export default function Deudas() {
         </Modal>
       )}
 
-      {/* Modal historial */}
+      {/* Modal historial completo */}
       {modal === 'historial' && selected && (
-        <Modal title={`Historial — ${selected.nombre_deudor}`} onClose={() => setModal(null)} wide>
+        <Modal title={`📋 Historial completo — ${selected.nombre_deudor}`} onClose={() => setModal(null)} wide>
           <div className="space-y-4">
-            <div className="bg-red-900/20 border border-red-800/40 rounded-lg p-3">
-              <p className="text-xs text-gray-400 mb-2">Deuda pendiente actual:</p>
-              <div className="flex gap-2 flex-wrap">
-                {parseFloat(selected.monto_pendiente) > 0 && <span className="text-sm bg-red-900/40 text-red-300 px-3 py-1 rounded-lg font-bold">💰 S/ {Number(selected.monto_pendiente).toLocaleString('es-PE')}</span>}
-                {parseInt(selected.balones_pendiente) > 0 && <span className="text-sm bg-orange-900/40 text-orange-300 px-3 py-1 rounded-lg font-bold">🔵 {selected.balones_pendiente} bal.</span>}
-                {parseInt(selected.vales_20_pendiente) > 0 && <span className="text-sm bg-yellow-900/40 text-yellow-300 px-3 py-1 rounded-lg font-bold">🎫 {selected.vales_20_pendiente}×S/20</span>}
-                {parseInt(selected.vales_43_pendiente) > 0 && <span className="text-sm bg-yellow-900/40 text-yellow-300 px-3 py-1 rounded-lg font-bold">🎫 {selected.vales_43_pendiente}×S/43</span>}
-                {!parseFloat(selected.monto_pendiente) && !parseInt(selected.balones_pendiente) && !parseInt(selected.vales_20_pendiente) && !parseInt(selected.vales_43_pendiente) && (
-                  <span className="text-emerald-400 font-bold">✅ Deuda liquidada</span>
-                )}
+
+            {/* Estado actual */}
+            <div className={`rounded-xl p-4 border ${selected.estado === 'liquidada' ? 'bg-emerald-900/20 border-emerald-700/40' : 'bg-red-900/20 border-red-800/40'}`}>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <p className="text-xs text-gray-400 mb-1">Estado actual de la deuda</p>
+                  <span className={`text-sm font-bold ${selected.estado === 'liquidada' ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {selected.estado === 'liquidada' ? '✅ Liquidada' : selected.estado === 'pagada_parcial' ? '⚠️ Pagada parcialmente' : '🔴 Activa'}
+                  </span>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {parseFloat(selected.monto_pendiente) > 0 && <span className="text-sm bg-red-900/40 text-red-300 px-3 py-1 rounded-lg font-bold">💰 S/ {Number(selected.monto_pendiente).toLocaleString('es-PE')}</span>}
+                  {parseInt(selected.balones_pendiente) > 0 && <span className="text-sm bg-orange-900/40 text-orange-300 px-3 py-1 rounded-lg font-bold">🔵 {selected.balones_pendiente} bal.</span>}
+                  {parseInt(selected.vales_20_pendiente) > 0 && <span className="text-sm bg-yellow-900/40 text-yellow-300 px-3 py-1 rounded-lg font-bold">🎫 {selected.vales_20_pendiente}×S/20</span>}
+                  {parseInt(selected.vales_43_pendiente) > 0 && <span className="text-sm bg-yellow-900/40 text-yellow-300 px-3 py-1 rounded-lg font-bold">🎫 {selected.vales_43_pendiente}×S/43</span>}
+                  {selected.estado === 'liquidada' && <span className="text-emerald-400 font-bold">Sin deuda pendiente</span>}
+                </div>
               </div>
             </div>
+
+            {/* Resumen estadístico */}
+            {historialCompleto?.deudas && (
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-gray-800/50 rounded-xl p-3 text-center">
+                  <p className="text-2xl font-bold text-white">{historialCompleto.deudas.length}</p>
+                  <p className="text-xs text-gray-500 mt-1">Deudas totales</p>
+                </div>
+                <div className="bg-emerald-900/20 rounded-xl p-3 text-center">
+                  <p className="text-2xl font-bold text-emerald-400">{historialCompleto.deudas.filter(d => d.estado === 'liquidada').length}</p>
+                  <p className="text-xs text-gray-500 mt-1">Liquidadas</p>
+                </div>
+                <div className="bg-red-900/20 rounded-xl p-3 text-center">
+                  <p className="text-2xl font-bold text-red-400">{historialCompleto.deudas.filter(d => d.estado !== 'liquidada').length}</p>
+                  <p className="text-xs text-gray-500 mt-1">Activas</p>
+                </div>
+              </div>
+            )}
+
+            {/* Timeline de movimientos */}
             <div>
-              <p className="text-xs text-gray-400 font-medium mb-2">📋 Historial detallado de movimientos:</p>
-              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                {(selected.historial || []).length === 0 ? (
-                  <p className="text-center text-gray-400 text-sm py-4">Sin movimientos registrados</p>
-                ) : (
-                  (selected.historial || []).map((h, i) => {
-                    const esPago = h.tipo === 'pago'
-                    const items = []
-                    if (parseFloat(h.monto) > 0) items.push(`S/ ${Number(h.monto).toLocaleString('es-PE')}`)
-                    if (parseInt(h.balones) > 0) items.push(`${h.balones} bal. ${h.tipo_balon || ''}`.trim())
-                    if (parseInt(h.vales_20) > 0) items.push(`${h.vales_20} vale(s) S/20`)
-                    if (parseInt(h.vales_43) > 0) items.push(`${h.vales_43} vale(s) S/43`)
-
-                    async function borrarEntradaDeuda() {
-                      if (!confirm('¿Eliminar esta entrada del historial?')) return
-                      const nuevoHistorial = (selected.historial || []).filter((_, idx) => idx !== i)
-                      const { error: e } = await supabase.from('deudas').update({
-                        historial: nuevoHistorial,
-                        updated_at: new Date().toISOString()
-                      }).eq('id', selected.id)
-                      if (e) { alert('Error: ' + e.message); return }
-                      const { data } = await supabase.from('deudas').select('*').eq('id', selected.id).single()
-                      setSelected(data)
-                      cargar()
-                    }
-
-                    return (
-                      <div key={i} className={`flex items-start gap-3 rounded-lg p-3 border ${esPago ? 'bg-emerald-900/20 border-emerald-800/30' : 'bg-red-900/20 border-red-800/30'}`}>
-                        <span className="text-base">{esPago ? '💚' : '🔴'}</span>
-                        <div className="flex-1">
-                          <div className="flex justify-between items-start gap-2">
-                            <div>
-                              <p className={`text-xs font-semibold ${esPago ? 'text-emerald-300' : 'text-red-300'}`}>
-                                {esPago ? `Pagó${h.metodo_pago ? ' · ' + h.metodo_pago : ''}` : (i === 0 ? 'Deuda inicial' : 'Deuda adicional')}
-                              </p>
-                              <p className="text-xs text-gray-400">
-                                {h.fecha ? format(new Date(h.fecha + 'T12:00:00'), "dd 'de' MMMM yyyy", { locale: es }) : '—'}
-                              </p>
-                              {h.notas && <p className="text-amber-400/80 text-xs mt-0.5 italic">📝 "{h.notas}"</p>}
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <p className={`text-sm font-bold ${esPago ? 'text-emerald-300' : 'text-red-300'}`}>
-                                {esPago ? '-' : '+'}{items.join(' + ')}
-                              </p>
-                              {perfil?.rol === 'admin' && (
-                                <button onClick={borrarEntradaDeuda}
-                                  className="text-xs bg-red-600/20 hover:bg-red-600/40 border border-red-600/30 text-red-400 px-1.5 py-0.5 rounded transition-all"
-                                  title="Borrar esta entrada">
-                                  🗑️
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
+              <p className="text-xs text-gray-400 font-semibold uppercase mb-3">📅 Todos los movimientos</p>
+              {loadingHistorial ? (
+                <div className="text-center text-gray-500 py-6">Cargando historial...</div>
+              ) : (
+                <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                  {/* Agrupar por deuda */}
+                  {(historialCompleto?.deudas || [selected]).map((deuda, di) => (
+                    <div key={deuda.id} className="mb-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${deuda.estado === 'liquidada' ? 'bg-emerald-900/40 text-emerald-400' : 'bg-red-900/40 text-red-400'}`}>
+                          {deuda.estado === 'liquidada' ? '✅ Liquidada' : '🔴 Activa'}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          Deuda del {deuda.fecha_deuda ? format(new Date(deuda.fecha_deuda + 'T12:00:00'), 'dd/MM/yyyy', { locale: es }) : '—'}
+                        </span>
                       </div>
-                    )
-                  })
-                )}
-              </div>
+                      <div className="space-y-1.5 ml-2 border-l-2 border-gray-700 pl-3">
+                        {(deuda.historial || []).length === 0 ? (
+                          <p className="text-xs text-gray-600 py-2">Sin movimientos</p>
+                        ) : (
+                          (deuda.historial || []).map((h, i) => {
+                            const esPago = h.tipo === 'pago'
+                            const items = []
+                            if (parseFloat(h.monto) > 0) items.push(`S/ ${Number(h.monto).toLocaleString('es-PE')}`)
+                            if (parseInt(h.balones) > 0) items.push(`${h.balones} bal. ${h.tipo_balon || ''}`.trim())
+                            if (parseInt(h.vales_20) > 0) items.push(`${h.vales_20}×S/20`)
+                            if (parseInt(h.vales_43) > 0) items.push(`${h.vales_43}×S/43`)
+                            return (
+                              <div key={i} className={`flex items-start gap-2 rounded-lg p-2.5 border text-xs ${esPago ? 'bg-emerald-900/20 border-emerald-800/30' : 'bg-red-900/20 border-red-800/30'}`}>
+                                <span>{esPago ? '💚' : '🔴'}</span>
+                                <div className="flex-1">
+                                  <div className="flex justify-between items-start">
+                                    <div>
+                                      <span className={`font-semibold ${esPago ? 'text-emerald-300' : 'text-red-300'}`}>
+                                        {esPago ? `Pagó${h.metodo_pago ? ' · ' + h.metodo_pago : ''}` : (i === 0 ? 'Deuda inicial' : 'Cargo adicional')}
+                                      </span>
+                                      <span className="text-gray-500 ml-2">
+                                        {h.fecha ? format(new Date(h.fecha + 'T12:00:00'), 'dd/MM/yyyy', { locale: es }) : '—'}
+                                      </span>
+                                    </div>
+                                    <span className={`font-bold ${esPago ? 'text-emerald-300' : 'text-red-300'}`}>
+                                      {esPago ? '−' : '+'}{items.join(' + ')}
+                                    </span>
+                                  </div>
+                                  {h.notas && <p className="text-amber-400/70 italic mt-0.5">📝 {h.notas}</p>}
+                                </div>
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+
             <button onClick={() => setModal(null)} className="btn-secondary w-full">Cerrar</button>
           </div>
         </Modal>
