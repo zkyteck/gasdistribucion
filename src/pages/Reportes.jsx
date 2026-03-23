@@ -56,21 +56,30 @@ export default function Reportes() {
   useEffect(() => { calcular() }, [periodo, tab, filtroVista])
 
   function getRango() {
-    const hoy = new Date()
-    if (periodo === 'hoy') return { desde: startOfDay(hoy), hasta: endOfDay(hoy) }
-    if (periodo === 'semana') return { desde: startOfWeek(hoy, { weekStartsOn: 1 }), hasta: endOfDay(hoy) }
-    if (periodo === 'mes') return { desde: startOfMonth(hoy), hasta: endOfMonth(hoy) }
-    return { desde: startOfDay(parseISO(fechaDesde)), hasta: endOfDay(parseISO(fechaHasta)) }
+    // Siempre trabajar con fechas locales Peru (YYYY-MM-DD)
+    const hoy = hoyPeru()
+    const ahora = new Date()
+    if (periodo === 'hoy') return { desdeDate: hoy, hastaDate: hoy }
+    if (periodo === 'semana') {
+      const hace7 = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000)
+      const d7 = hace7.toISOString().split('T')[0]
+      return { desdeDate: d7, hastaDate: hoy }
+    }
+    if (periodo === 'mes') {
+      const [y, m] = hoy.split('-').map(Number)
+      const inicioMes = `${y}-${String(m).padStart(2,'0')}-01`
+      const finMes = new Date(y, m, 0).toISOString().split('T')[0]
+      return { desdeDate: inicioMes, hastaDate: finMes }
+    }
+    return { desdeDate: fechaDesde, hastaDate: fechaHasta }
   }
 
   async function calcular() {
     setLoading(true)
     try {
-      const { desde, hasta } = getRango()
-      const desdeISO = desde.toISOString()
-      const hastaISO = hasta.toISOString()
-      const desdeDate = desdeISO.split('T')[0]
-      const hastaDate = hastaISO.split('T')[0]
+      const { desdeDate, hastaDate } = getRango()
+      const desdeISO = desdeDate + 'T00:00:00'
+      const hastaISO = hastaDate + 'T23:59:59'
 
       const [
         { data: ventas },
@@ -173,10 +182,9 @@ export default function Reportes() {
       }) || []
 
       // GRÁFICA DIARIA
-      const { desde: d1, hasta: d2 } = getRango()
-      const dias = eachDayOfInterval({ start: d1, end: d2 })
+      const dias = eachDayOfInterval({ start: parseISO(desdeDate), end: parseISO(hastaDate) })
       const diario = dias.map(dia => {
-        const ds = dia.toISOString().split('T')[0]
+        const ds = format(dia, 'yyyy-MM-dd')
         const vDia = ventas?.filter(v => v.fecha?.startsWith(ds)) || []
         const cDia = cuentasDist?.filter(c => c.periodo_fin === ds) || []
         const iT = vDia.reduce((s, v) => s + (v.cantidad || 0) * (v.precio_unitario || 0), 0)
