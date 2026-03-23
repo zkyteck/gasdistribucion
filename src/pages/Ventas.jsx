@@ -54,7 +54,7 @@ export default function Ventas() {
     setLoading(true)
     const [{ data: v }, { data: a }, { data: pt }, { data: c }, { data: ptb }, { data: spt }] = await Promise.all([
       supabase.from('ventas').select('*, clientes(nombre), almacenes(nombre), precio_tipos(nombre)')
-        .gte('fecha', filtroFecha).lt('fecha', filtroFecha + 'T23:59:59').order('created_at', { ascending: false }),
+        .gte('fecha', filtroFecha + 'T00:00:00').lte('fecha', filtroFecha + 'T23:59:59').order('fecha', { ascending: false }),
       supabase.from('almacenes').select('id, nombre, stock_actual').eq('activo', true).ilike('nombre', '%tienda%'),
       supabase.from('precio_tipos').select('*').eq('activo', true),
       supabase.from('clientes').select('id, nombre, tipo, es_varios').order('nombre').limit(100),
@@ -165,7 +165,7 @@ export default function Ventas() {
       almacen_id: form.almacen_id,
       precio_tipo_id: form.precio_tipo_id || null,
       tipo_balon: form.tipo_balon,
-      fecha: form.fecha ? form.fecha + 'T12:00:00' : new Date().toISOString(),
+      fecha: (form.fecha || hoyPeru()) + 'T12:00:00',
       cantidad: parseInt(form.cantidad),
       precio_unitario: parseFloat(form.precio_unitario),
       metodo_pago: form.metodo_pago,
@@ -207,7 +207,11 @@ export default function Ventas() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div><label className="label">Filtrar por fecha</label><input type="date" className="input" value={filtroFecha} onChange={e => setFiltroFecha(e.target.value)} /></div>
+        <div className="flex items-end gap-2">
+          <div><label className="label">Filtrar por fecha</label><input type="date" className="input" value={filtroFecha} onChange={e => setFiltroFecha(e.target.value)} /></div>
+          <button onClick={() => setFiltroFecha(hoyPeru())} className="btn-secondary py-2 text-xs">📅 Hoy</button>
+          <button onClick={() => setFiltroFecha(new Date(new Date().setDate(new Date().getDate()-1)).toISOString().split('T')[0])} className="btn-secondary py-2 text-xs">⬅ Ayer</button>
+        </div>
         <div className="stat-card border border-blue-500/20"><p className="text-2xl font-bold text-white">{totalBalones}</p><p className="text-xs text-gray-500">Balones vendidos</p></div>
         <div className="stat-card border border-emerald-500/20"><p className="text-2xl font-bold text-emerald-400">S/ {totalDia.toLocaleString('es-PE')}</p><p className="text-xs text-gray-500">Ingresos del día</p></div>
       </div>
