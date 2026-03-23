@@ -78,8 +78,8 @@ export default function Reportes() {
     setLoading(true)
     try {
       const { desdeDate, hastaDate } = getRango()
-      const desdeISO = desdeDate + 'T00:00:00'
-      const hastaISO = hastaDate + 'T23:59:59'
+      const desdeISO = desdeDate + 'T00:00:00-05:00'
+      const hastaISO = hastaDate + 'T23:59:59-05:00'
 
       const [
         { data: ventas },
@@ -91,7 +91,7 @@ export default function Reportes() {
         { data: deudas },
         { data: stockPorTipo },
       ] = await Promise.all([
-        supabase.from('ventas').select('*, clientes(nombre), almacenes(nombre)').gte('fecha', desdeDate + 'T00:00:00').lte('fecha', hastaDate + 'T23:59:59'),
+        supabase.from('ventas').select('*, clientes(nombre), almacenes(nombre)').gte('fecha', desdeDate + 'T00:00:00-05:00').lte('fecha', hastaDate + 'T23:59:59-05:00'),
         supabase.from('cuentas_distribuidor').select('*, distribuidores(nombre)').gte('periodo_fin', desdeDate).lte('periodo_fin', hastaDate),
         supabase.from('configuracion').select('clave, valor').in('clave', ['costo_5kg', 'costo_10kg', 'costo_45kg']),
         supabase.from('almacenes').select('*').eq('activo', true).order('nombre'),
