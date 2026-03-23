@@ -33,6 +33,9 @@ export default function Vales() {
   const [reloadKey, setReloadKey] = useState(0)
 
   const [form, setForm] = useState({ cantidad_20: '', cantidad_43: '', fecha: hoyPeru(), notas: '' })
+  const [smsForm, setSmsForm] = useState({ dni: '', cupon: '', tipo: '20' })
+  const [smsHistorial, setSmsHistorial] = useState([])
+  const [modalSms, setModalSms] = useState(false)
   const [retiroForm, setRetiroForm] = useState({ monto: '', motivo: '', fecha: hoyPeru() })
 
   useEffect(() => {
@@ -95,6 +98,25 @@ export default function Vales() {
     setModal(null); setRetiroForm({ monto: '', motivo: '', fecha: hoyPeru() }); cargar()
   }
 
+  function enviarSmsFise() {
+    if (!smsForm.dni || !smsForm.cupon) return
+    const mensaje = `Fise ah01 ${smsForm.dni} ${smsForm.cupon}`
+    const url = `sms:58996?body=${encodeURIComponent(mensaje)}`
+    // Guardar en historial local
+    const nuevo = { id: Date.now(), dni: smsForm.dni, cupon: smsForm.cupon, tipo: smsForm.tipo, fecha: hoyPeru(), hora: new Date().toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'}), estado: 'enviado' }
+    setSmsHistorial(h => [nuevo, ...h])
+    setSmsForm({ dni: '', cupon: '', tipo: '20' })
+    window.open(url, '_blank')
+  }
+
+  function consultarSaldo() {
+    window.open('sms:58996?body=saldo%20ah01', '_blank')
+  }
+
+  function marcarEstadoSms(id, estado) {
+    setSmsHistorial(h => h.map(x => x.id === id ? {...x, estado} : x))
+  }
+
   async function eliminarValesPorTipo(tipo) {
     const cant = tipo === '20' ? cant20 : cant43
     if (!cant) return
@@ -126,7 +148,15 @@ export default function Vales() {
           <h2 className="text-xl font-bold text-white">Vales FISE</h2>
           <p className="text-gray-500 text-sm">Control de vales S/20 y S/43</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={consultarSaldo}
+            className="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/40 text-blue-400 text-sm font-medium px-3 py-2 rounded-xl transition-all flex items-center gap-2">
+            💰 Consultar saldo FISE
+          </button>
+          <button onClick={() => setModalSms(true)}
+            className="bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/40 text-emerald-400 text-sm font-medium px-3 py-2 rounded-xl transition-all flex items-center gap-2">
+            📱 Procesar vale FISE
+          </button>
           <button onClick={() => { setRetiroForm({ monto: '', motivo: '', fecha: hoyPeru() }); setError(''); setModal('retiro') }} className="btn-secondary">
             <DollarSign className="w-4 h-4" />Registrar retiro
           </button>
@@ -226,6 +256,48 @@ export default function Vales() {
         </div>
       )}
 
+      {/* Historial SMS FISE enviados */}
+      {smsHistorial.length > 0 && (
+        <div className="card p-0 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-white">📱 Vales FISE enviados por SMS (esta sesión)</h3>
+            <span className="text-xs text-gray-500">{smsHistorial.length} enviados</span>
+          </div>
+          <div className="divide-y divide-gray-800/50">
+            {smsHistorial.map(s => (
+              <div key={s.id} className="flex items-center justify-between px-6 py-3 gap-4">
+                <div className="flex items-center gap-3">
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${s.estado === 'procesado' ? 'bg-emerald-400' : s.estado === 'rechazado' ? 'bg-red-400' : 'bg-yellow-400'}`} />
+                  <div>
+                    <p className="text-white text-sm font-medium">DNI: {s.dni} · Cupón: {s.cupon}</p>
+                    <p className="text-gray-500 text-xs">{s.fecha} {s.hora} · Vale S/{s.tipo}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {s.estado === 'enviado' ? (
+                    <>
+                      <span className="text-xs text-yellow-400 bg-yellow-900/30 border border-yellow-700/40 px-2 py-1 rounded-lg">⏳ Esperando</span>
+                      <button onClick={() => marcarEstadoSms(s.id, 'procesado')}
+                        className="text-xs bg-emerald-600/20 border border-emerald-600/40 text-emerald-400 px-2 py-1 rounded-lg hover:bg-emerald-600/30 transition-all">
+                        ✅ Procesado
+                      </button>
+                      <button onClick={() => marcarEstadoSms(s.id, 'rechazado')}
+                        className="text-xs bg-red-600/20 border border-red-600/40 text-red-400 px-2 py-1 rounded-lg hover:bg-red-600/30 transition-all">
+                        ❌ Rechazado
+                      </button>
+                    </>
+                  ) : s.estado === 'procesado' ? (
+                    <span className="text-xs text-emerald-400 bg-emerald-900/30 border border-emerald-700/40 px-2 py-1 rounded-lg">✅ Procesado</span>
+                  ) : (
+                    <span className="text-xs text-red-400 bg-red-900/30 border border-red-700/40 px-2 py-1 rounded-lg">❌ Rechazado</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Historial de días */}
       <HistorialVales key={reloadKey} filtroFecha={filtroFecha} onFechaClick={cargar} />
 
@@ -284,6 +356,66 @@ export default function Vales() {
               <button onClick={() => setModal(null)} className="btn-secondary flex-1">Cancelar</button>
               <button onClick={guardarLote} disabled={saving} className="btn-primary flex-1 justify-center">
                 {saving ? 'Guardando...' : '✓ Registrar vales'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal procesar vale FISE por SMS */}
+      {modalSms && (
+        <Modal title="📱 Procesar vale FISE por SMS" onClose={() => setModalSms(false)}>
+          <div className="space-y-5">
+            <div className="bg-blue-900/20 border border-blue-800/40 rounded-xl p-4 text-sm text-gray-400">
+              <p className="text-blue-300 font-medium mb-1">¿Cómo funciona?</p>
+              <p>1. Ingresa el DNI y cupón del cliente</p>
+              <p className="mt-1">2. Presiona <strong className="text-white">"Enviar SMS"</strong> — abrirá tu celular con el mensaje listo</p>
+              <p className="mt-1">3. Envía el SMS al <strong className="text-white">58996</strong></p>
+              <p className="mt-1">4. Cuando recibas la respuesta, marca como ✅ Procesado o ❌ Rechazado</p>
+            </div>
+
+            <div>
+              <label className="label">DNI del cliente</label>
+              <input type="number" className="input text-lg font-mono" placeholder="Ej: 23219038"
+                value={smsForm.dni} onChange={e => setSmsForm(f => ({...f, dni: e.target.value}))}
+                maxLength={8} />
+            </div>
+
+            <div>
+              <label className="label">Número de cupón FISE</label>
+              <input type="text" className="input text-lg font-mono" placeholder="Ej: 0802267980430"
+                value={smsForm.cupon} onChange={e => setSmsForm(f => ({...f, cupon: e.target.value}))} />
+            </div>
+
+            <div>
+              <label className="label">Tipo de vale</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => setSmsForm(f => ({...f, tipo: '20'}))}
+                  className={`py-3 rounded-xl border text-sm font-medium transition-all ${smsForm.tipo === '20' ? 'bg-yellow-900/30 border-yellow-500 text-yellow-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                  🎫 Vale S/ 20
+                </button>
+                <button onClick={() => setSmsForm(f => ({...f, tipo: '43'}))}
+                  className={`py-3 rounded-xl border text-sm font-medium transition-all ${smsForm.tipo === '43' ? 'bg-orange-900/30 border-orange-500 text-orange-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                  🎫 Vale S/ 43
+                </button>
+              </div>
+            </div>
+
+            {smsForm.dni && smsForm.cupon && (
+              <div className="bg-gray-800/50 rounded-xl p-4">
+                <p className="text-xs text-gray-500 mb-1">Mensaje que se enviará al 58996:</p>
+                <p className="text-white font-mono text-sm bg-gray-900 rounded-lg px-3 py-2">
+                  Fise ah01 {smsForm.dni} {smsForm.cupon}
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setModalSms(false)} className="btn-secondary flex-1">Cancelar</button>
+              <button onClick={() => { enviarSmsFise(); setModalSms(false) }}
+                disabled={!smsForm.dni || !smsForm.cupon}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-xl transition-all flex items-center justify-center gap-2">
+                📱 Enviar SMS al 58996
               </button>
             </div>
           </div>
