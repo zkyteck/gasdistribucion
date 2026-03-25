@@ -773,7 +773,11 @@ export default function Distribuidores() {
               const totalVendidos = rendiciones.reduce((s,r) => s + (r.balones_vendidos||0), 0)
               const totalDevueltos = rendiciones.reduce((s,r) => s + (r.balones_devueltos||0), 0)
               const totalPendientes = rendiciones.reduce((s,r) => s + (r.balones_faltantes||0), 0)
-              const totalCobrar = rendiciones.filter(r=>r.estado!=='cancelado').reduce((s,r) => s+(r.total_esperado||0)-(r.total_vales||0)-(r.total_adelantos||0), 0)
+              // Total esperado solo de rendiciones con balones
+              const totalEsperado = rendiciones.reduce((s,r) => s + (r.total_esperado||0), 0)
+              // Total abonado en TODAS las rendiciones (vales + adelantos)
+              const totalAbonado = rendiciones.reduce((s,r) => s + (r.total_vales||0) + (r.total_adelantos||0), 0)
+              const totalCobrar = Math.max(0, totalEsperado - totalAbonado)
               return (
                 <div className="bg-blue-900/10 border border-blue-800/30 rounded-xl p-4">
                   <p className="text-xs text-blue-300 font-semibold mb-3">📊 Resumen total de rendiciones</p>
