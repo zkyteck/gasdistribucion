@@ -232,16 +232,28 @@ export default function Distribuidores() {
         updated_at: new Date().toISOString() 
       })
       .eq('id', selected.id)
-    // Sincronizar vacíos al almacén del distribuidor
-    if (selected.almacen_id && balonesVendidos > 0) {
+    // Actualizar almacén: descontar llenos vendidos, sumar vacíos, agregar devueltos
+    if (selected.almacen_id) {
       const almacen = almacenes.find(a => a.id === selected.almacen_id)
       if (almacen) {
+        const nuevosLlenos = Math.max(0, (almacen.stock_actual || 0) - balonesVendidos + balonesDevueltos)
+        const nuevosVacios = Math.max(0, (almacen.balones_vacios || 0) + balonesVendidos - balonesDevueltos)
+        const nuevosVacios10 = Math.max(0, (almacen.vacios_10kg || 0) + balonesVendidos - balonesDevueltos)
         await supabase.from('almacenes')
           .update({
-            balones_vacios: (almacen.balones_vacios || 0) + balonesVendidos,
-            vacios_10kg: (almacen.vacios_10kg || 0) + balonesVendidos
+            stock_actual: nuevosLlenos,
+            balones_vacios: nuevosVacios,
+            vacios_10kg: nuevosVacios10
           })
           .eq('id', selected.almacen_id)
+        // También actualizar stock_por_tipo para el desglose
+        const { data: spt } = await supabase.from('stock_por_tipo')
+          .select('stock_actual').eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg').single()
+        if (spt) {
+          await supabase.from('stock_por_tipo')
+            .update({ stock_actual: Math.max(0, spt.stock_actual - balonesVendidos + balonesDevueltos) })
+            .eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg')
+        }
       }
     }
     setSaving(false); setModal(null); cargar()
