@@ -71,6 +71,7 @@ export default function Distribuidores() {
         ...dist,
         stock_actual: almacenAsignado?.stock_actual || 0,
         balones_vacios: almacenAsignado?.balones_vacios || 0,
+        balones_pendientes_devolucion: almacenAsignado?.balones_pendientes_devolucion || 0,
       }
     })
     setDistribuidores(distEnriquecidos)
@@ -237,13 +238,17 @@ export default function Distribuidores() {
       const almacen = almacenes.find(a => a.id === selected.almacen_id)
       if (almacen) {
         const nuevosLlenos = Math.max(0, (almacen.stock_actual || 0) - balonesVendidos + balonesDevueltos)
-        const nuevosVacios = Math.max(0, (almacen.balones_vacios || 0) + balonesVendidos - balonesDevueltos)
-        const nuevosVacios10 = Math.max(0, (almacen.vacios_10kg || 0) + balonesVendidos - balonesDevueltos)
+        // Vacíos = solo los que físicamente devolvió
+        const nuevosVacios = Math.max(0, (almacen.balones_vacios || 0) + balonesDevueltos)
+        const nuevosVacios10 = Math.max(0, (almacen.vacios_10kg || 0) + balonesDevueltos)
+        // Pendientes = balones que aún no devuelve
+        const nuevosPendientes = Math.max(0, (almacen.balones_pendientes_devolucion || 0) + balonesFaltantes)
         await supabase.from('almacenes')
           .update({
             stock_actual: nuevosLlenos,
             balones_vacios: nuevosVacios,
-            vacios_10kg: nuevosVacios10
+            vacios_10kg: nuevosVacios10,
+            balones_pendientes_devolucion: nuevosPendientes
           })
           .eq('id', selected.almacen_id)
         // También actualizar stock_por_tipo para el desglose
@@ -320,9 +325,15 @@ export default function Distribuidores() {
                 </div>
                 <div className="bg-gray-700/30 border border-gray-600/30 rounded-lg p-3 text-center">
                   <p className="text-2xl font-bold text-gray-300">{d.balones_vacios || 0}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">⚪ Vacíos</p>
+                  <p className="text-xs text-gray-500 mt-0.5">⚪ Vacíos devueltos</p>
                 </div>
               </div>
+              {(d.balones_pendientes_devolucion || 0) > 0 && (
+                <div className="bg-orange-900/20 border border-orange-700/40 rounded-lg p-2 mb-2 flex items-center justify-between">
+                  <span className="text-xs text-orange-300 font-medium">⏳ Pendientes de devolución</span>
+                  <span className="text-orange-400 font-bold text-sm">{d.balones_pendientes_devolucion} bal.</span>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2 mb-4">
                 <div className="bg-gray-800/50 rounded-lg p-3 text-center">
                   <p className="text-xl font-bold text-blue-400">S/{d.precio_base}</p>
