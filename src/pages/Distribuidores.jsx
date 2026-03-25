@@ -457,8 +457,9 @@ export default function Distribuidores() {
                 <div className="text-right flex-shrink-0">
                   {(() => {
                     const devueltos = parseInt(cuentaForm.balones_devueltos) || 0
-                    const faltantes = selected.stock_actual - devueltos
-                    if (!cuentaForm.balones_devueltos) return <span className="text-gray-500 text-xs">de {selected.stock_actual} bal.</span>
+                    const vendidos = parseInt(cuentaForm.balones_vendidos) || selected.stock_actual
+                    const faltantes = vendidos - devueltos
+                    if (!cuentaForm.balones_devueltos) return <span className="text-gray-500 text-xs">de {vendidos} bal. vendidos</span>
                     if (faltantes > 0) return <span className="text-red-400 text-sm font-bold">⚠️ Faltan {faltantes}</span>
                     if (faltantes < 0) return <span className="text-yellow-400 text-sm font-bold">+{Math.abs(faltantes)} extra</span>
                     return <span className="text-emerald-400 text-sm font-bold">✅ Completo</span>
