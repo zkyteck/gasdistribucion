@@ -82,14 +82,23 @@ export default function Distribuidores() {
   }
 
   async function cargarHistorial(distId) {
-    const [{ data: repos }, { data: rends }] = await Promise.all([
+    // Obtener almacen_id del distribuidor seleccionado
+    const dist = distribuidores.find(d => d.id === distId)
+    const almacenId = dist?.almacen_id
+
+    const [{ data: repos }, { data: rends }, { data: movs }] = await Promise.all([
       supabase.from('reposiciones_distribuidor')
         .select('*, almacenes(nombre)').eq('distribuidor_id', distId).order('fecha', { ascending: false }).limit(20),
       supabase.from('cuentas_distribuidor')
-        .select('*').eq('distribuidor_id', distId).order('created_at', { ascending: false }).limit(30)
+        .select('*').eq('distribuidor_id', distId).order('periodo_fin', { ascending: false }).limit(30),
+      almacenId ? supabase.from('movimientos_stock')
+        .select('*').eq('almacen_id', almacenId)
+        .in('tipo', ['traslado', 'entrada', 'compra', 'ajuste_manual'])
+        .order('created_at', { ascending: false }).limit(20) : { data: [] }
     ])
     setHistorial(repos || [])
     setRendiciones(rends || [])
+    setMovimientos(movs || [])
   }
 
   async function cargarMovimientos(distId) {
@@ -239,11 +248,12 @@ export default function Distribuidores() {
     if (selected.almacen_id) {
       const almacen = almacenes.find(a => a.id === selected.almacen_id)
       if (almacen) {
-        const nuevosLlenos = Math.max(0, (almacen.stock_actual || 0) - balonesVendidos + balonesDevueltos)
-        // Vacíos = solo los que físicamente devolvió
+        // Llenos = stock actual - balones que salieron a vender (los devueltos son VACÍOS, no llenos)
+        const nuevosLlenos = Math.max(0, (almacen.stock_actual || 0) - balonesVendidos)
+        // Vacíos = los que devolvió físicamente
         const nuevosVacios = Math.max(0, (almacen.balones_vacios || 0) + balonesDevueltos)
         const nuevosVacios10 = Math.max(0, (almacen.vacios_10kg || 0) + balonesDevueltos)
-        // Pendientes = balones que aún no devuelve
+        // Pendientes = balones vendidos que aún no devuelve como vacíos
         const nuevosPendientes = Math.max(0, (almacen.balones_pendientes_devolucion || 0) + balonesFaltantes)
         await supabase.from('almacenes')
           .update({
@@ -253,12 +263,12 @@ export default function Distribuidores() {
             balones_pendientes_devolucion: nuevosPendientes
           })
           .eq('id', selected.almacen_id)
-        // También actualizar stock_por_tipo para el desglose
+        // También actualizar stock_por_tipo
         const { data: spt } = await supabase.from('stock_por_tipo')
           .select('stock_actual').eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg').single()
         if (spt) {
           await supabase.from('stock_por_tipo')
-            .update({ stock_actual: Math.max(0, spt.stock_actual - balonesVendidos + balonesDevueltos) })
+            .update({ stock_actual: Math.max(0, spt.stock_actual - balonesVendidos) })
             .eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg')
         }
       }
@@ -668,11 +678,44 @@ export default function Distribuidores() {
       {modal === 'historial' && selected && (
         <Modal title={`Historial — ${selected.nombre}`} onClose={() => setModal(null)} wide>
           <div className="space-y-5">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-gray-800/50 rounded-lg p-3 text-center"><p className="text-xl font-bold text-white">{selected.stock_actual}</p><p className="text-xs text-gray-500">Stock actual</p></div>
-              <div className="bg-gray-800/50 rounded-lg p-3 text-center"><p className="text-xl font-bold text-blue-400">S/{selected.precio_base}</p><p className="text-xs text-gray-500">Precio/bal.</p></div>
-              <div className="bg-gray-800/50 rounded-lg p-3 text-center"><p className="text-xl font-bold text-yellow-400">S/{(selected.stock_actual * selected.precio_base).toLocaleString()}</p><p className="text-xs text-gray-500">Valor campo</p></div>
+            {/* Resumen actual */}
+            <div className="grid grid-cols-4 gap-3">
+              <div className="bg-emerald-900/20 border border-emerald-700/30 rounded-xl p-3 text-center">
+                <p className="text-2xl font-bold text-emerald-400">{selected.stock_actual}</p>
+                <p className="text-xs text-gray-500 mt-1">🟢 Llenos actuales</p>
+              </div>
+              <div className="bg-gray-700/30 border border-gray-600/30 rounded-xl p-3 text-center">
+                <p className="text-2xl font-bold text-gray-300">{selected.balones_vacios || 0}</p>
+                <p className="text-xs text-gray-500 mt-1">⚪ Vacíos devueltos</p>
+              </div>
+              <div className="bg-blue-900/20 border border-blue-700/30 rounded-xl p-3 text-center">
+                <p className="text-2xl font-bold text-blue-400">S/{selected.precio_base}</p>
+                <p className="text-xs text-gray-500 mt-1">Precio/bal.</p>
+              </div>
+              <div className="bg-yellow-900/20 border border-yellow-700/30 rounded-xl p-3 text-center">
+                <p className="text-xl font-bold text-yellow-400">S/{(selected.stock_actual * selected.precio_base).toLocaleString()}</p>
+                <p className="text-xs text-gray-500 mt-1">Valor campo</p>
+              </div>
             </div>
+
+            {/* Resumen de movimientos */}
+            {rendiciones.length > 0 && (() => {
+              const totalVendidos = rendiciones.reduce((s,r) => s + (r.balones_vendidos||0), 0)
+              const totalDevueltos = rendiciones.reduce((s,r) => s + (r.balones_devueltos||0), 0)
+              const totalPendientes = rendiciones.reduce((s,r) => s + (r.balones_faltantes||0), 0)
+              const totalCobrar = rendiciones.filter(r=>r.estado!=='cancelado').reduce((s,r) => s+(r.total_esperado||0)-(r.total_vales||0)-(r.total_adelantos||0), 0)
+              return (
+                <div className="bg-blue-900/10 border border-blue-800/30 rounded-xl p-4">
+                  <p className="text-xs text-blue-300 font-semibold mb-3">📊 Resumen total de rendiciones</p>
+                  <div className="grid grid-cols-4 gap-3 text-center">
+                    <div><p className="text-white font-bold">{totalVendidos}</p><p className="text-xs text-gray-500">Vendidos</p></div>
+                    <div><p className="text-gray-300 font-bold">{totalDevueltos}</p><p className="text-xs text-gray-500">Devueltos</p></div>
+                    <div><p className="text-orange-400 font-bold">{totalPendientes}</p><p className="text-xs text-gray-500">⏳ Pendientes</p></div>
+                    <div><p className="text-emerald-400 font-bold">S/{totalCobrar.toLocaleString()}</p><p className="text-xs text-gray-500">💰 Por cobrar</p></div>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Rendiciones */}
             <div>
@@ -741,8 +784,9 @@ export default function Distribuidores() {
                             if (almacen) {
                               const vendidos = r.balones_vendidos || 0
                               const devueltos = r.balones_devueltos || 0
+                              // Restaurar: devolver llenos vendidos, quitar vacíos devueltos
                               await supabase.from('almacenes').update({
-                                stock_actual: (almacen.stock_actual || 0) + vendidos - devueltos,
+                                stock_actual: (almacen.stock_actual || 0) + vendidos,
                                 balones_vacios: Math.max(0, (almacen.balones_vacios || 0) - devueltos),
                                 vacios_10kg: Math.max(0, (almacen.vacios_10kg || 0) - devueltos),
                                 balones_pendientes_devolucion: Math.max(0, (almacen.balones_pendientes_devolucion || 0) - (r.balones_faltantes || 0))
@@ -751,7 +795,7 @@ export default function Distribuidores() {
                               const { data: spt } = await supabase.from('stock_por_tipo')
                                 .select('stock_actual').eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg').single()
                               if (spt) await supabase.from('stock_por_tipo')
-                                .update({ stock_actual: spt.stock_actual + vendidos - devueltos })
+                                .update({ stock_actual: spt.stock_actual + vendidos })
                                 .eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg')
                             }
                             // Borrar rendición
@@ -771,19 +815,44 @@ export default function Distribuidores() {
               )}
             </div>
 
-            {/* Reposiciones */}
+            {/* Movimientos del almacén */}
             <div>
-              <h4 className="text-sm font-semibold text-white mb-3">📦 Reposiciones recientes</h4>
-              {historial.length === 0 ? <p className="text-gray-600 text-sm text-center py-4">Sin reposiciones registradas</p> : (
-                <div className="space-y-2">
+              <h4 className="text-sm font-semibold text-white mb-3">📦 Historial de stock del almacén</h4>
+              {historial.length === 0 && movimientos.length === 0 ? (
+                <p className="text-gray-600 text-sm text-center py-4">Sin movimientos registrados</p>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {/* Reposiciones desde distribuidores */}
                   {historial.map(r => (
-                    <div key={r.id} className="flex items-center justify-between bg-gray-800/40 rounded-lg px-4 py-3">
-                      <div>
-                        <p className="text-white text-sm font-medium">+{r.cantidad} balones</p>
-                        <p className="text-gray-500 text-xs">{r.almacenes?.nombre} · {format(new Date(r.fecha), 'dd/MM/yyyy HH:mm', { locale: es })}</p>
+                    <div key={r.id} className="flex items-center justify-between bg-emerald-900/20 border border-emerald-800/30 rounded-lg px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-emerald-400 text-lg">📥</span>
+                        <div>
+                          <p className="text-white text-sm font-medium">Reposición +{r.cantidad} balones</p>
+                          <p className="text-gray-500 text-xs">{format(new Date(r.fecha), "dd/MM/yyyy HH:mm", { locale: es })}</p>
+                          {r.notas && <p className="text-gray-600 text-xs italic">{r.notas}</p>}
+                        </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-gray-500">{r.stock_antes_dist} → <span className="text-emerald-400 font-semibold">{r.stock_despues_dist}</span></p>
+                        <p className="text-xs text-gray-500">{r.stock_antes_dist} → <span className="text-emerald-400 font-semibold">{r.stock_despues_dist}</span> bal.</p>
+                      </div>
+                    </div>
+                  ))}
+                  {/* Movimientos del almacén (traslados, compras) */}
+                  {movimientos.map(m => (
+                    <div key={m.id} className="flex items-center justify-between bg-blue-900/20 border border-blue-800/30 rounded-lg px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-blue-400 text-lg">
+                          {m.tipo === 'traslado' ? '🔄' : m.tipo === 'ajuste_manual' ? '✏️' : '📦'}
+                        </span>
+                        <div>
+                          <p className="text-white text-sm font-medium capitalize">
+                            {m.tipo === 'traslado' ? 'Traslado' : m.tipo === 'ajuste_manual' ? 'Ajuste manual' : m.tipo}
+                            {m.cantidad > 0 ? ` +${m.cantidad}` : ` ${m.cantidad}`} bal.
+                          </p>
+                          <p className="text-gray-500 text-xs">{format(new Date(m.created_at), "dd/MM/yyyy HH:mm", { locale: es })}</p>
+                          {m.notas && <p className="text-gray-600 text-xs italic">{m.notas}</p>}
+                        </div>
                       </div>
                     </div>
                   ))}
