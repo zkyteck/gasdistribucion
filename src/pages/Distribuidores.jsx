@@ -210,7 +210,7 @@ export default function Distribuidores() {
     const v43 = parseInt(cuentaForm.vales43) || 0
     const adelantos = parseFloat(cuentaForm.adelantos) || 0
     const balonesDevueltos = parseInt(cuentaForm.balones_devueltos) || 0
-    const balonesVendidos = parseInt(cuentaForm.balones_vendidos) || selected.stock_actual
+    const balonesVendidos = parseInt(cuentaForm.balones_vendidos) || 0
     const balonesFaltantes = balonesVendidos - balonesDevueltos
     const totalVales = (v20 * 20) + (v43 * 43)
     const totalEsperado = balonesVendidos * selected.precio_base
@@ -481,6 +481,7 @@ export default function Distribuidores() {
             {/* Cálculo automático */}
             {(cuentaForm.balones_vendidos || cuentaForm.vales20 || cuentaForm.vales43 || cuentaForm.adelantos || cuentaForm.balones_devueltos) && (() => {
               const vendidos = parseInt(cuentaForm.balones_vendidos) || 0
+              if (vendidos === 0 && !cuentaForm.balones_vendidos) return null
               const v20 = (parseInt(cuentaForm.vales20) || 0) * 20
               const v43 = (parseInt(cuentaForm.vales43) || 0) * 43
               const adel = parseFloat(cuentaForm.adelantos) || 0
