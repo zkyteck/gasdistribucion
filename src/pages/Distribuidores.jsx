@@ -35,6 +35,9 @@ export default function Distribuidores() {
   const [expandido, setExpandido] = useState(null)
   const [valesDist, setValesDist] = useState([])
   const [rendiciones, setRendiciones] = useState([])
+  const [abonoModal, setAbonoModal] = useState(null)
+  const [abonoForm, setAbonoForm] = useState({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', notas: '' })
+  const [savingAbono, setSavingAbono] = useState(false)
   const [clientes, setClientes] = useState([])
   const [valeForm, setValeForm] = useState({ nombre_cliente: '', cliente_id: '', tipo_vale: '20', fecha: hoyPeru(), notas: '' })
   const [clienteRapidoForm, setClienteRapidoForm] = useState({ nombre: '', telefono: '' })
@@ -159,6 +162,52 @@ export default function Distribuidores() {
   }
 
   const form_vale_nombre = valeForm.nombre_cliente
+
+  async function guardarAbono() {
+    if (!abonoModal) return
+    const efectivo = parseFloat(abonoForm.efectivo) || 0
+    const vales20 = parseInt(abonoForm.vales20) || 0
+    const vales43 = parseInt(abonoForm.vales43) || 0
+    const balonesDevueltos = parseInt(abonoForm.balones_devueltos) || 0
+    const totalAbono = efectivo + (vales20 * 20) + (vales43 * 43)
+    if (totalAbono === 0 && balonesDevueltos === 0) return
+
+    setSavingAbono(true)
+    // Actualizar la rendición: sumar vales/adelantos y devueltos
+    const nuevoTotalVales = (abonoModal.total_vales || 0) + (vales20 * 20) + (vales43 * 43)
+    const nuevoTotalAdelantos = (abonoModal.total_adelantos || 0) + efectivo
+    const nuevosDevueltos = (abonoModal.balones_devueltos || 0) + balonesDevueltos
+    const nuevosFaltantes = Math.max(0, (abonoModal.balones_vendidos || 0) - nuevosDevueltos)
+    const nuevoSaldo = (abonoModal.total_esperado || 0) - nuevoTotalVales - nuevoTotalAdelantos
+    const nuevoEstado = nuevoSaldo <= 0 && nuevosFaltantes <= 0 ? 'cancelado' : 'por_cobrar'
+
+    await supabase.from('cuentas_distribuidor').update({
+      total_vales: nuevoTotalVales,
+      total_adelantos: nuevoTotalAdelantos,
+      balones_devueltos: nuevosDevueltos,
+      balones_faltantes: nuevosFaltantes,
+      estado: nuevoEstado,
+      updated_at: new Date().toISOString()
+    }).eq('id', abonoModal.id)
+
+    // Actualizar vacíos en almacén si devolvió balones
+    if (balonesDevueltos > 0 && selected.almacen_id) {
+      const almacen = almacenes.find(a => a.id === selected.almacen_id)
+      if (almacen) {
+        await supabase.from('almacenes').update({
+          balones_vacios: (almacen.balones_vacios || 0) + balonesDevueltos,
+          vacios_10kg: (almacen.vacios_10kg || 0) + balonesDevueltos,
+          balones_pendientes_devolucion: Math.max(0, (almacen.balones_pendientes_devolucion || 0) - balonesDevueltos)
+        }).eq('id', selected.almacen_id)
+      }
+    }
+
+    setSavingAbono(false)
+    setAbonoModal(null)
+    setAbonoForm({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', notas: '' })
+    await cargarHistorial(selected.id)
+    cargar()
+  }
 
   async function guardarDistribuidor() {
     if (!form.nombre || !form.precio_base) { setError('Nombre y precio son obligatorios'); return }
@@ -796,8 +845,14 @@ export default function Distribuidores() {
                           </div>
                         </div>
                         {r.notas && <p className="text-xs text-gray-500 mt-2">📝 {r.notas}</p>}
-                        {/* Botones editar/borrar */}
+                        {/* Botones abono/borrar */}
                         <div className="flex gap-2 mt-3 pt-3 border-t border-gray-700/50">
+                          {r.estado !== 'cancelado' && (
+                            <button onClick={() => { setAbonoModal(r); setAbonoForm({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', notas: '' }) }}
+                              className="text-xs bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 px-3 py-1.5 rounded-lg transition-all flex-1 text-center">
+                              💰 Registrar abono
+                            </button>
+                          )}
                           <button onClick={async () => {
                             if (!confirm(`¿Borrar esta rendición del ${r.periodo_fin}? Esto restaurará el stock del almacén.`)) return
                             // Restaurar stock: devolver llenos, quitar vacíos devueltos
@@ -882,6 +937,84 @@ export default function Distribuidores() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Modal abono a rendición */}
+      {abonoModal && selected && (
+        <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+              <div>
+                <h3 className="text-white font-semibold">💰 Registrar abono</h3>
+                <p className="text-gray-500 text-xs mt-0.5">{selected.nombre} · Rendición del {abonoModal.periodo_fin}</p>
+              </div>
+              <button onClick={() => setAbonoModal(null)} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="bg-red-900/20 border border-red-800/40 rounded-xl p-3">
+                <p className="text-xs text-gray-400 mb-1">Saldo pendiente actual</p>
+                <p className="text-2xl font-bold text-red-400">
+                  S/ {Math.max(0, (abonoModal.total_esperado||0) - (abonoModal.total_vales||0) - (abonoModal.total_adelantos||0)).toLocaleString()}
+                </p>
+                {(abonoModal.balones_faltantes||0) > 0 && (
+                  <p className="text-xs text-orange-400 mt-1">⏳ {abonoModal.balones_faltantes} balones pendientes de devolver</p>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">💵 Efectivo (S/)</label>
+                  <input type="number" min="0" className="input" placeholder="0"
+                    value={abonoForm.efectivo} onChange={e => setAbonoForm(f => ({...f, efectivo: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="label">⚪ Balones vacíos devueltos</label>
+                  <input type="number" min="0" className="input" placeholder="0"
+                    value={abonoForm.balones_devueltos} onChange={e => setAbonoForm(f => ({...f, balones_devueltos: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="label">🎫 Vales S/20</label>
+                  <input type="number" min="0" className="input" placeholder="0"
+                    value={abonoForm.vales20} onChange={e => setAbonoForm(f => ({...f, vales20: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="label">🎫 Vales S/43</label>
+                  <input type="number" min="0" className="input" placeholder="0"
+                    value={abonoForm.vales43} onChange={e => setAbonoForm(f => ({...f, vales43: e.target.value}))} />
+                </div>
+              </div>
+              {(parseFloat(abonoForm.efectivo)||0) + (parseInt(abonoForm.vales20)||0)*20 + (parseInt(abonoForm.vales43)||0)*43 > 0 && (() => {
+                const totalAbono = (parseFloat(abonoForm.efectivo)||0) + (parseInt(abonoForm.vales20)||0)*20 + (parseInt(abonoForm.vales43)||0)*43
+                const saldoActual = (abonoModal.total_esperado||0) - (abonoModal.total_vales||0) - (abonoModal.total_adelantos||0)
+                const saldoNuevo = saldoActual - totalAbono
+                return (
+                  <div className="bg-emerald-900/20 border border-emerald-800/40 rounded-xl p-3 text-sm">
+                    <div className="flex justify-between mb-1">
+                      <span className="text-gray-400">Abono total:</span>
+                      <span className="text-emerald-400 font-bold">S/ {totalAbono.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Nuevo saldo:</span>
+                      <span className={`font-bold ${saldoNuevo <= 0 ? 'text-emerald-400' : 'text-yellow-400'}`}>
+                        S/ {Math.max(0, saldoNuevo).toLocaleString()} {saldoNuevo <= 0 ? '✅ CANCELADO' : '⏳ POR COBRAR'}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })()}
+              <div>
+                <label className="label">Notas (opcional)</label>
+                <input className="input" placeholder="Ej: Pago parcial..."
+                  value={abonoForm.notas} onChange={e => setAbonoForm(f => ({...f, notas: e.target.value}))} />
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button onClick={() => setAbonoModal(null)} className="btn-secondary flex-1">Cancelar</button>
+                <button onClick={guardarAbono} disabled={savingAbono} className="btn-primary flex-1 justify-center">
+                  {savingAbono ? 'Guardando...' : '✓ Registrar abono'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
