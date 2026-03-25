@@ -55,14 +55,16 @@ export default function Distribuidores() {
 
   async function cargar() {
     setLoading(true)
-    const [{ data: d }, { data: a }, { data: vp }] = await Promise.all([
+    const [{ data: d }, { data: a }, { data: vp }, { data: rp }] = await Promise.all([
       supabase.from('distribuidores').select('*, almacenes(nombre, stock_actual, balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg)').eq('activo', true).order('nombre'),
       supabase.from('almacenes').select('id, nombre, stock_actual, balones_vacios').eq('activo', true),
-      supabase.from('vales_distribuidor').select('distribuidor_id').eq('estado', 'pendiente')
+      supabase.from('vales_distribuidor').select('distribuidor_id').eq('estado', 'pendiente'),
+      supabase.from('cuentas_distribuidor').select('distribuidor_id, balones_faltantes').neq('estado', 'cancelado')
     ])
     const distConVales = (d || []).map(dist => ({
       ...dist,
-      vales_pendientes: (vp || []).filter(v => v.distribuidor_id === dist.id).length
+      vales_pendientes: (vp || []).filter(v => v.distribuidor_id === dist.id).length,
+      balones_por_cobrar: (rp || []).filter(r => r.distribuidor_id === dist.id).reduce((s, r) => s + (r.balones_faltantes || 0), 0)
     }))
     // Enriquecer distribuidores con stock real del almacén asignado
     const distEnriquecidos = (distConVales).map(dist => {
@@ -328,10 +330,10 @@ export default function Distribuidores() {
                   <p className="text-xs text-gray-500 mt-0.5">⚪ Vacíos devueltos</p>
                 </div>
               </div>
-              {(d.balones_pendientes_devolucion || 0) > 0 && (
+              {(d.balones_por_cobrar || 0) > 0 && (
                 <div className="bg-orange-900/20 border border-orange-700/40 rounded-lg p-2 mb-2 flex items-center justify-between">
-                  <span className="text-xs text-orange-300 font-medium">⏳ Pendientes de devolución</span>
-                  <span className="text-orange-400 font-bold text-sm">{d.balones_pendientes_devolucion} bal.</span>
+                  <span className="text-xs text-orange-300 font-medium">⏳ Balones pendientes de devolución</span>
+                  <span className="text-orange-400 font-bold text-sm">{d.balones_por_cobrar} bal.</span>
                 </div>
               )}
               <div className="grid grid-cols-2 gap-2 mb-4">
@@ -691,6 +693,24 @@ export default function Distribuidores() {
                             {r.estado === 'cancelado' ? '✅ CANCELADO' : '⏳ POR COBRAR'}
                           </span>
                         </div>
+                        {/* Balones */}
+                        <div className="grid grid-cols-3 gap-2 text-center mb-2">
+                          <div className="bg-gray-800/50 rounded-lg p-2">
+                            <p className="text-white font-bold text-sm">{r.balones_vendidos || 0}</p>
+                            <p className="text-xs text-gray-500">🔵 Vendidos</p>
+                          </div>
+                          <div className="bg-gray-700/50 rounded-lg p-2">
+                            <p className="text-gray-300 font-bold text-sm">{r.balones_devueltos || 0}</p>
+                            <p className="text-xs text-gray-500">⚪ Devueltos</p>
+                          </div>
+                          <div className={`rounded-lg p-2 ${(r.balones_faltantes||0) > 0 ? 'bg-orange-900/20' : 'bg-emerald-900/20'}`}>
+                            <p className={`font-bold text-sm ${(r.balones_faltantes||0) > 0 ? 'text-orange-400' : 'text-emerald-400'}`}>
+                              {r.balones_faltantes || 0}
+                            </p>
+                            <p className="text-xs text-gray-500">⏳ Pendientes</p>
+                          </div>
+                        </div>
+                        {/* Dinero */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
                           <div className="bg-blue-900/20 rounded-lg p-2">
                             <p className="text-blue-400 font-bold text-sm">S/ {(r.total_esperado||0).toLocaleString()}</p>
