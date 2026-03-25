@@ -679,24 +679,44 @@ export default function Distribuidores() {
         <Modal title={`Historial — ${selected.nombre}`} onClose={() => setModal(null)} wide>
           <div className="space-y-5">
             {/* Resumen actual */}
-            <div className="grid grid-cols-4 gap-3">
-              <div className="bg-emerald-900/20 border border-emerald-700/30 rounded-xl p-3 text-center">
-                <p className="text-2xl font-bold text-emerald-400">{selected.stock_actual}</p>
-                <p className="text-xs text-gray-500 mt-1">🟢 Llenos actuales</p>
-              </div>
-              <div className="bg-gray-700/30 border border-gray-600/30 rounded-xl p-3 text-center">
-                <p className="text-2xl font-bold text-gray-300">{selected.balones_vacios || 0}</p>
-                <p className="text-xs text-gray-500 mt-1">⚪ Vacíos devueltos</p>
-              </div>
-              <div className="bg-blue-900/20 border border-blue-700/30 rounded-xl p-3 text-center">
-                <p className="text-2xl font-bold text-blue-400">S/{selected.precio_base}</p>
-                <p className="text-xs text-gray-500 mt-1">Precio/bal.</p>
-              </div>
-              <div className="bg-yellow-900/20 border border-yellow-700/30 rounded-xl p-3 text-center">
-                <p className="text-xl font-bold text-yellow-400">S/{(selected.stock_actual * selected.precio_base).toLocaleString()}</p>
-                <p className="text-xs text-gray-500 mt-1">Valor campo</p>
-              </div>
-            </div>
+            {(() => {
+              const totalVendidos = rendiciones.reduce((s,r) => s + (r.balones_vendidos||0), 0)
+              const stockInicial = selected.stock_actual + totalVendidos
+              return (
+                <div className="space-y-2">
+                  {/* Stock inicial vs actual */}
+                  <div className="bg-gray-800/40 border border-gray-700/40 rounded-xl p-3 flex items-center justify-between">
+                    <div className="text-center px-4">
+                      <p className="text-xs text-gray-500 mb-1">📦 Stock inicial</p>
+                      <p className="text-2xl font-bold text-gray-300">{stockInicial} bal.</p>
+                    </div>
+                    <div className="flex-1 flex items-center justify-center gap-2 text-gray-600">
+                      <div className="h-px flex-1 bg-gray-700" />
+                      <span className="text-xs">→ {totalVendidos} vendidos</span>
+                      <div className="h-px flex-1 bg-gray-700" />
+                    </div>
+                    <div className="text-center px-4">
+                      <p className="text-xs text-gray-500 mb-1">🟢 Llenos actuales</p>
+                      <p className="text-2xl font-bold text-emerald-400">{selected.stock_actual} bal.</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-gray-700/30 border border-gray-600/30 rounded-xl p-3 text-center">
+                      <p className="text-2xl font-bold text-gray-300">{selected.balones_vacios || 0}</p>
+                      <p className="text-xs text-gray-500 mt-1">⚪ Vacíos devueltos</p>
+                    </div>
+                    <div className="bg-blue-900/20 border border-blue-700/30 rounded-xl p-3 text-center">
+                      <p className="text-2xl font-bold text-blue-400">S/{selected.precio_base}</p>
+                      <p className="text-xs text-gray-500 mt-1">Precio/bal.</p>
+                    </div>
+                    <div className="bg-yellow-900/20 border border-yellow-700/30 rounded-xl p-3 text-center">
+                      <p className="text-xl font-bold text-yellow-400">S/{(selected.stock_actual * selected.precio_base).toLocaleString()}</p>
+                      <p className="text-xs text-gray-500 mt-1">Valor campo</p>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Resumen de movimientos */}
             {rendiciones.length > 0 && (() => {
