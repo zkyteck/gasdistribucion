@@ -56,15 +56,24 @@ export default function Distribuidores() {
   async function cargar() {
     setLoading(true)
     const [{ data: d }, { data: a }, { data: vp }] = await Promise.all([
-      supabase.from('distribuidores').select('*, almacenes(nombre)').eq('activo', true).order('nombre'),
-      supabase.from('almacenes').select('id, nombre, stock_actual').eq('activo', true),
+      supabase.from('distribuidores').select('*, almacenes(nombre, stock_actual, balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg)').eq('activo', true).order('nombre'),
+      supabase.from('almacenes').select('id, nombre, stock_actual, balones_vacios').eq('activo', true),
       supabase.from('vales_distribuidor').select('distribuidor_id').eq('estado', 'pendiente')
     ])
     const distConVales = (d || []).map(dist => ({
       ...dist,
       vales_pendientes: (vp || []).filter(v => v.distribuidor_id === dist.id).length
     }))
-    setDistribuidores(distConVales)
+    // Enriquecer distribuidores con stock real del almacén asignado
+    const distEnriquecidos = (distConVales).map(dist => {
+      const almacenAsignado = (a || []).find(alm => alm.id === dist.almacen_id)
+      return {
+        ...dist,
+        stock_actual: almacenAsignado?.stock_actual || 0,
+        balones_vacios: almacenAsignado?.balones_vacios || 0,
+      }
+    })
+    setDistribuidores(distEnriquecidos)
     setAlmacenes(a || [])
     setLoading(false)
   }
@@ -168,11 +177,7 @@ export default function Distribuidores() {
       fecha: new Date().toISOString()
     })
     if (e) { setError(e.message); setSaving(false); return }
-    // Actualizar stock del distribuidor
-    await supabase.from('distribuidores')
-      .update({ stock_actual: selected.stock_actual + cant, updated_at: new Date().toISOString() })
-      .eq('id', selected.id)
-    // Descontar del almacén origen
+    // Descontar del almacén origen (el stock del distribuidor viene del almacén directamente)
     await supabase.from('almacenes')
       .update({ stock_actual: almacen.stock_actual - cant })
       .eq('id', selected.almacen_id)
@@ -220,10 +225,9 @@ export default function Distribuidores() {
     if (v43 > 0) detalles.push({ cuenta_id: cuenta.id, tipo: 'vale_43', cantidad: v43, monto: v43 * 43, fecha: hoy })
     if (adelantos > 0) detalles.push({ cuenta_id: cuenta.id, tipo: 'adelanto', monto: adelantos, fecha: hoy })
     if (detalles.length > 0) await supabase.from('cuenta_distribuidor_detalles').insert(detalles)
-    // Resetear stock distribuidor: llenos = devueltos, vacíos acumulados
+    // Actualizar solo vacíos en distribuidor (stock_actual viene del almacén)
     await supabase.from('distribuidores')
       .update({ 
-        stock_actual: balonesDevueltos,
         balones_vacios: (selected.balones_vacios || 0) + balonesVendidos,
         updated_at: new Date().toISOString() 
       })
