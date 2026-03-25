@@ -732,6 +732,38 @@ export default function Distribuidores() {
                           </div>
                         </div>
                         {r.notas && <p className="text-xs text-gray-500 mt-2">📝 {r.notas}</p>}
+                        {/* Botones editar/borrar */}
+                        <div className="flex gap-2 mt-3 pt-3 border-t border-gray-700/50">
+                          <button onClick={async () => {
+                            if (!confirm(`¿Borrar esta rendición del ${r.periodo_fin}? Esto restaurará el stock del almacén.`)) return
+                            // Restaurar stock: devolver llenos, quitar vacíos devueltos
+                            const almacen = almacenes.find(a => a.id === selected.almacen_id)
+                            if (almacen) {
+                              const vendidos = r.balones_vendidos || 0
+                              const devueltos = r.balones_devueltos || 0
+                              await supabase.from('almacenes').update({
+                                stock_actual: (almacen.stock_actual || 0) + vendidos - devueltos,
+                                balones_vacios: Math.max(0, (almacen.balones_vacios || 0) - devueltos),
+                                vacios_10kg: Math.max(0, (almacen.vacios_10kg || 0) - devueltos),
+                                balones_pendientes_devolucion: Math.max(0, (almacen.balones_pendientes_devolucion || 0) - (r.balones_faltantes || 0))
+                              }).eq('id', selected.almacen_id)
+                              // Restaurar stock_por_tipo
+                              const { data: spt } = await supabase.from('stock_por_tipo')
+                                .select('stock_actual').eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg').single()
+                              if (spt) await supabase.from('stock_por_tipo')
+                                .update({ stock_actual: spt.stock_actual + vendidos - devueltos })
+                                .eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg')
+                            }
+                            // Borrar rendición
+                            await supabase.from('cuenta_distribuidor_detalles').delete().eq('cuenta_id', r.id)
+                            await supabase.from('cuentas_distribuidor').delete().eq('id', r.id)
+                            await cargarHistorial(selected.id)
+                            cargar()
+                          }}
+                            className="text-xs bg-red-600/20 hover:bg-red-600/30 border border-red-600/30 text-red-400 px-3 py-1.5 rounded-lg transition-all flex-1 text-center">
+                            🗑️ Borrar rendición
+                          </button>
+                        </div>
                       </div>
                     )
                   })}
