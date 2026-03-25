@@ -48,6 +48,8 @@ export default function Inventario() {
   const [savingQuick, setSavingQuick] = useState(false) // 'juntos' | dist_id
 
   const [editCompraSelected, setEditCompraSelected] = useState(null)
+  const [detalleCompra, setDetalleCompra] = useState(null) // { compra, detalles }
+  const [loadingDetalle, setLoadingDetalle] = useState(false)
   const [editCompraForm, setEditCompraForm] = useState({ fecha: '', notas: '', proveedor_id: '', marca_id: '' })
   const [editDist, setEditDist] = useState([]) // [{almacen_id, nombre, responsable, tipo_balon, cantidad, detalle_id}]
   const [compraForm, setCompraForm] = useState({
@@ -520,12 +522,20 @@ export default function Inventario() {
                       <td className="px-4 py-4 text-yellow-400 font-bold">S/ {(c.cantidad_total * c.precio_unitario).toLocaleString('es-PE')}</td>
                       <td className="px-4 py-4 text-gray-500 text-xs">{c.notas || '-'}</td>
                       <td className="px-4 py-4">
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap">
+                          <button onClick={async () => {
+                            setLoadingDetalle(true)
+                            const { data: dets } = await supabase.from('compra_detalles').select('*').eq('compra_id', c.id)
+                            setDetalleCompra({ compra: c, detalles: dets || [] })
+                            setLoadingDetalle(false)
+                          }}
+                            className="text-xs bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 px-2 py-1 rounded-lg transition-all">
+                            👁️ Detalle
+                          </button>
                           <button onClick={() => { 
                             setEditCompraSelected(c)
                             setEditCompraForm({ fecha: c.fecha, notas: c.notas||'', proveedor_id: c.proveedor_id||'', marca_id: c.marca_id||'' })
                             setError('')
-                            // Load distribution details
                             supabase.from('compra_detalles').select('*').eq('compra_id', c.id).then(({data: dets}) => {
                               const tipos = ['5kg','10kg','45kg']
                               const dist = almacenes.flatMap(a => tipos.map(t => {
@@ -640,6 +650,102 @@ export default function Inventario() {
       )}
 
       {/* Modal editar stock manual */}
+      {/* Modal detalle compra */}
+      {detalleCompra && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
+              <div>
+                <h3 className="text-white font-semibold">📦 Detalle de compra</h3>
+                <p className="text-gray-500 text-xs mt-0.5">
+                  {format(new Date(detalleCompra.compra.fecha + 'T12:00:00'), "dd 'de' MMMM yyyy", { locale: es })}
+                </p>
+              </div>
+              <button onClick={() => setDetalleCompra(null)} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+
+              {/* Resumen compra */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-800/50 rounded-xl p-3">
+                  <p className="text-xs text-gray-500 mb-1">Proveedor</p>
+                  <p className="text-white font-medium text-sm">{detalleCompra.compra.proveedores?.nombre || '-'}</p>
+                </div>
+                <div className="bg-gray-800/50 rounded-xl p-3">
+                  <p className="text-xs text-gray-500 mb-1">Marca</p>
+                  <p className="text-white font-medium text-sm">{detalleCompra.compra.marcas_gas?.nombre || detalleCompra.compra.marca_nombre || '-'}</p>
+                </div>
+                <div className="bg-emerald-900/20 border border-emerald-700/30 rounded-xl p-3 text-center">
+                  <p className="text-xs text-gray-500 mb-1">Total balones</p>
+                  <p className="text-2xl font-bold text-emerald-400">{detalleCompra.compra.cantidad_total} bal.</p>
+                </div>
+                <div className="bg-yellow-900/20 border border-yellow-700/30 rounded-xl p-3 text-center">
+                  <p className="text-xs text-gray-500 mb-1">Total invertido</p>
+                  <p className="text-2xl font-bold text-yellow-400">S/ {(detalleCompra.compra.cantidad_total * detalleCompra.compra.precio_unitario).toLocaleString('es-PE')}</p>
+                </div>
+                <div className="bg-blue-900/20 border border-blue-700/30 rounded-xl p-3 text-center col-span-2">
+                  <p className="text-xs text-gray-500 mb-1">Costo por balón</p>
+                  <p className="text-xl font-bold text-blue-400">S/ {detalleCompra.compra.precio_unitario}/bal.</p>
+                </div>
+              </div>
+
+              {/* Distribución por almacén */}
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase mb-3">Distribución por almacén y tipo</p>
+                {detalleCompra.detalles.length === 0 ? (
+                  <p className="text-gray-600 text-sm text-center py-4">Sin detalles de distribución registrados</p>
+                ) : (
+                  <div className="space-y-2">
+                    {/* Agrupar por almacén */}
+                    {almacenes.filter(a => detalleCompra.detalles.some(d => d.almacen_id === a.id)).map(a => {
+                      const dets = detalleCompra.detalles.filter(d => d.almacen_id === a.id)
+                      const totalAlmacen = dets.reduce((s, d) => s + (d.cantidad || 0), 0)
+                      return (
+                        <div key={a.id} className="bg-gray-800/40 rounded-xl p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-white font-medium text-sm">📦 {a.nombre}</p>
+                            <span className="text-emerald-400 font-bold text-sm">{totalAlmacen} bal.</span>
+                          </div>
+                          <div className="flex gap-2 flex-wrap">
+                            {dets.map((d, i) => (
+                              <span key={i} className={`text-xs px-2 py-1 rounded-lg font-medium ${
+                                d.tipo_balon === '5kg' ? 'bg-blue-900/30 text-blue-300' :
+                                d.tipo_balon === '10kg' ? 'bg-yellow-900/30 text-yellow-300' :
+                                'bg-red-900/30 text-red-300'
+                              }`}>
+                                {d.tipo_balon === '5kg' ? '🔵' : d.tipo_balon === '10kg' ? '🟡' : '🔴'} {d.tipo_balon}: {d.cantidad} bal.
+                              </span>
+                            ))}
+                          </div>
+                          <p className="text-xs text-gray-600 mt-2">
+                            Costo: S/ {(totalAlmacen * detalleCompra.compra.precio_unitario).toLocaleString('es-PE')}
+                          </p>
+                        </div>
+                      )
+                    })}
+                    {/* Total */}
+                    <div className="border-t border-gray-700 pt-3 flex justify-between items-center">
+                      <span className="text-gray-400 text-sm">Total distribuido:</span>
+                      <span className="text-emerald-400 font-bold">{detalleCompra.detalles.reduce((s,d) => s+(d.cantidad||0), 0)} bal.</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Notas */}
+              {detalleCompra.compra.notas && (
+                <div className="bg-amber-900/20 border border-amber-700/30 rounded-xl p-3">
+                  <p className="text-xs text-gray-500 mb-1">📝 Notas</p>
+                  <p className="text-amber-300 text-sm">{detalleCompra.compra.notas}</p>
+                </div>
+              )}
+
+              <button onClick={() => setDetalleCompra(null)} className="btn-secondary w-full">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal editar vacíos */}
       {editVaciosModal && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
