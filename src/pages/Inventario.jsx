@@ -36,6 +36,8 @@ export default function Inventario() {
   const [editVaciosVal, setEditVaciosVal] = useState({ '5kg': 0, '10kg': 0, '45kg': 0 })
   const [editStockAlmacen, setEditStockAlmacen] = useState(null)
   const [editStockVal, setEditStockVal] = useState(0)
+  const [editVaciosModal, setEditVaciosModal] = useState(null)
+  const [editVaciosModalVal, setEditVaciosModalVal] = useState({ '5kg': 0, '10kg': 0, '45kg': 0 })
   const [movimientoForm, setMovimientoForm] = useState({ origen_id: '', destino_id: '', cantidad: '', tipo_balon: '10kg', notas: '', fecha: hoyPeru() })
   const [vaciosForm, setVaciosForm] = useState({ almacen_id: '', cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, notas: '', fecha: hoyPeru() })
 
@@ -473,7 +475,7 @@ export default function Inventario() {
                     <td className="px-6 py-4"><span className={a.stock_actual > 50 ? 'badge-green' : a.stock_actual > 10 ? 'badge-yellow' : 'badge-red'}>{a.stock_actual > 50 ? 'Bien' : a.stock_actual > 10 ? 'Bajo' : 'Crítico'}</span></td>
                     <td className="px-6 py-4">
                       <div className="flex gap-1">
-                        <button onClick={() => { setEditVacios(a); setEditVaciosVal({ '5kg': a.vacios_5kg||0, '10kg': a.vacios_10kg||0, '45kg': a.vacios_45kg||0 }) }}
+                        <button onClick={() => { setEditVaciosModal(a); setEditVaciosModalVal({ '5kg': a.vacios_5kg||0, '10kg': a.vacios_10kg||0, '45kg': a.vacios_45kg||0 }) }}
                           className="text-gray-500 hover:text-blue-400 transition-colors p-1" title="Editar vacíos">
                           <Edit2 className="w-4 h-4" />
                         </button>
@@ -638,6 +640,56 @@ export default function Inventario() {
       )}
 
       {/* Modal editar stock manual */}
+      {/* Modal editar vacíos */}
+      {editVaciosModal && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+              <div>
+                <h3 className="text-white font-semibold text-sm">⚪ Editar balones vacíos</h3>
+                <p className="text-gray-500 text-xs mt-0.5">{editVaciosModal.nombre}</p>
+              </div>
+              <button onClick={() => setEditVaciosModal(null)} className="text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-xs text-gray-500">Ingresa la cantidad de balones vacíos por tipo:</p>
+              <div className="grid grid-cols-3 gap-3">
+                {[['5kg','🔵','blue'],['10kg','🟡','yellow'],['45kg','🔴','red']].map(([tipo, icon, color]) => (
+                  <div key={tipo} className={`bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-center`}>
+                    <p className="text-gray-300 font-bold text-xs mb-2">{icon} {tipo}</p>
+                    <input type="number" min="0"
+                      className="input text-center font-bold py-2"
+                      value={editVaciosModalVal[tipo]}
+                      onChange={e => setEditVaciosModalVal(v => ({...v, [tipo]: parseInt(e.target.value)||0}))} />
+                  </div>
+                ))}
+              </div>
+              {Object.values(editVaciosModalVal).reduce((s,v) => s+(v||0), 0) > 0 && (
+                <p className="text-xs text-gray-400 text-right">
+                  Total: <span className="text-white font-bold">{Object.values(editVaciosModalVal).reduce((s,v) => s+(v||0), 0)} bal. vacíos</span>
+                </p>
+              )}
+              <div className="flex gap-3">
+                <button onClick={() => setEditVaciosModal(null)} className="btn-secondary flex-1">Cancelar</button>
+                <button onClick={async () => {
+                  setSaving(true)
+                  const total = Object.values(editVaciosModalVal).reduce((s,v) => s+(v||0), 0)
+                  await supabase.from('almacenes').update({
+                    balones_vacios: total,
+                    vacios_5kg: editVaciosModalVal['5kg'] || 0,
+                    vacios_10kg: editVaciosModalVal['10kg'] || 0,
+                    vacios_45kg: editVaciosModalVal['45kg'] || 0,
+                  }).eq('id', editVaciosModal.id)
+                  setSaving(false); setEditVaciosModal(null); cargar()
+                }} disabled={saving} className="btn-primary flex-1 justify-center">
+                  {saving ? 'Guardando...' : '✓ Guardar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {editStockAlmacen && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl">
