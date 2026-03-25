@@ -27,7 +27,7 @@ export default function Distribuidores() {
   const [selected, setSelected] = useState(null)
   const [form, setForm] = useState({ nombre: '', telefono: '', almacen_id: '', precio_base: '' })
   const [repoForm, setRepoForm] = useState({ cantidad: '', notas: '' })
-  const [cuentaForm, setCuentaForm] = useState({ vales20: '', vales43: '', adelantos: '', balones_devueltos: '', balones_vendidos: '', notas: '' })
+  const [cuentaForm, setCuentaForm] = useState({ vales20: '', vales43: '', adelantos: '', balones_devueltos: '', balones_vendidos: '', notas: '', fecha: hoyPeru() })
   const [historial, setHistorial] = useState([])
   const [movimientos, setMovimientos] = useState([])
   const [saving, setSaving] = useState(false)
@@ -193,7 +193,7 @@ export default function Distribuidores() {
   }
 
   async function abrirCuenta(d) {
-    setSelected(d); setCuentaForm({ vales20: '', vales43: '', adelantos: '', balones_devueltos: '', balones_vendidos: '', notas: '' }); setError(''); setModal('cuenta')
+    setSelected(d); setCuentaForm({ vales20: '', vales43: '', adelantos: '', balones_devueltos: '', balones_vendidos: '', notas: '', fecha: hoyPeru() }); setError(''); setModal('cuenta')
   }
 
   async function guardarCuenta() {
@@ -208,10 +208,10 @@ export default function Distribuidores() {
     const saldoEfectivo = totalEsperado - totalVales - adelantos
     const estadoCuenta = saldoEfectivo <= 0 && balonesFaltantes <= 0 ? 'cancelado' : 'por_cobrar'
     setSaving(true); setError('')
-    const hoy = hoyPeru()
+    const fechaRendicion = cuentaForm.fecha || hoyPeru()
     const { data: cuenta, error: e1 } = await supabase.from('cuentas_distribuidor').insert({
       distribuidor_id: selected.id,
-      periodo_inicio: hoy, periodo_fin: hoy,
+      periodo_inicio: fechaRendicion, periodo_fin: fechaRendicion,
       balones_entregados: selected.stock_actual,
       balones_vendidos: balonesVendidos,
       precio_por_balon: selected.precio_base,
@@ -224,9 +224,9 @@ export default function Distribuidores() {
     }).select().single()
     if (e1) { setError(e1.message); setSaving(false); return }
     const detalles = []
-    if (v20 > 0) detalles.push({ cuenta_id: cuenta.id, tipo: 'vale_20', cantidad: v20, monto: v20 * 20, fecha: hoy })
-    if (v43 > 0) detalles.push({ cuenta_id: cuenta.id, tipo: 'vale_43', cantidad: v43, monto: v43 * 43, fecha: hoy })
-    if (adelantos > 0) detalles.push({ cuenta_id: cuenta.id, tipo: 'adelanto', monto: adelantos, fecha: hoy })
+    if (v20 > 0) detalles.push({ cuenta_id: cuenta.id, tipo: 'vale_20', cantidad: v20, monto: v20 * 20, fecha: fechaRendicion })
+    if (v43 > 0) detalles.push({ cuenta_id: cuenta.id, tipo: 'vale_43', cantidad: v43, monto: v43 * 43, fecha: fechaRendicion })
+    if (adelantos > 0) detalles.push({ cuenta_id: cuenta.id, tipo: 'adelanto', monto: adelantos, fecha: fechaRendicion })
     if (detalles.length > 0) await supabase.from('cuenta_distribuidor_detalles').insert(detalles)
     // Actualizar solo vacíos en distribuidor (stock_actual viene del almacén)
     await supabase.from('distribuidores')
@@ -505,6 +505,7 @@ export default function Distribuidores() {
               )
             })()}
 
+            <div><label className="label">Fecha de la rendición</label><input type="date" className="input" value={cuentaForm.fecha} onChange={e => setCuentaForm({...cuentaForm, fecha: e.target.value})} /></div>
             <div><label className="label">Notas</label><textarea className="input" rows={2} value={cuentaForm.notas} onChange={e => setCuentaForm({...cuentaForm, notas: e.target.value})} /></div>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setModal(null)} className="btn-secondary flex-1">Cancelar</button>
