@@ -73,7 +73,7 @@ export default function Deudas() {
 
   async function cargar() {
     setLoading(true)
-    let query = supabase.from('deudas').select('*').order('created_at', { ascending: false })
+    let query = supabase.from('deudas').select('*').order('fecha_deuda', { ascending: false })
     if (filtroEstado === 'activas') query = query.in('estado', ['activa', 'pagada_parcial'])
     else if (filtroEstado === 'liquidadas') query = query.eq('estado', 'liquidada')
     const { data } = await query
@@ -87,7 +87,7 @@ export default function Deudas() {
     const { data } = await supabase.from('deudas')
       .select('*')
       .ilike('nombre_deudor', nombreDeudor)
-      .order('created_at', { ascending: false })
+      .order('fecha_deuda', { ascending: false })
     
     // Combinar todos los movimientos de todas las deudas
     const todosMovimientos = []
