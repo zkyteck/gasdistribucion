@@ -108,7 +108,10 @@ export default function Reportes() {
         if (r.clave === 'costo_10kg') costos['10kg'] = parseFloat(r.valor) || 0
         if (r.clave === 'costo_45kg') costos['45kg'] = parseFloat(r.valor) || 0
       })
-      const costoPromedio = Object.values(costos).filter(v => v > 0).reduce((s, v, _, a) => s + v / a.length, 0) || 0
+      // Costo promedio ponderado por ventas reales (no promedio simple de tipos)
+      const totalBalVendidos = ventas?.reduce((s, v) => s + (v.cantidad || 0), 0) || 1
+      const costoTotalVentas = ventas?.reduce((s, v) => s + (v.cantidad || 0) * (costos[v.tipo_balon || '10kg'] || costos['10kg'] || 0), 0) || 0
+      const costoPromedio = totalBalVendidos > 0 ? costoTotalVentas / totalBalVendidos : (costos['10kg'] || 0)
 
       // TIENDA
       const ingTienda = ventas?.reduce((s, v) => s + (v.cantidad || 0) * (v.precio_unitario || 0), 0) || 0
@@ -151,7 +154,8 @@ export default function Reportes() {
       // DISTRIBUIDORES
       const ingDist = cuentasDist?.reduce((s, c) => s + (c.total_esperado || 0), 0) || 0
       const balDist = cuentasDist?.reduce((s, c) => s + (c.balones_vendidos || 0), 0) || 0
-      const costoDist = balDist * costoPromedio
+      // Para distribuidores usar costo del 10kg (tipo más común)
+      const costoDist = balDist * (costos['10kg'] || costoPromedio)
       const ganDist = ingDist - costoDist
 
       const porDist = {}
@@ -161,7 +165,7 @@ export default function Reportes() {
         porDist[n].ingreso += c.total_esperado || 0
         porDist[n].balones += c.balones_vendidos || 0
         porDist[n].rendiciones++
-        porDist[n].ganancia += (c.total_esperado || 0) - (c.balones_vendidos || 0) * costoPromedio
+        porDist[n].ganancia += (c.total_esperado || 0) - (c.balones_vendidos || 0) * (costos['10kg'] || costoPromedio)
       })
 
       // STOCK ACTUAL
