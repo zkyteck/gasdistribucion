@@ -218,14 +218,40 @@ export default function Inventario() {
     const origen = almacenes.find(a => a.id === movimientoForm.origen_id)
     if (origen && origen.stock_actual < cant) { setError(`Stock insuficiente. Disponible: ${origen.stock_actual} bal.`); return }
     setSaving(true); setError('')
-    await supabase.from('almacenes').update({ stock_actual: (origen?.stock_actual || 0) - cant }).eq('id', movimientoForm.origen_id)
     const destino = almacenes.find(a => a.id === movimientoForm.destino_id)
+    const tipoBalon = movimientoForm.tipo_balon
+
+    // Actualizar stock_actual en almacenes
+    await supabase.from('almacenes').update({ stock_actual: (origen?.stock_actual || 0) - cant }).eq('id', movimientoForm.origen_id)
     await supabase.from('almacenes').update({ stock_actual: (destino?.stock_actual || 0) + cant }).eq('id', movimientoForm.destino_id)
+
+    // Actualizar stock_por_tipo en origen
+    const { data: sptOrigen } = await supabase.from('stock_por_tipo')
+      .select('*').eq('almacen_id', movimientoForm.origen_id).eq('tipo_balon', tipoBalon).single()
+    if (sptOrigen) {
+      await supabase.from('stock_por_tipo')
+        .update({ stock_actual: Math.max(0, sptOrigen.stock_actual - cant) })
+        .eq('id', sptOrigen.id)
+    }
+
+    // Actualizar stock_por_tipo en destino
+    const { data: sptDestino } = await supabase.from('stock_por_tipo')
+      .select('*').eq('almacen_id', movimientoForm.destino_id).eq('tipo_balon', tipoBalon).single()
+    if (sptDestino) {
+      await supabase.from('stock_por_tipo')
+        .update({ stock_actual: sptDestino.stock_actual + cant })
+        .eq('id', sptDestino.id)
+    } else {
+      await supabase.from('stock_por_tipo')
+        .insert({ almacen_id: movimientoForm.destino_id, tipo_balon: tipoBalon, stock_actual: cant })
+    }
+
+    // Registrar movimiento
     await supabase.from('movimientos_stock').insert({
       almacen_id: movimientoForm.origen_id,
       almacen_destino_id: movimientoForm.destino_id,
       tipo: 'traslado', cantidad: cant,
-      tipo_balon: movimientoForm.tipo_balon,
+      tipo_balon: tipoBalon,
       notas: movimientoForm.notas || null,
       fecha: movimientoForm.fecha
     })
