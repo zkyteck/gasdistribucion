@@ -55,7 +55,7 @@ export default function Ventas() {
     const [{ data: v }, { data: a }, { data: pt }, { data: c }, { data: ptb }, { data: spt }] = await Promise.all([
       supabase.from('ventas').select('*, clientes(nombre), almacenes(nombre), precio_tipos(nombre)')
         .gte('fecha', filtroFecha + 'T00:00:00-05:00').lte('fecha', filtroFecha + 'T23:59:59-05:00').order('fecha', { ascending: false }),
-      supabase.from('almacenes').select('id, nombre, stock_actual').eq('activo', true).ilike('nombre', '%tienda%'),
+      supabase.from('almacenes').select('id, nombre, stock_actual').eq('activo', true).order('nombre'),
       supabase.from('precio_tipos').select('*').eq('activo', true),
       supabase.from('clientes').select('id, nombre, tipo, es_varios').order('nombre').limit(100),
       supabase.from('precio_tipo_balon').select('*'),
