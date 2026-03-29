@@ -197,17 +197,19 @@ export default function Deudas() {
     const vales20 = parseInt(pagoForm.vales_20) || 0
     const vales43 = parseInt(pagoForm.vales_43) || 0
     if (monto === 0 && balones === 0 && vales20 === 0 && vales43 === 0) { setError('Ingresa al menos un pago'); return }
-    if (monto > (parseFloat(selected.monto_pendiente) || 0)) { setError(`Máximo S/ ${selected.monto_pendiente}`); return }
+    // Los vales descuentan del monto en dinero
+    const totalVales = (vales20 * 20) + (vales43 * 43)
+    const totalPago = monto + totalVales
+    if (totalPago > (parseFloat(selected.monto_pendiente) || 0)) { setError(`El total (S/${totalPago}) supera la deuda (S/${selected.monto_pendiente})`); return }
     if (balones > (parseInt(selected.balones_pendiente) || 0)) { setError(`Máximo ${selected.balones_pendiente} balones`); return }
-    if (vales20 > (parseInt(selected.vales_20_pendiente) || 0)) { setError(`Máximo ${selected.vales_20_pendiente} vales S/20`); return }
-    if (vales43 > (parseInt(selected.vales_43_pendiente) || 0)) { setError(`Máximo ${selected.vales_43_pendiente} vales S/43`); return }
     setSaving(true); setError('')
-    const nuevoMonto = Math.max(0, (parseFloat(selected.monto_pendiente) || 0) - monto)
+    const nuevoMonto = Math.max(0, (parseFloat(selected.monto_pendiente) || 0) - totalPago)
     const nuevoBal = Math.max(0, (parseInt(selected.balones_pendiente) || 0) - balones)
     const nuevoV20 = Math.max(0, (parseInt(selected.vales_20_pendiente) || 0) - vales20)
     const nuevoV43 = Math.max(0, (parseInt(selected.vales_43_pendiente) || 0) - vales43)
     const liquidada = nuevoMonto === 0 && nuevoBal === 0 && nuevoV20 === 0 && nuevoV43 === 0
-    const entradaHistorial = { tipo: 'pago', fecha: pagoForm.fecha, monto, balones, vales_20: vales20, vales_43: vales43, metodo_pago: pagoForm.metodo_pago, notas: pagoForm.notas || null }
+    const metodo = vales20 > 0 || vales43 > 0 ? (monto > 0 ? 'mixto' : 'vale') : pagoForm.metodo_pago
+    const entradaHistorial = { tipo: 'pago', fecha: pagoForm.fecha, monto: totalPago, balones, vales_20: vales20, vales_43: vales43, metodo_pago: metodo, notas: pagoForm.notas || null }
     const historialAnterior = selected.historial || []
     const { error: e } = await supabase.from('deudas').update({
       monto_pendiente: nuevoMonto, balones_pendiente: nuevoBal,
@@ -570,34 +572,53 @@ export default function Deudas() {
             <p className="text-xs text-gray-500">¿Cuánto paga ahora? (puede ser parcial):</p>
             <div className="grid grid-cols-2 gap-3">
               {parseFloat(selected.monto_pendiente) > 0 && (
-                <div><label className="label">💰 Dinero S/ <span className="text-gray-600 text-xs">(max {Number(selected.monto_pendiente).toLocaleString()})</span></label>
+                <div><label className="label">💰 Efectivo S/ <span className="text-gray-600 text-xs">(max {Number(selected.monto_pendiente).toLocaleString()})</span></label>
                   <input type="number" min="0" step="0.50" className="input"
+                    placeholder="0"
                     value={pagoForm.monto} onChange={e => setPagoForm(f => ({...f, monto: e.target.value}))} /></div>
               )}
               {parseInt(selected.balones_pendiente) > 0 && (
                 <div><label className="label">🔵 Balones <span className="text-gray-600 text-xs">(max {selected.balones_pendiente})</span></label>
                   <input type="number" min="0" className="input"
+                    placeholder="0"
                     value={pagoForm.balones} onChange={e => setPagoForm(f => ({...f, balones: e.target.value}))} /></div>
               )}
-              {parseInt(selected.vales_20_pendiente) > 0 && (
-                <div><label className="label">🎫 Vales S/20 <span className="text-gray-600 text-xs">(max {selected.vales_20_pendiente})</span></label>
-                  <input type="number" min="0" className="input"
+              {/* Vales siempre visibles si hay deuda en dinero */}
+              {parseFloat(selected.monto_pendiente) > 0 && (
+                <div><label className="label">🎫 Vales S/20</label>
+                  <input type="number" min="0" className="input" placeholder="0"
                     value={pagoForm.vales_20} onChange={e => setPagoForm(f => ({...f, vales_20: e.target.value}))} /></div>
               )}
-              {parseInt(selected.vales_43_pendiente) > 0 && (
-                <div><label className="label">🎫 Vales S/43 <span className="text-gray-600 text-xs">(max {selected.vales_43_pendiente})</span></label>
-                  <input type="number" min="0" className="input"
+              {parseFloat(selected.monto_pendiente) > 0 && (
+                <div><label className="label">🎫 Vales S/43</label>
+                  <input type="number" min="0" className="input" placeholder="0"
                     value={pagoForm.vales_43} onChange={e => setPagoForm(f => ({...f, vales_43: e.target.value}))} /></div>
               )}
             </div>
+            {/* Preview del total pagado */}
+            {((parseFloat(pagoForm.monto)||0) + (parseInt(pagoForm.vales_20)||0)*20 + (parseInt(pagoForm.vales_43)||0)*43) > 0 && (
+              <div className="bg-emerald-900/20 border border-emerald-800/40 rounded-lg p-3 text-sm space-y-1">
+                {(parseFloat(pagoForm.monto)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">💵 Efectivo:</span><span className="text-white">S/ {(parseFloat(pagoForm.monto)||0).toLocaleString()}</span></div>}
+                {(parseInt(pagoForm.vales_20)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">🎫 {pagoForm.vales_20} vale(s) S/20:</span><span className="text-white">S/ {((parseInt(pagoForm.vales_20)||0)*20).toLocaleString()}</span></div>}
+                {(parseInt(pagoForm.vales_43)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">🎫 {pagoForm.vales_43} vale(s) S/43:</span><span className="text-white">S/ {((parseInt(pagoForm.vales_43)||0)*43).toLocaleString()}</span></div>}
+                <div className="flex justify-between border-t border-gray-700 pt-1 mt-1">
+                  <span className="text-gray-400 font-semibold">Total abono:</span>
+                  <span className="text-emerald-400 font-bold">S/ {((parseFloat(pagoForm.monto)||0) + (parseInt(pagoForm.vales_20)||0)*20 + (parseInt(pagoForm.vales_43)||0)*43).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Saldo restante:</span>
+                  <span className="text-yellow-400 font-bold">S/ {Math.max(0, (parseFloat(selected.monto_pendiente)||0) - (parseFloat(pagoForm.monto)||0) - (parseInt(pagoForm.vales_20)||0)*20 - (parseInt(pagoForm.vales_43)||0)*43).toLocaleString()}</span>
+                </div>
+              </div>
+            )}
             {parseFloat(selected.monto_pendiente) > 0 && (
               <div>
-                <label className="label">Método de pago</label>
+                <label className="label">Método de pago (efectivo)</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {['efectivo','yape','vale'].map(m => (
+                  {['efectivo','yape','mixto'].map(m => (
                     <button key={m} onClick={() => setPagoForm(f => ({...f, metodo_pago: m}))}
                       className={`py-2 rounded-lg border text-xs font-medium capitalize transition-all ${pagoForm.metodo_pago === m ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
-                      {m}
+                      {m === 'mixto' ? 'Mixto' : m}
                     </button>
                   ))}
                 </div>
