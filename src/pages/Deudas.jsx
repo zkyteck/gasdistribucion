@@ -182,6 +182,7 @@ export default function Deudas() {
       vales_20_pendiente: (parseInt(deudaPendiente.vales_20_pendiente) || 0) + vales20,
       vales_43_pendiente: (parseInt(deudaPendiente.vales_43_pendiente) || 0) + vales43,
       estado: 'activa', historial: [...historialAnterior, entradaHistorial],
+      fecha_deuda: deudaForm.fecha,
       updated_at: new Date().toISOString()
     }).eq('id', deudaPendiente.id)
     setSaving(false)
