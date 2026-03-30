@@ -82,7 +82,7 @@ function Ticket({ data, onClose }) {
           .deposito-color { color: #000; }
           .entrega-color { color: #000; }
           .saldo-box { border: 1px solid #000; padding: 3px 4px; margin: 4px 0; text-align: center; font-size: 11px; font-weight: bold; }
-          .espacio-corte { height: 16mm; }
+          .espacio-corte { height: 30mm; }
           @media print {
             @page { size: 57mm auto; margin: 0; }
             body { width: 56mm; max-width: 56mm; padding: 2mm 3mm; }
@@ -130,7 +130,7 @@ function Ticket({ data, onClose }) {
               <div className="seccion-titulo">DEPOSITOS:</div>
               {depositos.map((h, i) => (
                 <div key={i} className="hist-fila">
-                  <span className="deposito-color">+ {h.fecha || '—'}</span>
+                  <span className="deposito-color">+ {h.fecha ? format(new Date(h.fecha + 'T12:00:00'), 'dd/MM/yy') : '—'}</span>
                   <span className="bold">{itemsTexto(h)}</span>
                 </div>
               ))}
@@ -144,7 +144,7 @@ function Ticket({ data, onClose }) {
               <div className="seccion-titulo">ENTREGAS REALIZADAS:</div>
               {entregas.map((h, i) => (
                 <div key={i} className="hist-fila">
-                  <span className="entrega-color">- {h.fecha || '—'}{h.quien_recoge ? ` (${h.quien_recoge})` : ''}</span>
+                  <span className="entrega-color">- {h.fecha ? format(new Date(h.fecha + 'T12:00:00'), 'dd/MM/yy') : '—'}{h.quien_recoge ? ` ${h.quien_recoge}` : ''}</span>
                   <span className="bold">{itemsTexto(h)}</span>
                 </div>
               ))}
@@ -166,9 +166,7 @@ function Ticket({ data, onClose }) {
             Centro Gas Paucara
           </div>
 
-          {/* ESPACIO DE CORTE */}
-          <div className="linea-corte" />
-          <div className="scissors">✂</div>
+          {/* ESPACIO DE CORTE — espacio en blanco para poder romper la hoja */}
           <div className="espacio-corte" />
         </div>
 
