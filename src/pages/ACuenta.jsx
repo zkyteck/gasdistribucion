@@ -23,9 +23,30 @@ function Modal({ title, onClose, children, wide }) {
 function Ticket({ data, onClose }) {
   const ticketRef = useRef()
 
+  // Construir historial completo de movimientos
+  const historial = data.historial_cambios || []
+  const depositos = historial.filter(h => h.tipo === 'deposito')
+  const entregas = historial.filter(h => h.tipo === 'entrega')
+
+  function itemsTexto(h) {
+    const arr = []
+    if (h.vales_20 > 0) arr.push(`${h.vales_20}x S/20`)
+    if (h.vales_43 > 0) arr.push(`${h.vales_43}x S/43`)
+    if (h.balones > 0) arr.push(`${h.balones} bal.`)
+    if (parseFloat(h.dinero) > 0) arr.push(`S/${parseFloat(h.dinero).toFixed(2)}`)
+    return arr.join(' + ')
+  }
+
+  // Saldo actual en custodia
+  const saldoItems = []
+  if (data.vales_20 > 0) saldoItems.push(`${data.vales_20} vale(s) S/20`)
+  if (data.vales_43 > 0) saldoItems.push(`${data.vales_43} vale(s) S/43`)
+  if (data.balones > 0) saldoItems.push(`${data.balones} balón(es)`)
+  if (parseFloat(data.dinero) > 0) saldoItems.push(`S/${parseFloat(data.dinero).toFixed(2)}`)
+
   function imprimir() {
     const contenido = ticketRef.current.innerHTML
-    const ventana = window.open('', '_blank', 'width=226,height=700')
+    const ventana = window.open('', '_blank', 'width=226,height=900')
     ventana.document.write(`
       <!DOCTYPE html>
       <html>
@@ -49,21 +70,22 @@ function Ticket({ data, onClose }) {
           .titulo { font-size: 13px; font-weight: bold; text-align: center; margin-bottom: 1px; letter-spacing: 0.5px; }
           .subtitulo { font-size: 10px; text-align: center; margin-bottom: 4px; }
           .linea { border-top: 1px dashed #000; margin: 4px 0; }
+          .linea-corte { border-top: 2px dashed #000; margin: 8px 0; }
+          .scissors { text-align: center; font-size: 13px; margin: 2px 0; }
           .fila { display: flex; justify-content: space-between; margin: 2px 0; font-size: 10px; }
-          .item { margin: 2px 0 2px 4px; font-size: 11px; }
+          .item { margin: 2px 0 2px 4px; font-size: 10px; }
           .grande { font-size: 12px; font-weight: bold; text-align: center; margin: 4px 0; letter-spacing: 1px; }
           .footer { text-align: center; font-size: 9px; margin-top: 6px; line-height: 1.5; }
           .ticket-num { font-size: 16px; font-weight: bold; text-align: center; letter-spacing: 3px; margin: 3px 0; }
+          .seccion-titulo { font-size: 10px; font-weight: bold; margin: 3px 0 2px 0; }
+          .hist-fila { display: flex; justify-content: space-between; font-size: 9px; margin: 1px 0; }
+          .deposito-color { color: #000; }
+          .entrega-color { color: #000; }
+          .saldo-box { border: 1px solid #000; padding: 3px 4px; margin: 4px 0; text-align: center; font-size: 11px; font-weight: bold; }
+          .espacio-corte { height: 16mm; }
           @media print {
-            @page {
-              size: 57mm auto;
-              margin: 0;
-            }
-            body {
-              width: 56mm;
-              max-width: 56mm;
-              padding: 2mm 3mm;
-            }
+            @page { size: 57mm auto; margin: 0; }
+            body { width: 56mm; max-width: 56mm; padding: 2mm 3mm; }
           }
         </style>
       </head>
@@ -75,37 +97,79 @@ function Ticket({ data, onClose }) {
     setTimeout(() => { ventana.print(); ventana.close() }, 400)
   }
 
-  const items = []
-  if (data.vales_20 > 0) items.push(`${data.vales_20} vale(s) de S/ 20`)
-  if (data.vales_43 > 0) items.push(`${data.vales_43} vale(s) de S/ 43`)
-  if (data.balones > 0) items.push(`${data.balones} balón(es) ${data.tipo_balon || ''}`.trim() + ' vacío(s)')
-  if (data.dinero > 0) items.push(`S/ ${parseFloat(data.dinero).toFixed(2)} en efectivo`)
-
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-xs">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-xs max-h-[90vh] overflow-y-auto">
         {/* Preview del ticket */}
-        <div ref={ticketRef} style={{ fontFamily: "'Courier New', monospace", fontSize: '12px', color: '#000', padding: '12px' }}>
+        <div ref={ticketRef} style={{ fontFamily: "'Courier New', monospace", fontSize: '11px', color: '#000', padding: '10px' }}>
+
+          {/* ENCABEZADO */}
           <div className="titulo">CENTRO GAS PAUCARA</div>
           <div className="subtitulo">Distribución de Gas</div>
           <div className="linea" />
-          <div className="center bold" style={{ fontSize: '11px', marginBottom: '4px' }}>COMPROBANTE "A CUENTA"</div>
+          <div className="center bold" style={{ fontSize: '11px', marginBottom: '3px' }}>COMPROBANTE "A CUENTA"</div>
           <div className="ticket-num">#{String(data.numero).padStart(4, '0')}</div>
           <div className="linea" />
           <div className="fila"><span>Cliente:</span><span className="bold">{data.nombre_cliente}</span></div>
-          <div className="fila"><span>Fecha:</span><span>{format(new Date(), 'dd/MM/yyyy HH:mm', { locale: es })}</span></div>
+          <div className="fila"><span>Impreso:</span><span>{format(new Date(), 'dd/MM/yyyy HH:mm', { locale: es })}</span></div>
+
+          {/* SALDO ACTUAL */}
           <div className="linea" />
-          <div className="bold" style={{ marginBottom: '4px' }}>DEJÓ EN CUSTODIA:</div>
-          {items.map((item, i) => <div key={i} className="item">✓ {item}</div>)}
-          {data.notas && <><div className="linea" /><div style={{ fontSize: '11px' }}>Nota: {data.notas}</div></>}
-          <div className="linea" />
-          <div className="grande">PENDIENTE DE ENTREGA</div>
+          <div className="seccion-titulo">SALDO EN CUSTODIA:</div>
+          <div className="saldo-box">
+            {saldoItems.length > 0 ? saldoItems.join(' + ') : 'Sin saldo'}
+          </div>
+          <div className="center" style={{ fontSize: '9px', marginBottom: '2px' }}>
+            {data.estado === 'entregado' ? '✓ ENTREGADO' : 'PENDIENTE DE ENTREGA'}
+          </div>
+
+          {/* HISTORIAL DE DEPÓSITOS */}
+          {depositos.length > 0 && (
+            <>
+              <div className="linea" />
+              <div className="seccion-titulo">DEPOSITOS:</div>
+              {depositos.map((h, i) => (
+                <div key={i} className="hist-fila">
+                  <span className="deposito-color">+ {h.fecha || '—'}</span>
+                  <span className="bold">{itemsTexto(h)}</span>
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* HISTORIAL DE ENTREGAS */}
+          {entregas.length > 0 && (
+            <>
+              <div className="linea" />
+              <div className="seccion-titulo">ENTREGAS REALIZADAS:</div>
+              {entregas.map((h, i) => (
+                <div key={i} className="hist-fila">
+                  <span className="entrega-color">- {h.fecha || '—'}{h.quien_recoge ? ` (${h.quien_recoge})` : ''}</span>
+                  <span className="bold">{itemsTexto(h)}</span>
+                </div>
+              ))}
+            </>
+          )}
+
+          {data.notas && (
+            <>
+              <div className="linea" />
+              <div style={{ fontSize: '10px' }}>Nota: {data.notas}</div>
+            </>
+          )}
+
+          {/* FOOTER */}
           <div className="linea" />
           <div className="footer">
             Guarde este comprobante<br />
             para recoger su pedido<br />
             Centro Gas Paucara
           </div>
+
+          {/* ESPACIO DE CORTE */}
+          <div className="linea-corte" />
+          <div className="scissors">✂</div>
+          <div className="espacio-corte" />
         </div>
 
         {/* Botones */}
