@@ -82,7 +82,7 @@ function Ticket({ data, onClose }) {
           .deposito-color { color: #000; }
           .entrega-color { color: #000; }
           .saldo-box { border: 1px solid #000; padding: 3px 4px; margin: 4px 0; text-align: center; font-size: 11px; font-weight: bold; }
-          .espacio-corte { height: 30mm; }
+          .espacio-corte { height: 60mm; }
           @media print {
             @page { size: 57mm auto; margin: 0; }
             body { width: 56mm; max-width: 56mm; padding: 2mm 3mm; }
