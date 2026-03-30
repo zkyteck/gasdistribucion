@@ -75,14 +75,14 @@ function Ticket({ data, onClose }) {
           .fila { display: flex; justify-content: space-between; margin: 2px 0; font-size: 10px; }
           .item { margin: 2px 0 2px 4px; font-size: 10px; }
           .grande { font-size: 12px; font-weight: bold; text-align: center; margin: 4px 0; letter-spacing: 1px; }
-          .footer { text-align: center; font-size: 9px; margin-top: 6px; line-height: 1.5; }
+          .footer { text-align: center; font-size: 9px; margin-top: 6px; margin-bottom: 8px; line-height: 1.5; }
           .ticket-num { font-size: 16px; font-weight: bold; text-align: center; letter-spacing: 3px; margin: 3px 0; }
           .seccion-titulo { font-size: 10px; font-weight: bold; margin: 3px 0 2px 0; }
           .hist-fila { display: flex; justify-content: space-between; font-size: 9px; margin: 1px 0; }
           .deposito-color { color: #000; }
           .entrega-color { color: #000; }
           .saldo-box { border: 1px solid #000; padding: 3px 4px; margin: 4px 0; text-align: center; font-size: 11px; font-weight: bold; }
-          .espacio-corte { height: 90mm; }
+          .espacio-corte { height: 120mm; }
           @media print {
             @page { size: 57mm auto; margin: 0; }
             body { width: 56mm; max-width: 56mm; padding: 2mm 3mm; }
@@ -101,7 +101,7 @@ function Ticket({ data, onClose }) {
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-xs max-h-[90vh] overflow-y-auto">
         {/* Preview del ticket */}
-        <div ref={ticketRef} style={{ fontFamily: "'Courier New', monospace", fontSize: '11px', color: '#000', padding: '10px' }}>
+        <div ref={ticketRef} style={{ fontFamily: "'Courier New', monospace", fontSize: '11px', color: '#000', padding: '10px', width: '56mm', margin: '0 auto' }}>
 
           {/* ENCABEZADO */}
           <div className="titulo">CENTRO GAS PAUCARA</div>
