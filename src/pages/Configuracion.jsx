@@ -201,6 +201,12 @@ export default function Configuracion() {
     setModal(null); cargar()
   }
 
+  async function eliminarProveedor(id) {
+    if (!confirm('¿Eliminar este proveedor?')) return
+    await supabase.from('proveedores').update({ activo: false }).eq('id', id)
+    cargar()
+  }
+
   async function guardarUsuario() {
     if (!usuarioForm.nombre || !usuarioForm.email || !usuarioForm.password) { setError('Completa nombre, email y contraseña'); return }
     if (usuarioForm.password.length < 6) { setError('La contraseña debe tener al menos 6 caracteres'); return }
@@ -449,8 +455,6 @@ export default function Configuracion() {
         </div>
       )}
 
-      )}
-
       {/* Tab Vales FISE */}
       {tab === 'vales' && (
         <div className="space-y-6">
@@ -519,8 +523,16 @@ export default function Configuracion() {
                     <td className="px-6 py-4 text-gray-400 text-sm font-mono">{p.ruc || '-'}</td>
                     <td className="px-6 py-4 text-gray-500 text-sm">{p.direccion || '-'}</td>
                     <td className="px-6 py-4">
-                      <button onClick={() => { setSelected(p); setProvForm({ nombre: p.nombre, telefono: p.telefono||'', direccion: p.direccion||'', ruc: p.ruc||'' }); setError(''); setModal('proveedor') }}
-                        className="text-gray-500 hover:text-blue-400 transition-colors"><Edit2 className="w-4 h-4" /></button>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => { setSelected(p); setProvForm({ nombre: p.nombre, telefono: p.telefono||'', direccion: p.direccion||'', ruc: p.ruc||'' }); setError(''); setModal('proveedor') }}
+                          className="text-xs bg-blue-600/20 border border-blue-600/30 text-blue-400 px-2 py-1 rounded-lg flex items-center gap-1">
+                          <Edit2 className="w-3 h-3" />Editar
+                        </button>
+                        <button onClick={() => eliminarProveedor(p.id)}
+                          className="text-xs bg-red-600/20 border border-red-600/30 text-red-400 px-2 py-1 rounded-lg">
+                          🗑️ Borrar
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
