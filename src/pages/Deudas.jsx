@@ -69,14 +69,12 @@ export default function Deudas() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'deudas' }, () => cargar())
       .subscribe()
     return () => supabase.removeChannel(canal)
-  }, [filtroEstado])
+  }, [])
 
   async function cargar() {
     setLoading(true)
-    let query = supabase.from('deudas').select('*').order('fecha_deuda', { ascending: false })
-    if (filtroEstado === 'activas') query = query.in('estado', ['activa', 'pagada_parcial'])
-    else if (filtroEstado === 'liquidadas') query = query.eq('estado', 'liquidada')
-    const { data } = await query
+    // Traer TODAS las deudas — el filtro de estado se aplica al agrupar por cliente
+    const { data } = await supabase.from('deudas').select('*').order('fecha_deuda', { ascending: false })
     setDeudas(data || [])
     setLoading(false)
   }
@@ -250,17 +248,63 @@ export default function Deudas() {
     cargar()
   }
 
-  const deudasFiltradas = deudas.filter(d => {
-    const matchBusqueda = !busqueda || d.nombre_deudor?.toLowerCase().includes(busqueda.toLowerCase())
-    const matchDesde = !filtroFechaDesde || d.fecha_deuda >= filtroFechaDesde
-    const matchHasta = !filtroFechaHasta || d.fecha_deuda <= filtroFechaHasta
-    return matchBusqueda && matchDesde && matchHasta
+  // Agrupar todas las deudas por nombre_deudor (case-insensitive)
+  const clientesAgrupados = (() => {
+    const mapa = {}
+    deudas.forEach(d => {
+      const key = d.nombre_deudor?.trim().toLowerCase() || ''
+      if (!mapa[key]) {
+        mapa[key] = {
+          nombre: d.nombre_deudor,
+          deudas: [],
+          // Acumuladores
+          monto_pendiente_total: 0,
+          balones_pendiente_total: 0,
+          vales_20_pendiente_total: 0,
+          vales_43_pendiente_total: 0,
+          monto_pagado_total: 0,
+          tiene_activa: false,
+          ultima_fecha: d.fecha_deuda,
+        }
+      }
+      const g = mapa[key]
+      g.deudas.push(d)
+      g.monto_pendiente_total += parseFloat(d.monto_pendiente) || 0
+      g.balones_pendiente_total += parseInt(d.balones_pendiente) || 0
+      g.vales_20_pendiente_total += parseInt(d.vales_20_pendiente) || 0
+      g.vales_43_pendiente_total += parseInt(d.vales_43_pendiente) || 0
+      // Sumar pagos del historial
+      ;(d.historial || []).forEach(h => {
+        if (h.tipo === 'pago') g.monto_pagado_total += parseFloat(h.monto) || 0
+      })
+      if (d.estado !== 'liquidada') g.tiene_activa = true
+      // Quedarse con la fecha más reciente
+      if (d.fecha_deuda > g.ultima_fecha) g.ultima_fecha = d.fecha_deuda
+    })
+    return Object.values(mapa)
+  })()
+
+  // Filtrar grupos según filtros activos
+  const clientesFiltrados = clientesAgrupados.filter(g => {
+    const matchBusqueda = !busqueda || g.nombre?.toLowerCase().includes(busqueda.toLowerCase())
+    const matchEstado = filtroEstado === 'activas' ? g.tiene_activa
+      : filtroEstado === 'liquidadas' ? !g.tiene_activa
+      : true
+    const matchDesde = !filtroFechaDesde || g.ultima_fecha >= filtroFechaDesde
+    const matchHasta = !filtroFechaHasta || g.ultima_fecha <= filtroFechaHasta
+    return matchBusqueda && matchEstado && matchDesde && matchHasta
+  }).sort((a, b) => {
+    // Activas primero, luego por fecha descendente
+    if (a.tiene_activa && !b.tiene_activa) return -1
+    if (!a.tiene_activa && b.tiene_activa) return 1
+    return b.ultima_fecha.localeCompare(a.ultima_fecha)
   })
-  const totalDinero = deudas.filter(d => d.estado !== 'liquidada').reduce((a, d) => a + (parseFloat(d.monto_pendiente) || 0), 0)
-  const totalBalones = deudas.filter(d => d.estado !== 'liquidada').reduce((a, d) => a + (parseInt(d.balones_pendiente) || 0), 0)
-  const totalVales20 = deudas.filter(d => d.estado !== 'liquidada').reduce((a, d) => a + (parseInt(d.vales_20_pendiente) || 0), 0)
-  const totalVales43 = deudas.filter(d => d.estado !== 'liquidada').reduce((a, d) => a + (parseInt(d.vales_43_pendiente) || 0), 0)
-  const totalDeudores = new Set(deudas.filter(d => d.estado !== 'liquidada').map(d => d.nombre_deudor)).size
+
+  const totalDinero = clientesAgrupados.filter(g => g.tiene_activa).reduce((a, g) => a + g.monto_pendiente_total, 0)
+  const totalBalones = clientesAgrupados.filter(g => g.tiene_activa).reduce((a, g) => a + g.balones_pendiente_total, 0)
+  const totalVales20 = clientesAgrupados.filter(g => g.tiene_activa).reduce((a, g) => a + g.vales_20_pendiente_total, 0)
+  const totalVales43 = clientesAgrupados.filter(g => g.tiene_activa).reduce((a, g) => a + g.vales_43_pendiente_total, 0)
+  const totalDeudores = clientesAgrupados.filter(g => g.tiene_activa).length
 
   return (
     <div className="space-y-6">
@@ -345,55 +389,104 @@ export default function Deudas() {
         </div>
       </div>
 
-      {/* Lista */}
+      {/* Lista agrupada por cliente */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
         <div className="px-6 py-3 border-b border-gray-800 flex justify-between items-center">
           <h3 className="text-white font-semibold text-sm">
-            {filtroEstado === 'activas' ? 'Deudas activas' : filtroEstado === 'liquidadas' ? 'Liquidadas' : 'Todas'}
+            {filtroEstado === 'activas' ? 'Con deuda' : filtroEstado === 'liquidadas' ? 'Liquidadas' : 'Todos los clientes'}
           </h3>
-          <span className="text-xs bg-red-600/20 text-red-400 border border-red-600/30 px-2 py-0.5 rounded-full">{deudasFiltradas.length} registros</span>
+          <span className="text-xs bg-red-600/20 text-red-400 border border-red-600/30 px-2 py-0.5 rounded-full">{clientesFiltrados.length} clientes</span>
         </div>
         {loading ? (
           <div className="text-center py-8 text-gray-600">Cargando...</div>
-        ) : deudasFiltradas.length === 0 ? (
+        ) : clientesFiltrados.length === 0 ? (
           <div className="text-center py-8 text-gray-600 flex flex-col items-center gap-2">
             <Users className="w-8 h-8 opacity-30" />
-            <p className="text-sm">Sin deudas registradas</p>
+            <p className="text-sm">Sin resultados</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-800/50">
-            {deudasFiltradas.map(d => {
-              const dias = differenceInDays(new Date(), new Date(d.fecha_deuda))
+            {clientesFiltrados.map(grupo => {
+              // Para acciones usamos la deuda activa más reciente (o la última si todas liquidadas)
+              const deudaActiva = grupo.deudas.find(d => d.estado !== 'liquidada') || grupo.deudas[0]
+              const dias = differenceInDays(new Date(), new Date(grupo.ultima_fecha))
+              // Construir resumen pendiente del grupo
+              const itemsDeuda = []
+              if (grupo.monto_pendiente_total > 0) itemsDeuda.push(`S/ ${grupo.monto_pendiente_total.toLocaleString('es-PE')}`)
+              if (grupo.balones_pendiente_total > 0) itemsDeuda.push(`${grupo.balones_pendiente_total} bal.`)
+              if (grupo.vales_20_pendiente_total > 0) itemsDeuda.push(`${grupo.vales_20_pendiente_total}×S/20`)
+              if (grupo.vales_43_pendiente_total > 0) itemsDeuda.push(`${grupo.vales_43_pendiente_total}×S/43`)
+              const resumenPendiente = itemsDeuda.join(' + ') || 'Sin deuda'
+
               return (
-                <div key={d.id} className="px-4 py-4 hover:bg-gray-800/30 transition-colors">
+                <div key={grupo.nombre} className="px-4 py-4 hover:bg-gray-800/30 transition-colors">
                   <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0 mt-0.5 text-sm">👤</div>
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 text-sm ${grupo.tiene_activa ? 'bg-red-500/10' : 'bg-emerald-500/10'}`}>👤</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="text-white font-semibold text-sm">{d.nombre_deudor}</p>
-                        <p className="text-red-300 font-bold text-sm flex-shrink-0 text-right">{resumenDeuda(d)}</p>
+                        <div>
+                          <p className="text-white font-semibold text-sm">{grupo.nombre}</p>
+                          {grupo.deudas.length > 1 && (
+                            <span className="text-xs text-gray-500">{grupo.deudas.length} deudas registradas</span>
+                          )}
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          {grupo.tiene_activa ? (
+                            <p className="text-red-300 font-bold text-sm">{resumenPendiente}</p>
+                          ) : (
+                            <div>
+                              <p className="text-emerald-400 font-bold text-sm">Sin deuda</p>
+                              {grupo.monto_pagado_total > 0 && (
+                                <p className="text-xs text-gray-500">Pagó S/ {grupo.monto_pagado_total.toLocaleString('es-PE')}</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className={d.estado === 'liquidada' ? 'badge-green' : d.estado === 'pagada_parcial' ? 'badge-yellow' : 'badge-red'}>
-                          {d.estado === 'liquidada' ? '✅ Liquidada' : d.estado === 'pagada_parcial' ? 'Parcial' : 'Activa'}
+                        <span className={grupo.tiene_activa ? 'badge-red' : 'badge-green'}>
+                          {grupo.tiene_activa ? '🔴 Activa' : '✅ Liquidada'}
                         </span>
                         <span className="text-gray-400 text-xs flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          {format(new Date(d.fecha_deuda + 'T12:00:00'), 'dd/MM/yyyy', { locale: es })} ({dias} días)
+                          {format(new Date(grupo.ultima_fecha + 'T12:00:00'), 'dd/MM/yyyy', { locale: es })} ({dias} días)
                         </span>
                       </div>
-                      {d.notas && <p className="text-amber-400/80 text-xs mt-1 italic">📝 "{d.notas}"</p>}
                       <div className="flex flex-wrap gap-2 mt-2">
-                        <button onClick={() => { setSelected(d); setError(''); cargarHistorialCompleto(d.nombre_deudor); setModal('historial') }}
-                          className="text-xs bg-blue-600/20 border border-blue-600/30 text-blue-400 px-2 py-1 rounded-lg">📋 Historial</button>
-                        {d.estado !== 'liquidada' && (
-                          <button onClick={() => { setSelected(d); setPagoForm(emptyPagoForm); setError(''); setModal('pago') }}
+                        {/* Historial — abre con el nombre del grupo */}
+                        <button onClick={() => {
+                          setSelected(deudaActiva)
+                          setError('')
+                          cargarHistorialCompleto(grupo.nombre)
+                          setModal('historial')
+                        }} className="text-xs bg-blue-600/20 border border-blue-600/30 text-blue-400 px-2 py-1 rounded-lg">📋 Historial</button>
+
+                        {/* Registrar pago — solo si hay deuda activa */}
+                        {grupo.tiene_activa && (
+                          <button onClick={() => { setSelected(deudaActiva); setPagoForm(emptyPagoForm); setError(''); setModal('pago') }}
                             className="text-xs bg-emerald-600/20 border border-emerald-600/30 text-emerald-400 px-2 py-1 rounded-lg">✓ Registrar pago</button>
                         )}
-                        <button onClick={() => { setSelected(d); setEditForm({ monto_pendiente: d.monto_pendiente || '', balones_pendiente: d.balones_pendiente || '', vales_20_pendiente: d.vales_20_pendiente || '', vales_43_pendiente: d.vales_43_pendiente || '', fecha_deuda: d.fecha_deuda, notas: d.notas || '' }); setError(''); setModal('editar') }}
-                          className="text-xs bg-gray-600/20 border border-gray-600/30 text-gray-300 px-2 py-1 rounded-lg">✏️ Editar</button>
-                        {perfil?.rol === 'admin' && (
-                          <button onClick={() => eliminarDeuda(d.id)}
+
+                        {/* Editar — solo la deuda activa */}
+                        {grupo.tiene_activa && (
+                          <button onClick={() => {
+                            setSelected(deudaActiva)
+                            setEditForm({
+                              monto_pendiente: deudaActiva.monto_pendiente || '',
+                              balones_pendiente: deudaActiva.balones_pendiente || '',
+                              vales_20_pendiente: deudaActiva.vales_20_pendiente || '',
+                              vales_43_pendiente: deudaActiva.vales_43_pendiente || '',
+                              fecha_deuda: deudaActiva.fecha_deuda,
+                              notas: deudaActiva.notas || ''
+                            })
+                            setError('')
+                            setModal('editar')
+                          }} className="text-xs bg-gray-600/20 border border-gray-600/30 text-gray-300 px-2 py-1 rounded-lg">✏️ Editar</button>
+                        )}
+
+                        {/* Borrar — solo admin, borra la deuda activa */}
+                        {perfil?.rol === 'admin' && grupo.tiene_activa && (
+                          <button onClick={() => eliminarDeuda(deudaActiva.id)}
                             className="text-xs bg-red-600/20 border border-red-600/30 text-red-400 px-2 py-1 rounded-lg">🗑️ Borrar</button>
                         )}
                       </div>
