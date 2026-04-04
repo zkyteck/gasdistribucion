@@ -187,8 +187,9 @@ export default function Inventario() {
       compra_id: compra.id, almacen_id: d.almacen_id, cantidad: d.cantidad, tipo_balon: d.tipo_balon
     }))
     await supabase.from('compra_detalles').insert(detalles)
-    // Update stock_por_tipo for each almacen+tipo_balon
+    // Update stock_por_tipo y descontar vacíos por cada almacén que recibe llenos
     for (const d of detalles) {
+      // 1. Sumar llenos en stock_por_tipo
       const { data: existing } = await supabase.from('stock_por_tipo')
         .select('stock_actual').eq('almacen_id', d.almacen_id).eq('tipo_balon', d.tipo_balon).single()
       if (existing) {
@@ -197,6 +198,22 @@ export default function Inventario() {
           .eq('almacen_id', d.almacen_id).eq('tipo_balon', d.tipo_balon)
       } else {
         await supabase.from('stock_por_tipo').insert({ almacen_id: d.almacen_id, tipo_balon: d.tipo_balon, stock_actual: d.cantidad })
+      }
+
+      // 2. Descontar vacíos del almacén (los llenos que entran reemplazan vacíos)
+      const { data: almFresco } = await supabase.from('almacenes')
+        .select('balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg').eq('id', d.almacen_id).single()
+      if (almFresco) {
+        const vaciosActuales = almFresco.balones_vacios || 0
+        const nuevosVacios = Math.max(0, vaciosActuales - d.cantidad)
+        const campoTipo = d.tipo_balon === '5kg' ? 'vacios_5kg' : d.tipo_balon === '45kg' ? 'vacios_45kg' : 'vacios_10kg'
+        const vaciosTipoActual = almFresco[campoTipo] || 0
+        const nuevosVaciosTipo = Math.max(0, vaciosTipoActual - d.cantidad)
+        await supabase.from('almacenes').update({
+          balones_vacios: nuevosVacios,
+          [campoTipo]: nuevosVaciosTipo,
+          updated_at: new Date().toISOString()
+        }).eq('id', d.almacen_id)
       }
     }
     setSaving(false)
