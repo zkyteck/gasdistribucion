@@ -37,14 +37,28 @@ export default function Vales() {
   const [smsHistorial, setSmsHistorial] = useState([])
   const [modalSms, setModalSms] = useState(false)
   const [retiroForm, setRetiroForm] = useState({ monto: '', motivo: '', fecha: hoyPeru() })
+  const [preciosVales, setPreciosVales] = useState({ '20': 20, '43': 43 })
 
   useEffect(() => {
     cargar()
+    cargarPreciosVales()
     const canal = supabase.channel('vales-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vales_fise' }, () => cargar())
       .subscribe()
     return () => supabase.removeChannel(canal)
   }, [filtroFecha])
+
+  async function cargarPreciosVales() {
+    const { data } = await supabase.from('configuracion').select('*').in('clave', ['precio_vale_20','precio_vale_43'])
+    if (data && data.length > 0) {
+      const mapa = { '20': 20, '43': 43 }
+      data.forEach(r => {
+        if (r.clave === 'precio_vale_20') mapa['20'] = parseFloat(r.valor) || 20
+        if (r.clave === 'precio_vale_43') mapa['43'] = parseFloat(r.valor) || 43
+      })
+      setPreciosVales(mapa)
+    }
+  }
 
   async function cargar() {
     setLoading(true)
@@ -61,7 +75,9 @@ export default function Vales() {
     const valesDelDia = v || []
     const v20 = valesDelDia.filter(x => x.tipo_vale === '20')
     const v43 = valesDelDia.filter(x => x.tipo_vale === '43')
-    setLotes(valesDelDia.length > 0 ? [{ fecha: filtroFecha, cant20: v20.length, cant43: v43.length, total: v20.length * 20 + v43.length * 43, vales: valesDelDia }] : [])
+    // Usar el monto real de cada vale (guardado en BD) para el total
+    const totalDia = valesDelDia.reduce((s, x) => s + (parseFloat(x.monto) || 0), 0)
+    setLotes(valesDelDia.length > 0 ? [{ fecha: filtroFecha, cant20: v20.length, cant43: v43.length, total: totalDia, vales: valesDelDia }] : [])
     setSaldo(s || { total_vales: 0, total_retiros: 0, saldo_disponible: 0 })
     setValesMes(totalMes || 0)
     setLoading(false)
@@ -75,8 +91,8 @@ export default function Vales() {
     setSaving(true); setError('')
 
     const inserts = []
-    for (let i = 0; i < c20; i++) inserts.push({ tipo_vale: '20', monto: 20, fecha_recepcion: form.fecha, lote_dia: form.fecha, estado: 'pendiente', notas: form.notas, usuario_id: perfil?.id || null })
-    for (let i = 0; i < c43; i++) inserts.push({ tipo_vale: '43', monto: 43, fecha_recepcion: form.fecha, lote_dia: form.fecha, estado: 'pendiente', notas: form.notas, usuario_id: perfil?.id || null })
+    for (let i = 0; i < c20; i++) inserts.push({ tipo_vale: '20', monto: preciosVales['20'], fecha_recepcion: form.fecha, lote_dia: form.fecha, estado: 'pendiente', notas: form.notas, usuario_id: perfil?.id || null })
+    for (let i = 0; i < c43; i++) inserts.push({ tipo_vale: '43', monto: preciosVales['43'], fecha_recepcion: form.fecha, lote_dia: form.fecha, estado: 'pendiente', notas: form.notas, usuario_id: perfil?.id || null })
 
     const { error: e } = await supabase.from('vales_fise').insert(inserts)
     setSaving(false)
