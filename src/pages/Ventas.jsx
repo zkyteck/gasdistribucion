@@ -231,6 +231,7 @@ export default function Ventas() {
         fecha_deuda: form.fecha, estado: 'activa',
         notas: form.notas || `Venta al crédito ${form.tipo_balon}`,
         historial: [entradaHistorial],
+        almacen_id: form.almacen_id || null,
         usuario_id: perfil?.id || null
       })
     }

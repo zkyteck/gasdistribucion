@@ -62,19 +62,27 @@ export default function Deudas() {
   const [editForm, setEditForm] = useState({ monto_pendiente: '', balones_pendiente: '', vales_20_pendiente: '', vales_43_pendiente: '', fecha_deuda: '', notas: '' })
   const [historialCompleto, setHistorialCompleto] = useState([])
   const [loadingHistorial, setLoadingHistorial] = useState(false)
+  const [almacenes, setAlmacenes] = useState([])
 
   useEffect(() => {
-    cargar(); cargarClientes()
+    cargar(); cargarClientes(); cargarAlmacenes()
     const canal = supabase.channel('deudas-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'deudas' }, () => cargar())
       .subscribe()
     return () => supabase.removeChannel(canal)
-  }, [])
+  }, [filtroEstado])
+
+  async function cargarAlmacenes() {
+    const { data } = await supabase.from('almacenes').select('id, nombre, stock_actual, balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg').eq('activo', true).order('nombre')
+    setAlmacenes(data || [])
+  }
 
   async function cargar() {
     setLoading(true)
-    // Traer TODAS las deudas — el filtro de estado se aplica al agrupar por cliente
-    const { data } = await supabase.from('deudas').select('*').order('fecha_deuda', { ascending: false })
+    let query = supabase.from('deudas').select('*').order('fecha_deuda', { ascending: false })
+    if (filtroEstado === 'activas') query = query.in('estado', ['activa', 'pagada_parcial'])
+    else if (filtroEstado === 'liquidadas') query = query.eq('estado', 'liquidada')
+    const { data } = await query
     setDeudas(data || [])
     setLoading(false)
   }
@@ -195,7 +203,6 @@ export default function Deudas() {
     const vales20 = parseInt(pagoForm.vales_20) || 0
     const vales43 = parseInt(pagoForm.vales_43) || 0
     if (monto === 0 && balones === 0 && vales20 === 0 && vales43 === 0) { setError('Ingresa al menos un pago'); return }
-    // Los vales descuentan del monto en dinero
     const totalVales = (vales20 * 20) + (vales43 * 43)
     const totalPago = monto + totalVales
     if (totalPago > (parseFloat(selected.monto_pendiente) || 0)) { setError(`El total (S/${totalPago}) supera la deuda (S/${selected.monto_pendiente})`); return }
@@ -217,8 +224,44 @@ export default function Deudas() {
       historial: [...historialAnterior, entradaHistorial],
       updated_at: new Date().toISOString()
     }).eq('id', selected.id)
+    if (e) { setError(e.message); setSaving(false); return }
+
+    // ── Efectos en stock e ingresos ──────────────────────────────
+    const almacenId = selected.almacen_id
+    const tipoBalonDeuda = selected.historial?.[0]?.tipo_balon || '10kg'
+
+    // 1. Si devuelve balones → sumar a vacíos del almacén origen
+    if (balones > 0 && almacenId) {
+      const { data: almFresco } = await supabase.from('almacenes')
+        .select('balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg')
+        .eq('id', almacenId).single()
+      if (almFresco) {
+        const campoVacios = tipoBalonDeuda === '5kg' ? 'vacios_5kg' : tipoBalonDeuda === '45kg' ? 'vacios_45kg' : 'vacios_10kg'
+        await supabase.from('almacenes').update({
+          balones_vacios: (almFresco.balones_vacios || 0) + balones,
+          [campoVacios]: (almFresco[campoVacios] || 0) + balones,
+          updated_at: new Date().toISOString()
+        }).eq('id', almacenId)
+      }
+    }
+
+    // 2. Si paga dinero → registrar como ingreso en ventas (cobro de crédito)
+    if (totalPago > 0 && almacenId) {
+      await supabase.from('ventas').insert({
+        cliente_id: selected.cliente_id || null,
+        almacen_id: almacenId,
+        tipo_balon: tipoBalonDeuda,
+        fecha: pagoForm.fecha + 'T12:00:00-05:00',
+        cantidad: balones || 0,
+        precio_unitario: balones > 0 ? totalPago / balones : totalPago,
+        metodo_pago: 'cobro_credito',
+        notas: `Cobro de crédito — ${selected.nombre_deudor}${pagoForm.notas ? ' · ' + pagoForm.notas : ''}`,
+        usuario_id: perfil?.id || null
+      })
+    }
+    // ────────────────────────────────────────────────────────────
+
     setSaving(false)
-    if (e) { setError(e.message); return }
     setModal(null); cargar()
   }
 
@@ -248,63 +291,17 @@ export default function Deudas() {
     cargar()
   }
 
-  // Agrupar todas las deudas por nombre_deudor (case-insensitive)
-  const clientesAgrupados = (() => {
-    const mapa = {}
-    deudas.forEach(d => {
-      const key = d.nombre_deudor?.trim().toLowerCase() || ''
-      if (!mapa[key]) {
-        mapa[key] = {
-          nombre: d.nombre_deudor,
-          deudas: [],
-          // Acumuladores
-          monto_pendiente_total: 0,
-          balones_pendiente_total: 0,
-          vales_20_pendiente_total: 0,
-          vales_43_pendiente_total: 0,
-          monto_pagado_total: 0,
-          tiene_activa: false,
-          ultima_fecha: d.fecha_deuda,
-        }
-      }
-      const g = mapa[key]
-      g.deudas.push(d)
-      g.monto_pendiente_total += parseFloat(d.monto_pendiente) || 0
-      g.balones_pendiente_total += parseInt(d.balones_pendiente) || 0
-      g.vales_20_pendiente_total += parseInt(d.vales_20_pendiente) || 0
-      g.vales_43_pendiente_total += parseInt(d.vales_43_pendiente) || 0
-      // Sumar pagos del historial
-      ;(d.historial || []).forEach(h => {
-        if (h.tipo === 'pago') g.monto_pagado_total += parseFloat(h.monto) || 0
-      })
-      if (d.estado !== 'liquidada') g.tiene_activa = true
-      // Quedarse con la fecha más reciente
-      if (d.fecha_deuda > g.ultima_fecha) g.ultima_fecha = d.fecha_deuda
-    })
-    return Object.values(mapa)
-  })()
-
-  // Filtrar grupos según filtros activos
-  const clientesFiltrados = clientesAgrupados.filter(g => {
-    const matchBusqueda = !busqueda || g.nombre?.toLowerCase().includes(busqueda.toLowerCase())
-    const matchEstado = filtroEstado === 'activas' ? g.tiene_activa
-      : filtroEstado === 'liquidadas' ? !g.tiene_activa
-      : true
-    const matchDesde = !filtroFechaDesde || g.ultima_fecha >= filtroFechaDesde
-    const matchHasta = !filtroFechaHasta || g.ultima_fecha <= filtroFechaHasta
-    return matchBusqueda && matchEstado && matchDesde && matchHasta
-  }).sort((a, b) => {
-    // Activas primero, luego por fecha descendente
-    if (a.tiene_activa && !b.tiene_activa) return -1
-    if (!a.tiene_activa && b.tiene_activa) return 1
-    return b.ultima_fecha.localeCompare(a.ultima_fecha)
+  const deudasFiltradas = deudas.filter(d => {
+    const matchBusqueda = !busqueda || d.nombre_deudor?.toLowerCase().includes(busqueda.toLowerCase())
+    const matchDesde = !filtroFechaDesde || d.fecha_deuda >= filtroFechaDesde
+    const matchHasta = !filtroFechaHasta || d.fecha_deuda <= filtroFechaHasta
+    return matchBusqueda && matchDesde && matchHasta
   })
-
-  const totalDinero = clientesAgrupados.filter(g => g.tiene_activa).reduce((a, g) => a + g.monto_pendiente_total, 0)
-  const totalBalones = clientesAgrupados.filter(g => g.tiene_activa).reduce((a, g) => a + g.balones_pendiente_total, 0)
-  const totalVales20 = clientesAgrupados.filter(g => g.tiene_activa).reduce((a, g) => a + g.vales_20_pendiente_total, 0)
-  const totalVales43 = clientesAgrupados.filter(g => g.tiene_activa).reduce((a, g) => a + g.vales_43_pendiente_total, 0)
-  const totalDeudores = clientesAgrupados.filter(g => g.tiene_activa).length
+  const totalDinero = deudas.filter(d => d.estado !== 'liquidada').reduce((a, d) => a + (parseFloat(d.monto_pendiente) || 0), 0)
+  const totalBalones = deudas.filter(d => d.estado !== 'liquidada').reduce((a, d) => a + (parseInt(d.balones_pendiente) || 0), 0)
+  const totalVales20 = deudas.filter(d => d.estado !== 'liquidada').reduce((a, d) => a + (parseInt(d.vales_20_pendiente) || 0), 0)
+  const totalVales43 = deudas.filter(d => d.estado !== 'liquidada').reduce((a, d) => a + (parseInt(d.vales_43_pendiente) || 0), 0)
+  const totalDeudores = new Set(deudas.filter(d => d.estado !== 'liquidada').map(d => d.nombre_deudor)).size
 
   return (
     <div className="space-y-6">
@@ -389,104 +386,55 @@ export default function Deudas() {
         </div>
       </div>
 
-      {/* Lista agrupada por cliente */}
+      {/* Lista */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
         <div className="px-6 py-3 border-b border-gray-800 flex justify-between items-center">
           <h3 className="text-white font-semibold text-sm">
-            {filtroEstado === 'activas' ? 'Con deuda' : filtroEstado === 'liquidadas' ? 'Liquidadas' : 'Todos los clientes'}
+            {filtroEstado === 'activas' ? 'Deudas activas' : filtroEstado === 'liquidadas' ? 'Liquidadas' : 'Todas'}
           </h3>
-          <span className="text-xs bg-red-600/20 text-red-400 border border-red-600/30 px-2 py-0.5 rounded-full">{clientesFiltrados.length} clientes</span>
+          <span className="text-xs bg-red-600/20 text-red-400 border border-red-600/30 px-2 py-0.5 rounded-full">{deudasFiltradas.length} registros</span>
         </div>
         {loading ? (
           <div className="text-center py-8 text-gray-600">Cargando...</div>
-        ) : clientesFiltrados.length === 0 ? (
+        ) : deudasFiltradas.length === 0 ? (
           <div className="text-center py-8 text-gray-600 flex flex-col items-center gap-2">
             <Users className="w-8 h-8 opacity-30" />
-            <p className="text-sm">Sin resultados</p>
+            <p className="text-sm">Sin deudas registradas</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-800/50">
-            {clientesFiltrados.map(grupo => {
-              // Para acciones usamos la deuda activa más reciente (o la última si todas liquidadas)
-              const deudaActiva = grupo.deudas.find(d => d.estado !== 'liquidada') || grupo.deudas[0]
-              const dias = differenceInDays(new Date(), new Date(grupo.ultima_fecha))
-              // Construir resumen pendiente del grupo
-              const itemsDeuda = []
-              if (grupo.monto_pendiente_total > 0) itemsDeuda.push(`S/ ${grupo.monto_pendiente_total.toLocaleString('es-PE')}`)
-              if (grupo.balones_pendiente_total > 0) itemsDeuda.push(`${grupo.balones_pendiente_total} bal.`)
-              if (grupo.vales_20_pendiente_total > 0) itemsDeuda.push(`${grupo.vales_20_pendiente_total}×S/20`)
-              if (grupo.vales_43_pendiente_total > 0) itemsDeuda.push(`${grupo.vales_43_pendiente_total}×S/43`)
-              const resumenPendiente = itemsDeuda.join(' + ') || 'Sin deuda'
-
+            {deudasFiltradas.map(d => {
+              const dias = differenceInDays(new Date(), new Date(d.fecha_deuda))
               return (
-                <div key={grupo.nombre} className="px-4 py-4 hover:bg-gray-800/30 transition-colors">
+                <div key={d.id} className="px-4 py-4 hover:bg-gray-800/30 transition-colors">
                   <div className="flex items-start gap-3">
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 text-sm ${grupo.tiene_activa ? 'bg-red-500/10' : 'bg-emerald-500/10'}`}>👤</div>
+                    <div className="w-9 h-9 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0 mt-0.5 text-sm">👤</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="text-white font-semibold text-sm">{grupo.nombre}</p>
-                          {grupo.deudas.length > 1 && (
-                            <span className="text-xs text-gray-500">{grupo.deudas.length} deudas registradas</span>
-                          )}
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          {grupo.tiene_activa ? (
-                            <p className="text-red-300 font-bold text-sm">{resumenPendiente}</p>
-                          ) : (
-                            <div>
-                              <p className="text-emerald-400 font-bold text-sm">Sin deuda</p>
-                              {grupo.monto_pagado_total > 0 && (
-                                <p className="text-xs text-gray-500">Pagó S/ {grupo.monto_pagado_total.toLocaleString('es-PE')}</p>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                        <p className="text-white font-semibold text-sm">{d.nombre_deudor}</p>
+                        <p className="text-red-300 font-bold text-sm flex-shrink-0 text-right">{resumenDeuda(d)}</p>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className={grupo.tiene_activa ? 'badge-red' : 'badge-green'}>
-                          {grupo.tiene_activa ? '🔴 Activa' : '✅ Liquidada'}
+                        <span className={d.estado === 'liquidada' ? 'badge-green' : d.estado === 'pagada_parcial' ? 'badge-yellow' : 'badge-red'}>
+                          {d.estado === 'liquidada' ? '✅ Liquidada' : d.estado === 'pagada_parcial' ? 'Parcial' : 'Activa'}
                         </span>
                         <span className="text-gray-400 text-xs flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          {format(new Date(grupo.ultima_fecha + 'T12:00:00'), 'dd/MM/yyyy', { locale: es })} ({dias} días)
+                          {format(new Date(d.fecha_deuda + 'T12:00:00'), 'dd/MM/yyyy', { locale: es })} ({dias} días)
                         </span>
                       </div>
+                      {d.notas && <p className="text-amber-400/80 text-xs mt-1 italic">📝 "{d.notas}"</p>}
                       <div className="flex flex-wrap gap-2 mt-2">
-                        {/* Historial — abre con el nombre del grupo */}
-                        <button onClick={() => {
-                          setSelected(deudaActiva)
-                          setError('')
-                          cargarHistorialCompleto(grupo.nombre)
-                          setModal('historial')
-                        }} className="text-xs bg-blue-600/20 border border-blue-600/30 text-blue-400 px-2 py-1 rounded-lg">📋 Historial</button>
-
-                        {/* Registrar pago — solo si hay deuda activa */}
-                        {grupo.tiene_activa && (
-                          <button onClick={() => { setSelected(deudaActiva); setPagoForm(emptyPagoForm); setError(''); setModal('pago') }}
+                        <button onClick={() => { setSelected(d); setError(''); cargarHistorialCompleto(d.nombre_deudor); setModal('historial') }}
+                          className="text-xs bg-blue-600/20 border border-blue-600/30 text-blue-400 px-2 py-1 rounded-lg">📋 Historial</button>
+                        {d.estado !== 'liquidada' && (
+                          <button onClick={() => { setSelected(d); setPagoForm(emptyPagoForm); setError(''); setModal('pago') }}
                             className="text-xs bg-emerald-600/20 border border-emerald-600/30 text-emerald-400 px-2 py-1 rounded-lg">✓ Registrar pago</button>
                         )}
-
-                        {/* Editar — solo la deuda activa */}
-                        {grupo.tiene_activa && (
-                          <button onClick={() => {
-                            setSelected(deudaActiva)
-                            setEditForm({
-                              monto_pendiente: deudaActiva.monto_pendiente || '',
-                              balones_pendiente: deudaActiva.balones_pendiente || '',
-                              vales_20_pendiente: deudaActiva.vales_20_pendiente || '',
-                              vales_43_pendiente: deudaActiva.vales_43_pendiente || '',
-                              fecha_deuda: deudaActiva.fecha_deuda,
-                              notas: deudaActiva.notas || ''
-                            })
-                            setError('')
-                            setModal('editar')
-                          }} className="text-xs bg-gray-600/20 border border-gray-600/30 text-gray-300 px-2 py-1 rounded-lg">✏️ Editar</button>
-                        )}
-
-                        {/* Borrar — solo admin, borra la deuda activa */}
-                        {perfil?.rol === 'admin' && grupo.tiene_activa && (
-                          <button onClick={() => eliminarDeuda(deudaActiva.id)}
+                        <button onClick={() => { setSelected(d); setEditForm({ monto_pendiente: d.monto_pendiente || '', balones_pendiente: d.balones_pendiente || '', vales_20_pendiente: d.vales_20_pendiente || '', vales_43_pendiente: d.vales_43_pendiente || '', fecha_deuda: d.fecha_deuda, notas: d.notas || '' }); setError(''); setModal('editar') }}
+                          className="text-xs bg-gray-600/20 border border-gray-600/30 text-gray-300 px-2 py-1 rounded-lg">✏️ Editar</button>
+                        {perfil?.rol === 'admin' && (
+                          <button onClick={() => eliminarDeuda(d.id)}
                             className="text-xs bg-red-600/20 border border-red-600/30 text-red-400 px-2 py-1 rounded-lg">🗑️ Borrar</button>
                         )}
                       </div>
@@ -661,6 +609,15 @@ export default function Deudas() {
             <div className="bg-red-900/20 border border-red-800/40 rounded-lg p-3">
               <p className="text-xs text-gray-500 mb-1">Deuda pendiente:</p>
               <p className="text-red-300 font-bold">{resumenDeuda(selected)}</p>
+              {selected.almacen_id && (
+                <p className="text-xs text-gray-500 mt-1">
+                  🏪 Almacén origen: <span className="text-blue-400 font-medium">{almacenes.find(a => a.id === selected.almacen_id)?.nombre || '—'}</span>
+                  {parseInt(selected.balones_pendiente) > 0 && <span className="text-gray-600"> · los balones devueltos irán aquí como vacíos</span>}
+                </p>
+              )}
+              {parseInt(selected.balones_pendiente) > 0 && selected.almacen_id && (
+                <p className="text-xs text-emerald-400/70 mt-1">💰 El cobro se registrará como ingreso en reportes</p>
+              )}
             </div>
             <p className="text-xs text-gray-500">¿Cuánto paga ahora? (puede ser parcial):</p>
             <div className="grid grid-cols-2 gap-3">
