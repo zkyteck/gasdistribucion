@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { hoyPeru, inicioDiaPeru, finDiaPeru, nowPeru } from '../lib/fechas'
-import { Truck, Plus, Edit2, Package, X, AlertCircle, History, ChevronDown, ChevronUp, DollarSign, RefreshCw, Ticket, Clock, CheckCircle } from 'lucide-react'
+import { Truck, Plus, Edit2, Package, X, AlertCircle, History, ChevronDown, ChevronUp, DollarSign, RefreshCw, Ticket, Clock, CheckCircle, ClipboardList } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -39,8 +39,13 @@ export default function Distribuidores() {
   const [valesDist, setValesDist] = useState([])
   const [rendiciones, setRendiciones] = useState([])
   const [abonoModal, setAbonoModal] = useState(null)
-  const [abonoForm, setAbonoForm] = useState({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', notas: '' })
+  const [abonoForm, setAbonoForm] = useState({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', vacios_extra: '', notas: '', modo: 'abono', fecha: hoyPeru() })
   const [savingAbono, setSavingAbono] = useState(false)
+  const [acuentaDist, setAcuentaDist] = useState([]) // registros a cuenta del distribuidor seleccionado
+  const [acuentaModal, setAcuentaModal] = useState(false)
+  const [acuentaForm, setAcuentaForm] = useState({ nombre_cliente: '', vales_20: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() })
+  const [savingAcuenta, setSavingAcuenta] = useState(false)
+  const [loadingAcuenta, setLoadingAcuenta] = useState(false)
   const [clientes, setClientes] = useState([])
   const [valeForm, setValeForm] = useState({ nombre_cliente: '', cliente_id: '', tipo_vale: '20', fecha: hoyPeru(), notas: '' })
   const [clienteRapidoForm, setClienteRapidoForm] = useState({ nombre: '', telefono: '' })
@@ -257,9 +262,33 @@ export default function Distribuidores() {
       })
     }
 
+    // Si es totalizar → registrar también en cuentas_distribuidor (historial)
+    if (modo === 'totalizar') {
+      const vendidos = parseInt(abonoForm.balones_devueltos) || 0
+      const precio = selected.precio_base || 0
+      const totalEsperado = vendidos * precio
+      const saldoEfectivo = totalEsperado - totalAbono
+      const estado = saldoEfectivo <= 0 ? 'cancelado' : 'por_cobrar'
+      await supabase.from('cuentas_distribuidor').insert({
+        distribuidor_id: selected.id,
+        periodo_inicio: abonoForm.fecha || hoyPeru(),
+        periodo_fin: abonoForm.fecha || hoyPeru(),
+        balones_entregados: vendidos,
+        balones_vendidos: vendidos,
+        balones_devueltos: vaciosDevueltos,
+        balones_faltantes: Math.max(0, vendidos - vaciosDevueltos),
+        precio_por_balon: precio,
+        total_esperado: totalEsperado,
+        total_vales: (vales20 * 20) + (vales43 * 43),
+        total_adelantos: efectivo,
+        estado,
+        notas: abonoForm.notas || null
+      })
+    }
+
     setSavingAbono(false)
     setAbonoModal(null)
-    setAbonoForm({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', vacios_extra: '', notas: '', modo: 'abono' })
+    setAbonoForm({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', vacios_extra: '', notas: '', modo: 'abono', fecha: hoyPeru() })
     cargar()
   }
 
@@ -415,6 +444,51 @@ export default function Distribuidores() {
     alert(`${icono}\nTotal esperado: S/ ${totalEsperado}\nVales: S/ ${totalVales}\nAdelantos: S/ ${adelantos}\n💰 Saldo: S/ ${saldoEfectivo.toFixed(2)}${msgBalones}`)
   }
 
+  async function cargarAcuentaDist(distId) {
+    setLoadingAcuenta(true)
+    const { data } = await supabase.from('a_cuenta')
+      .select('*').eq('distribuidor_id', distId).eq('estado', 'pendiente')
+      .order('created_at', { ascending: false })
+    setAcuentaDist(data || [])
+    setLoadingAcuenta(false)
+  }
+
+  async function guardarAcuentaDist() {
+    if (!selected || !acuentaForm.nombre_cliente.trim()) return
+    const v20 = parseInt(acuentaForm.vales_20) || 0
+    const v43 = parseInt(acuentaForm.vales_43) || 0
+    const bal = parseInt(acuentaForm.balones) || 0
+    if (!v20 && !v43 && !bal) return
+    setSavingAcuenta(true)
+    const { count } = await supabase.from('a_cuenta').select('*', { count: 'exact', head: true })
+    await supabase.from('a_cuenta').insert({
+      nombre_cliente: acuentaForm.nombre_cliente.trim(),
+      fecha: acuentaForm.fecha || hoyPeru(),
+      vales_20: v20, vales_43: v43, balones: bal, dinero: 0,
+      estado: 'pendiente', numero: (count || 0) + 1,
+      distribuidor_id: selected.id,
+      notas: acuentaForm.notas || null,
+      historial_cambios: [{ tipo: 'deposito', fecha: acuentaForm.fecha || hoyPeru(), vales_20: v20, vales_43: v43, balones: bal }]
+    })
+    setSavingAcuenta(false)
+    setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() })
+    cargarAcuentaDist(selected.id)
+  }
+
+  async function entregarAcuentaDist(registro) {
+    if (!confirm(`Marcar como entregado a ${registro.nombre_cliente}?`)) return
+    await supabase.from('a_cuenta').update({
+      estado: 'entregado', fecha_entrega: hoyPeru(), updated_at: new Date().toISOString()
+    }).eq('id', registro.id)
+    cargarAcuentaDist(selected.id)
+  }
+
+  async function borrarAcuentaDist(id) {
+    if (!confirm('Borrar este registro?')) return
+    await supabase.from('a_cuenta').delete().eq('id', id)
+    cargarAcuentaDist(selected.id)
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -499,9 +573,13 @@ export default function Distribuidores() {
                   className="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/30 text-blue-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
                   <History className="w-3 h-3" />Historial
                 </button>
-                <button onClick={() => { setSelected(d); setAbonoModal(true); setAbonoForm({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', notas: '' }) }}
+                <button onClick={() => { setSelected(d); setAbonoModal(true); setAbonoForm({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', vacios_extra: '', notas: '', modo: 'abono', fecha: hoyPeru() }) }}
                   className="bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
                   <DollarSign className="w-3 h-3" />💰 Arreglar cuentas
+                </button>
+                <button onClick={() => { setSelected(d); setAcuentaModal(true); setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() }); cargarAcuentaDist(d.id) }}
+                  className="col-span-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/30 text-yellow-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
+                  <ClipboardList className="w-3 h-3" />📋 A Cuenta ({d.vales_pendientes || 0} pendientes)
                 </button>
               </div>
             </div>
@@ -1202,10 +1280,18 @@ export default function Distribuidores() {
                 </div>
               )}
 
-              <div>
-                <label className="label">Notas (opcional)</label>
-                <input className="input" placeholder="Ej: Próxima semana el resto..."
-                  value={abonoForm.notas} onChange={e => setAbonoForm(f => ({...f, notas: e.target.value}))} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Fecha</label>
+                  <input type="date" className="input"
+                    value={abonoForm.fecha || hoyPeru()}
+                    onChange={e => setAbonoForm(f => ({...f, fecha: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="label">Notas (opcional)</label>
+                  <input className="input" placeholder="Ej: Próxima semana el resto..."
+                    value={abonoForm.notas} onChange={e => setAbonoForm(f => ({...f, notas: e.target.value}))} />
+                </div>
               </div>
               <div className="flex gap-3 pt-1">
                 <button onClick={() => setAbonoModal(null)} className="btn-secondary flex-1">Cancelar</button>
@@ -1213,6 +1299,106 @@ export default function Distribuidores() {
                   {savingAbono ? 'Guardando...' : '✓ Registrar'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal A Cuenta del distribuidor */}
+      {acuentaModal && selected && (
+        <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
+              <div>
+                <h3 className="text-white font-semibold">📋 A Cuenta — {selected.nombre}</h3>
+                <p className="text-gray-500 text-xs mt-0.5">Clientes que dejaron vales o balones</p>
+              </div>
+              <button onClick={() => setAcuentaModal(false)} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+
+              {/* Formulario nuevo registro */}
+              <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3">
+                <p className="text-xs text-gray-400 font-semibold uppercase">Nuevo registro</p>
+                <div>
+                  <label className="label">Nombre del cliente *</label>
+                  <input className="input" placeholder="Nombre completo"
+                    value={acuentaForm.nombre_cliente}
+                    onChange={e => setAcuentaForm(f => ({...f, nombre_cliente: e.target.value}))} />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="label">🎫 Vales S/20</label>
+                    <input type="number" min="0" className="input text-center" placeholder="0"
+                      value={acuentaForm.vales_20}
+                      onChange={e => setAcuentaForm(f => ({...f, vales_20: e.target.value}))} />
+                  </div>
+                  <div>
+                    <label className="label">🎫 Vales S/43</label>
+                    <input type="number" min="0" className="input text-center" placeholder="0"
+                      value={acuentaForm.vales_43}
+                      onChange={e => setAcuentaForm(f => ({...f, vales_43: e.target.value}))} />
+                  </div>
+                  <div>
+                    <label className="label">🔵 Balones</label>
+                    <input type="number" min="0" className="input text-center" placeholder="0"
+                      value={acuentaForm.balones}
+                      onChange={e => setAcuentaForm(f => ({...f, balones: e.target.value}))} />
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Notas (opcional)</label>
+                  <input className="input" placeholder="Ej: para mañana..."
+                    value={acuentaForm.notas}
+                    onChange={e => setAcuentaForm(f => ({...f, notas: e.target.value}))} />
+                </div>
+                <button onClick={guardarAcuentaDist} disabled={savingAcuenta || !acuentaForm.nombre_cliente.trim()}
+                  className="btn-primary w-full justify-center disabled:opacity-40">
+                  {savingAcuenta ? 'Guardando...' : '+ Registrar'}
+                </button>
+              </div>
+
+              {/* Lista pendientes */}
+              <div>
+                <p className="text-xs text-gray-400 font-semibold uppercase mb-2">
+                  Pendientes ({acuentaDist.length})
+                </p>
+                {loadingAcuenta ? (
+                  <p className="text-center text-gray-600 text-sm py-4">Cargando...</p>
+                ) : acuentaDist.length === 0 ? (
+                  <p className="text-center text-gray-600 text-sm py-4">Sin registros pendientes</p>
+                ) : (
+                  <div className="space-y-2">
+                    {acuentaDist.map(r => (
+                      <div key={r.id} className="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="text-white font-semibold text-sm">{r.nombre_cliente}</p>
+                            <div className="flex gap-2 mt-1 flex-wrap">
+                              {r.vales_20 > 0 && <span className="text-xs bg-yellow-900/40 text-yellow-300 px-2 py-0.5 rounded-lg">{r.vales_20}×S/20</span>}
+                              {r.vales_43 > 0 && <span className="text-xs bg-yellow-900/40 text-yellow-300 px-2 py-0.5 rounded-lg">{r.vales_43}×S/43</span>}
+                              {r.balones > 0 && <span className="text-xs bg-blue-900/40 text-blue-300 px-2 py-0.5 rounded-lg">{r.balones} bal.</span>}
+                            </div>
+                            {r.notas && <p className="text-xs text-gray-500 mt-1 italic">{r.notas}</p>}
+                          </div>
+                          <div className="flex gap-2 flex-shrink-0">
+                            <button onClick={() => entregarAcuentaDist(r)}
+                              className="text-xs bg-emerald-600/20 border border-emerald-600/30 text-emerald-400 px-2 py-1 rounded-lg">
+                              ✓ Entregado
+                            </button>
+                            <button onClick={() => borrarAcuentaDist(r.id)}
+                              className="text-xs bg-red-600/20 border border-red-600/30 text-red-400 px-2 py-1 rounded-lg">
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <button onClick={() => setAcuentaModal(false)} className="btn-secondary w-full">Cerrar</button>
             </div>
           </div>
         </div>
