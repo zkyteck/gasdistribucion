@@ -387,8 +387,10 @@ export default function Ventas() {
               <label className="label">Almacén</label>
               <select className="input" value={form.almacen_id} onChange={e => {
                 const almacenId = e.target.value
-                // Detectar si este almacén tiene un distribuidor asignado
+                console.log('almacenId seleccionado:', almacenId)
+                console.log('distribuidores cargados:', distribuidores)
                 const dist = distribuidores.find(d => d.almacen_id === almacenId)
+                console.log('distribuidor encontrado:', dist)
                 if (dist) {
                   // Autocompletar con el distribuidor
                   setBusquedaCliente(dist.nombre)
