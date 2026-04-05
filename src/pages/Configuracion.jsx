@@ -121,6 +121,7 @@ export default function Configuracion() {
     ])
     setSavingCostos(false)
     alert('✅ Costos guardados correctamente')
+    cargar()
   }
 
   async function guardarPreciosTienda() {
@@ -298,7 +299,7 @@ export default function Configuracion() {
                       <td key={tipo} className="px-4 py-4">
                         <div className="relative">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs">S/</span>
-                          <input type="number" className="input pl-9 w-28 text-sm"
+                          <input type="number" className="input pl-7 w-28 text-sm"
                             value={editandoPrecios[p.id]?.[tipo] ?? ''}
                             onChange={e => setEditandoPrecios(prev => ({
                               ...prev, [p.id]: { ...prev[p.id], [tipo]: e.target.value }
@@ -339,7 +340,7 @@ export default function Configuracion() {
                       <td key={tipo} className="px-4 py-4">
                         <div className="relative">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs">S/</span>
-                          <input type="number" className="input pl-9 w-28 text-sm"
+                          <input type="number" className="input pl-7 w-28 text-sm"
                             value={editandoDistPrecios[d.id]?.[tipo] ?? ''}
                             onChange={e => setEditandoDistPrecios(prev => ({
                               ...prev, [d.id]: { ...prev[d.id], [tipo]: e.target.value }
