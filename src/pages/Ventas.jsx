@@ -50,16 +50,19 @@ export default function Ventas() {
 
   useEffect(() => { cargar() }, [filtroFecha])
 
+  const [distribuidores, setDistribuidores] = useState([])
+
   async function cargar() {
     setLoading(true)
-    const [{ data: v }, { data: a }, { data: pt }, { data: c }, { data: ptb }, { data: spt }] = await Promise.all([
+    const [{ data: v }, { data: a }, { data: pt }, { data: c }, { data: ptb }, { data: spt }, { data: dist }] = await Promise.all([
       supabase.from('ventas').select('*, clientes(nombre), almacenes(nombre), precio_tipos(nombre)')
         .gte('fecha', filtroFecha + 'T00:00:00-05:00').lte('fecha', filtroFecha + 'T23:59:59-05:00').order('fecha', { ascending: false }),
       supabase.from('almacenes').select('id, nombre, stock_actual').eq('activo', true).order('nombre'),
       supabase.from('precio_tipos').select('*').eq('activo', true),
-      supabase.from('clientes').select('id, nombre, tipo, es_varios').order('nombre').limit(100),
+      supabase.from('clientes').select('id, nombre, tipo, es_varios, precio_personalizado, tipo_balon_personalizado').order('nombre').limit(100),
       supabase.from('precio_tipo_balon').select('*'),
-      supabase.from('stock_por_tipo').select('*')
+      supabase.from('stock_por_tipo').select('*'),
+      supabase.from('distribuidores').select('id, nombre, almacen_id, precio_base').eq('activo', true)
     ])
     setVentas(v || [])
     setAlmacenes(a || [])
@@ -67,6 +70,7 @@ export default function Ventas() {
     setClientes(c || [])
     setPreciosPorTipo(ptb || [])
     setStockPorTipo(spt || [])
+    setDistribuidores(dist || [])
     setLoading(false)
   }
 
@@ -381,9 +385,49 @@ export default function Ventas() {
             </div>
             <div>
               <label className="label">Almacén</label>
-              <select className="input" value={form.almacen_id} onChange={e => setForm(f => ({...f, almacen_id: e.target.value}))}>
-                {almacenes.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+              <select className="input" value={form.almacen_id} onChange={e => {
+                const almacenId = e.target.value
+                // Detectar si este almacén tiene un distribuidor asignado
+                const dist = distribuidores.find(d => d.almacen_id === almacenId)
+                if (dist) {
+                  // Autocompletar con el distribuidor
+                  setBusquedaCliente(dist.nombre)
+                  setForm(f => ({
+                    ...f,
+                    almacen_id: almacenId,
+                    cliente_id: '',
+                    cliente_nombre: dist.nombre,
+                    es_varios: false,
+                    precio_unitario: dist.precio_base || f.precio_unitario,
+                    al_credito: true, // distribuidor siempre al crédito
+                    precio_especial_activo: !!dist.precio_base
+                  }))
+                } else {
+                  // Almacén normal — limpiar distribuidor si había uno
+                  const clienteVarios = clientes.find(c => c.es_varios)
+                  setBusquedaCliente('')
+                  setForm(f => ({
+                    ...f,
+                    almacen_id: almacenId,
+                    cliente_id: clienteVarios?.id || '',
+                    cliente_nombre: 'Cliente Varios',
+                    es_varios: true,
+                    al_credito: false,
+                    precio_especial_activo: false
+                  }))
+                }
+              }}>
+                {almacenes.map(a => {
+                  const dist = distribuidores.find(d => d.almacen_id === a.id)
+                  return <option key={a.id} value={a.id}>{a.nombre}{dist ? ` — ${dist.nombre}` : ''}</option>
+                })}
               </select>
+              {distribuidores.find(d => d.almacen_id === form.almacen_id) && (
+                <p className="text-xs text-purple-400 mt-1 px-1">
+                  🚛 Almacén de distribuidor — venta al crédito activada automáticamente
+                </p>
+              )}
+            </div>
             </div>
             <div>
               <label className="label">Tipo de balón</label>
