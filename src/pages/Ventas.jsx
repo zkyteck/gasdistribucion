@@ -303,7 +303,24 @@ export default function Ventas() {
                       <td className="px-4 py-3 text-blue-400 font-bold">{v.cantidad}</td>
                       <td className="px-4 py-3 text-gray-400 text-sm">S/{v.precio_unitario}</td>
                       <td className="px-4 py-3 text-emerald-400 font-bold">S/{(v.cantidad * v.precio_unitario).toLocaleString()}</td>
-                      <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${v.metodo_pago === 'efectivo' ? 'bg-emerald-900/40 text-emerald-400' : v.metodo_pago === 'yape' ? 'bg-blue-900/40 text-blue-400' : v.metodo_pago === 'vale' ? 'bg-yellow-900/40 text-yellow-400' : v.metodo_pago === 'credito' ? 'bg-orange-900/40 text-orange-400' : 'bg-purple-900/40 text-purple-400'}`}>{v.metodo_pago === 'credito' ? '💳 Crédito' : v.metodo_pago}</span></td>
+                      <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        v.metodo_pago === 'efectivo' ? 'bg-emerald-900/40 text-emerald-400' :
+                        v.metodo_pago === 'yape' ? 'bg-blue-900/40 text-blue-400' :
+                        v.metodo_pago === 'vale' ? 'bg-yellow-900/40 text-yellow-400' :
+                        v.metodo_pago === 'credito' ? 'bg-orange-900/40 text-orange-400' :
+                        v.metodo_pago === 'cobro_credito' ? 'bg-teal-900/40 text-teal-400' :
+                        v.metodo_pago === 'credito_distribuidor' ? 'bg-purple-900/40 text-purple-400' :
+                        v.metodo_pago === 'cobro_distribuidor' ? 'bg-indigo-900/40 text-indigo-400' :
+                        v.metodo_pago === 'abono_distribuidor' ? 'bg-cyan-900/40 text-cyan-400' :
+                        'bg-gray-900/40 text-gray-400'
+                      }`}>{
+                        v.metodo_pago === 'credito' ? '💳 Crédito' :
+                        v.metodo_pago === 'cobro_credito' ? '✅ Cobro crédito' :
+                        v.metodo_pago === 'credito_distribuidor' ? '🚛 Distribuidor' :
+                        v.metodo_pago === 'cobro_distribuidor' ? '✅ Cobro dist.' :
+                        v.metodo_pago === 'abono_distribuidor' ? '💰 Abono dist.' :
+                        v.metodo_pago
+                      }</span></td>
                       <td className="px-4 py-3">
                         <button onClick={() => eliminarVenta(v)}
                           className="text-gray-600 hover:text-red-400 transition-colors p-1 rounded hover:bg-red-900/20"

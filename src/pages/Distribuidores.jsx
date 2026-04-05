@@ -5,6 +5,8 @@ import { Truck, Plus, Edit2, Package, X, AlertCircle, History, ChevronDown, Chev
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
+import { useAuth } from '../context/AuthContext'
+
 function Modal({ title, onClose, children, wide }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
@@ -20,6 +22,7 @@ function Modal({ title, onClose, children, wide }) {
 }
 
 export default function Distribuidores() {
+  const { perfil } = useAuth()
   const [distribuidores, setDistribuidores] = useState([])
   const [almacenes, setAlmacenes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -205,6 +208,19 @@ export default function Distribuidores() {
     setSavingAbono(false)
     setAbonoModal(null)
     setAbonoForm({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', notas: '' })
+    // Si pagó efectivo → registrar como ingreso en ventas
+    if (efectivo > 0 && selected?.almacen_id) {
+      await supabase.from('ventas').insert({
+        almacen_id: selected.almacen_id,
+        tipo_balon: '10kg',
+        fecha: new Date().toISOString(),
+        cantidad: 0,
+        precio_unitario: efectivo,
+        metodo_pago: 'abono_distribuidor',
+        notas: `Abono de ${selected.nombre}${abonoForm.notas ? ' — ' + abonoForm.notas : ''}`,
+        usuario_id: perfil?.id || null
+      })
+    }
     await cargarHistorial(selected.id)
     cargar()
   }
@@ -238,10 +254,29 @@ export default function Distribuidores() {
       fecha: new Date().toISOString()
     })
     if (e) { setError(e.message); setSaving(false); return }
-    // Descontar del almacén origen (el stock del distribuidor viene del almacén directamente)
+    // Descontar del almacén
     await supabase.from('almacenes')
       .update({ stock_actual: almacen.stock_actual - cant })
       .eq('id', selected.almacen_id)
+    // Descontar stock_por_tipo
+    const { data: spt } = await supabase.from('stock_por_tipo')
+      .select('stock_actual').eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg').single()
+    if (spt) {
+      await supabase.from('stock_por_tipo')
+        .update({ stock_actual: Math.max(0, spt.stock_actual - cant) })
+        .eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg')
+    }
+    // Registrar en ventas como crédito al distribuidor (para reportes)
+    await supabase.from('ventas').insert({
+      almacen_id: selected.almacen_id,
+      tipo_balon: '10kg',
+      fecha: new Date().toISOString(),
+      cantidad: cant,
+      precio_unitario: selected.precio_base || 0,
+      metodo_pago: 'credito_distribuidor',
+      notas: `Reposición a ${selected.nombre}${repoForm.notas ? ' — ' + repoForm.notas : ''}`,
+      usuario_id: perfil?.id || null
+    })
     setSaving(false)
     setModal(null); setRepoForm({ cantidad: '', notas: '' }); cargar()
   }
@@ -323,6 +358,20 @@ export default function Distribuidores() {
       }
     }
     setSaving(false); setModal(null); cargar()
+    // Registrar el cobro como ingreso en ventas (para reportes)
+    const montoEfectivoCobrado = Math.max(0, saldoEfectivo)
+    if (montoEfectivoCobrado > 0 && selected.almacen_id) {
+      await supabase.from('ventas').insert({
+        almacen_id: selected.almacen_id,
+        tipo_balon: '10kg',
+        fecha: (cuentaForm.fecha || hoyPeru()) + 'T12:00:00-05:00',
+        cantidad: balonesVendidos,
+        precio_unitario: selected.precio_base || 0,
+        metodo_pago: 'cobro_distribuidor',
+        notas: `Rendición ${selected.nombre} — ${balonesVendidos} bal. vendidos`,
+        usuario_id: perfil?.id || null
+      })
+    }
     const icono = estadoCuenta === 'cancelado' ? '✅ CANCELADO' : '⏳ POR COBRAR'
     const msgBalones = balonesFaltantes > 0 ? `\n⚠️ Balones faltantes: ${balonesFaltantes}` : '\n✅ Balones completos'
     alert(`${icono}\nTotal esperado: S/ ${totalEsperado}\nVales: S/ ${totalVales}\nAdelantos: S/ ${adelantos}\n💰 Saldo: S/ ${saldoEfectivo.toFixed(2)}${msgBalones}`)
