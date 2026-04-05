@@ -82,11 +82,11 @@ export default function Ventas() {
 
   function abrirModal() {
     const clienteVarios = clientes.find(c => c.es_varios)
-    const primerAlmacen = almacenes[0]
+    const tiendaPrincipal = almacenes.find(a => a.nombre.toLowerCase().includes('tienda')) || almacenes[0]
     const primerTipo = precioTipos[0]
     setForm({
       cliente_id: clienteVarios?.id || '', cliente_nombre: 'Cliente Varios', es_varios: true,
-      almacen_id: primerAlmacen?.id || '', precio_tipo_id: primerTipo?.id || '',
+      almacen_id: tiendaPrincipal?.id || '', precio_tipo_id: primerTipo?.id || '',
       tipo_balon: '10kg', cantidad: '',
       precio_unitario: getPrecio(primerTipo?.id, '10kg') || primerTipo?.precio || '',
       metodo_pago: 'efectivo', notas: '', fecha: hoyPeru(), al_credito: false, precio_especial_activo: false
