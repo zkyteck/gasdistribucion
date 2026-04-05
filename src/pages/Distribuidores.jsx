@@ -262,7 +262,7 @@ export default function Distribuidores() {
       })
     }
 
-    // Si es totalizar → registrar también en cuentas_distribuidor (historial)
+    // Registrar en cuentas_distribuidor para que aparezca en historial (ambos modos)
     if (modo === 'totalizar') {
       const vendidos = parseInt(abonoForm.balones_devueltos) || 0
       const precio = selected.precio_base || 0
@@ -283,6 +283,23 @@ export default function Distribuidores() {
         total_adelantos: efectivo,
         estado,
         notas: abonoForm.notas || null
+      })
+    } else {
+      // Abono parcial → registrar como abono en historial
+      await supabase.from('cuentas_distribuidor').insert({
+        distribuidor_id: selected.id,
+        periodo_inicio: abonoForm.fecha || hoyPeru(),
+        periodo_fin: abonoForm.fecha || hoyPeru(),
+        balones_entregados: 0,
+        balones_vendidos: 0,
+        balones_devueltos: vaciosDevueltos,
+        balones_faltantes: 0,
+        precio_por_balon: selected.precio_base || 0,
+        total_esperado: 0,
+        total_vales: (vales20 * 20) + (vales43 * 43),
+        total_adelantos: efectivo,
+        estado: 'cancelado',
+        notas: `Abono parcial${abonoForm.notas ? ' — ' + abonoForm.notas : ''}`
       })
     }
 
