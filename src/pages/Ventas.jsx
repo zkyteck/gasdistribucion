@@ -45,7 +45,7 @@ export default function Ventas() {
     cliente_id: '', cliente_nombre: '', es_varios: false,
     almacen_id: '', precio_tipo_id: '', tipo_balon: '10kg',
     cantidad: '', precio_unitario: '', metodo_pago: 'efectivo', notas: '',
-    fecha: hoyPeru()
+    fecha: hoyPeru(), al_credito: false
   })
 
   useEffect(() => { cargar() }, [filtroFecha])
@@ -89,7 +89,7 @@ export default function Ventas() {
       almacen_id: primerAlmacen?.id || '', precio_tipo_id: primerTipo?.id || '',
       tipo_balon: '10kg', cantidad: '',
       precio_unitario: getPrecio(primerTipo?.id, '10kg') || primerTipo?.precio || '',
-      metodo_pago: 'efectivo', notas: ''
+      metodo_pago: 'efectivo', notas: '', fecha: hoyPeru(), al_credito: false
     })
     setError(''); setModal(true); setBusquedaCliente(''); setSubModal(null)
   }
@@ -165,11 +165,13 @@ export default function Ventas() {
 
   async function guardar() {
     if (!form.almacen_id || !form.cantidad || !form.precio_unitario) { setError('Completa todos los campos'); return }
+    if (form.al_credito && form.es_varios) { setError('Para venta al crédito debes seleccionar un cliente específico'); return }
     const stockDisp = getStock(form.almacen_id, form.tipo_balon)
     if (stockDisp < parseInt(form.cantidad)) {
       setError(`Stock insuficiente de ${form.tipo_balon}. Disponible: ${stockDisp} balones`); return
     }
     setSaving(true); setError('')
+    const metodo = form.al_credito ? 'credito' : form.metodo_pago
     const { error: e } = await supabase.from('ventas').insert({
       cliente_id: form.cliente_id || null,
       almacen_id: form.almacen_id,
@@ -178,27 +180,59 @@ export default function Ventas() {
       fecha: (form.fecha || hoyPeru()) + 'T12:00:00-05:00',
       cantidad: parseInt(form.cantidad),
       precio_unitario: parseFloat(form.precio_unitario),
-      metodo_pago: form.metodo_pago,
+      metodo_pago: metodo,
       notas: form.notas,
       usuario_id: perfil?.id || null
     })
     if (e) { setError(e.message); setSaving(false); return }
-    // Descontar stock_por_tipo (por tipo de balón)
+    // Descontar stock_por_tipo
     await supabase.from('stock_por_tipo')
       .update({ stock_actual: stockDisp - parseInt(form.cantidad), updated_at: new Date().toISOString() })
       .eq('almacen_id', form.almacen_id).eq('tipo_balon', form.tipo_balon)
-    // Descontar stock_actual en almacenes y sumar vacíos automáticamente
+    // Descontar stock_actual en almacenes
+    // Si es al crédito NO suma vacíos (el balón está en la calle, no regresó)
     const almacen = almacenes.find(a => a.id === form.almacen_id)
     if (almacen) {
       const cant = parseInt(form.cantidad)
       const campoVacios = form.tipo_balon === '5kg' ? 'vacios_5kg' : form.tipo_balon === '10kg' ? 'vacios_10kg' : 'vacios_45kg'
-      await supabase.from('almacenes')
-        .update({
-          stock_actual: Math.max(0, (almacen.stock_actual || 0) - cant),
-          balones_vacios: (almacen.balones_vacios || 0) + cant,
-          [campoVacios]: (almacen[campoVacios] || 0) + cant
-        })
-        .eq('id', form.almacen_id)
+      if (form.al_credito) {
+        // Solo descuenta llenos, NO suma vacíos (balón en la calle)
+        await supabase.from('almacenes')
+          .update({ stock_actual: Math.max(0, (almacen.stock_actual || 0) - cant) })
+          .eq('id', form.almacen_id)
+      } else {
+        await supabase.from('almacenes')
+          .update({
+            stock_actual: Math.max(0, (almacen.stock_actual || 0) - cant),
+            balones_vacios: (almacen.balones_vacios || 0) + cant,
+            [campoVacios]: (almacen[campoVacios] || 0) + cant
+          })
+          .eq('id', form.almacen_id)
+      }
+    }
+    // Si es al crédito → crear deuda automáticamente
+    if (form.al_credito) {
+      const monto = parseInt(form.cantidad) * parseFloat(form.precio_unitario)
+      const entradaHistorial = {
+        tipo: 'deuda', fecha: form.fecha,
+        monto, balones: parseInt(form.cantidad),
+        tipo_balon: form.tipo_balon,
+        vales_20: 0, vales_43: 0,
+        notas: `Venta al crédito — ${form.tipo_balon} × ${form.cantidad}`
+      }
+      await supabase.from('deudas').insert({
+        cliente_id: form.cliente_id || null,
+        nombre_deudor: form.cliente_nombre,
+        tipo_deuda: 'mixto',
+        monto_original: monto, monto_pendiente: monto,
+        cantidad_original: parseInt(form.cantidad), cantidad_pendiente: parseInt(form.cantidad),
+        balones_pendiente: parseInt(form.cantidad),
+        vales_20_pendiente: 0, vales_43_pendiente: 0,
+        fecha_deuda: form.fecha, estado: 'activa',
+        notas: form.notas || `Venta al crédito ${form.tipo_balon}`,
+        historial: [entradaHistorial],
+        usuario_id: perfil?.id || null
+      })
     }
     setSaving(false); setModal(false); cargar()
   }
@@ -260,7 +294,7 @@ export default function Ventas() {
                       <td className="px-4 py-3 text-blue-400 font-bold">{v.cantidad}</td>
                       <td className="px-4 py-3 text-gray-400 text-sm">S/{v.precio_unitario}</td>
                       <td className="px-4 py-3 text-emerald-400 font-bold">S/{(v.cantidad * v.precio_unitario).toLocaleString()}</td>
-                      <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${v.metodo_pago === 'efectivo' ? 'bg-emerald-900/40 text-emerald-400' : v.metodo_pago === 'yape' ? 'bg-blue-900/40 text-blue-400' : v.metodo_pago === 'vale' ? 'bg-yellow-900/40 text-yellow-400' : 'bg-purple-900/40 text-purple-400'}`}>{v.metodo_pago}</span></td>
+                      <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${v.metodo_pago === 'efectivo' ? 'bg-emerald-900/40 text-emerald-400' : v.metodo_pago === 'yape' ? 'bg-blue-900/40 text-blue-400' : v.metodo_pago === 'vale' ? 'bg-yellow-900/40 text-yellow-400' : v.metodo_pago === 'credito' ? 'bg-orange-900/40 text-orange-400' : 'bg-purple-900/40 text-purple-400'}`}>{v.metodo_pago === 'credito' ? '💳 Crédito' : v.metodo_pago}</span></td>
                       <td className="px-4 py-3">
                         <button onClick={() => eliminarVenta(v)}
                           className="text-gray-600 hover:text-red-400 transition-colors p-1 rounded hover:bg-red-900/20"
@@ -371,6 +405,30 @@ export default function Ventas() {
                 <span className="text-emerald-400 font-bold text-lg">S/ {((parseInt(form.cantidad)||0) * (parseFloat(form.precio_unitario)||0)).toLocaleString('es-PE')}</span>
               </div>
             )}
+            {/* Toggle al crédito */}
+            <div
+              onClick={() => setForm(f => ({...f, al_credito: !f.al_credito, metodo_pago: !f.al_credito ? 'credito' : 'efectivo'}))}
+              className={`flex items-center justify-between rounded-xl border p-3 cursor-pointer transition-all ${form.al_credito ? 'bg-orange-900/30 border-orange-600/50' : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'}`}>
+              <div>
+                <p className={`text-sm font-semibold ${form.al_credito ? 'text-orange-300' : 'text-gray-300'}`}>💳 Venta al crédito</p>
+                <p className="text-xs text-gray-500 mt-0.5">Descuenta stock y crea deuda automáticamente</p>
+              </div>
+              <div className={`w-10 h-6 rounded-full transition-all relative ${form.al_credito ? 'bg-orange-500' : 'bg-gray-600'}`}>
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${form.al_credito ? 'left-5' : 'left-1'}`} />
+              </div>
+            </div>
+
+            {form.al_credito && (
+              <div className="bg-orange-900/20 border border-orange-800/40 rounded-xl p-3 text-xs text-gray-400 space-y-1">
+                <p className="text-orange-300 font-medium">⚠️ Venta al crédito activa</p>
+                <p>• Se descontarán <strong className="text-white">{form.cantidad || '?'} balones</strong> del stock</p>
+                <p>• Se creará una deuda de <strong className="text-white">S/ {((parseInt(form.cantidad)||0)*(parseFloat(form.precio_unitario)||0)).toLocaleString('es-PE')}</strong> a nombre de <strong className="text-white">{form.cliente_nombre || '—'}</strong></p>
+                <p>• Los vacíos <strong className="text-white">no</strong> se suman (el balón está en la calle)</p>
+              </div>
+            )}
+
+            {/* Método de pago — solo si NO es crédito */}
+            {!form.al_credito && (
             <div>
               <label className="label">Método de pago</label>
               <div className="grid grid-cols-4 gap-2">
@@ -382,6 +440,7 @@ export default function Ventas() {
                 ))}
               </div>
             </div>
+            )}
             <div><label className="label">Fecha</label><input type="date" className="input" value={form.fecha} onChange={e => setForm(f => ({...f, fecha: e.target.value}))} /></div>
             <div><label className="label">Notas</label><input className="input" placeholder="Observaciones..." value={form.notas} onChange={e => setForm(f => ({...f, notas: e.target.value}))} /></div>
             <div className="flex gap-3 pt-2">
