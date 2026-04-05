@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { Warehouse, Plus, Edit2, Trash2, Package, X, AlertCircle, FlaskConical } from 'lucide-react'
+import { Warehouse, Plus, Edit2, Trash2, Package, X, AlertCircle, TestTube } from 'lucide-react'
 
 function Modal({ title, onClose, children }) {
   return (
@@ -121,7 +121,7 @@ export default function Almacenes() {
       {/* Banner almacenes de prueba */}
       {almacenes.some(a => a.es_prueba) && (
         <div className="bg-purple-900/20 border border-purple-700/40 rounded-xl px-4 py-3 flex items-center gap-3">
-          <FlaskConical className="w-4 h-4 text-purple-400 flex-shrink-0" />
+          <TestTube className="w-4 h-4 text-purple-400 flex-shrink-0" />
           <p className="text-xs text-purple-300">
             Tienes almacenes en <span className="font-semibold">modo prueba</span>. Úsalos para probar ventas, deudas e inventario sin afectar datos reales. Al terminar, usa el botón <span className="font-semibold">🧹 Limpiar prueba</span> para borrar todo lo generado.
           </p>
@@ -144,7 +144,7 @@ export default function Almacenes() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${a.es_prueba ? 'bg-purple-500/10' : 'bg-blue-500/10'}`}>
-                          {a.es_prueba ? <FlaskConical className="w-4 h-4 text-purple-400" /> : <Warehouse className="w-4 h-4 text-blue-400" />}
+                          {a.es_prueba ? <TestTube className="w-4 h-4 text-purple-400" /> : <Warehouse className="w-4 h-4 text-blue-400" />}
                         </div>
                         <div>
                           <span className="text-white font-medium text-sm">{a.nombre}</span>
