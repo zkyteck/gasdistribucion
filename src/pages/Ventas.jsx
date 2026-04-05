@@ -45,7 +45,7 @@ export default function Ventas() {
     cliente_id: '', cliente_nombre: '', es_varios: false,
     almacen_id: '', precio_tipo_id: '', tipo_balon: '10kg',
     cantidad: '', precio_unitario: '', metodo_pago: 'efectivo', notas: '',
-    fecha: hoyPeru(), al_credito: false
+    fecha: hoyPeru(), al_credito: false, precio_especial_activo: false
   })
 
   useEffect(() => { cargar() }, [filtroFecha])
@@ -89,17 +89,24 @@ export default function Ventas() {
       almacen_id: primerAlmacen?.id || '', precio_tipo_id: primerTipo?.id || '',
       tipo_balon: '10kg', cantidad: '',
       precio_unitario: getPrecio(primerTipo?.id, '10kg') || primerTipo?.precio || '',
-      metodo_pago: 'efectivo', notas: '', fecha: hoyPeru(), al_credito: false
+      metodo_pago: 'efectivo', notas: '', fecha: hoyPeru(), al_credito: false, precio_especial_activo: false
     })
     setError(''); setModal(true); setBusquedaCliente(''); setSubModal(null)
   }
 
   function seleccionarTipoPrecio(tipoId) {
+    // Si el cliente tiene precio especial, no sobreescribir
+    if (form.precio_especial_activo) return
     const precio = getPrecio(tipoId, form.tipo_balon)
     setForm(f => ({ ...f, precio_tipo_id: tipoId, precio_unitario: precio }))
   }
 
   function seleccionarTipoBalon(tipoBalon) {
+    // Si el cliente tiene precio especial, solo cambiar el tipo, no el precio
+    if (form.precio_especial_activo) {
+      setForm(f => ({ ...f, tipo_balon: tipoBalon }))
+      return
+    }
     const precio = getPrecio(form.precio_tipo_id, tipoBalon)
     setForm(f => ({ ...f, tipo_balon: tipoBalon, precio_unitario: precio }))
   }
@@ -108,19 +115,20 @@ export default function Ventas() {
     const c = clientes.find(c => c.id === clienteId)
     if (!c) return
     const tipoPrecio = precioTipos.find(t => t.nombre.toLowerCase().includes(c.tipo)) || precioTipos[0]
-    // Si el cliente tiene precio personalizado, usarlo directamente
     if (c.precio_personalizado && c.tipo_balon_personalizado) {
       setForm(f => ({
         ...f, cliente_id: c.id, cliente_nombre: c.nombre, es_varios: c.es_varios,
         precio_tipo_id: tipoPrecio?.id || '',
         tipo_balon: c.tipo_balon_personalizado,
-        precio_unitario: c.precio_personalizado
+        precio_unitario: c.precio_personalizado,
+        precio_especial_activo: true
       }))
     } else {
       const precio = getPrecio(tipoPrecio?.id, form.tipo_balon)
       setForm(f => ({
         ...f, cliente_id: c.id, cliente_nombre: c.nombre, es_varios: c.es_varios,
-        precio_tipo_id: tipoPrecio?.id || '', precio_unitario: precio || tipoPrecio?.precio || ''
+        precio_tipo_id: tipoPrecio?.id || '', precio_unitario: precio || tipoPrecio?.precio || '',
+        precio_especial_activo: false
       }))
     }
   }
@@ -377,6 +385,13 @@ export default function Ventas() {
             </div>
             <div>
               <label className="label">Tipo de cliente / precio</label>
+              {form.precio_especial_activo ? (
+                <div className="bg-emerald-900/20 border border-emerald-700/40 rounded-xl px-4 py-2.5 flex items-center justify-between">
+                  <p className="text-xs text-emerald-300">⭐ Precio especial del cliente activo</p>
+                  <button onClick={() => setForm(f => ({...f, precio_especial_activo: false, precio_unitario: getPrecio(f.precio_tipo_id, f.tipo_balon)}))}
+                    className="text-xs text-gray-500 hover:text-gray-300 underline">usar precio normal</button>
+                </div>
+              ) : (
               <div className="grid grid-cols-3 gap-2">
                 {precioTipos.map(t => {
                   const precio = getPrecio(t.id, form.tipo_balon) || t.precio
@@ -388,6 +403,7 @@ export default function Ventas() {
                   )
                 })}
               </div>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
