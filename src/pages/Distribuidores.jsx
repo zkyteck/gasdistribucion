@@ -167,33 +167,29 @@ export default function Distribuidores() {
   const form_vale_nombre = valeForm.nombre_cliente
 
   async function guardarAbono() {
-    if (!abonoModal) return
+    if (!selected) return
     const efectivo = parseFloat(abonoForm.efectivo) || 0
     const vales20 = parseInt(abonoForm.vales20) || 0
     const vales43 = parseInt(abonoForm.vales43) || 0
     const balonesDevueltos = parseInt(abonoForm.balones_devueltos) || 0
     const totalAbono = efectivo + (vales20 * 20) + (vales43 * 43)
-    if (totalAbono === 0 && balonesDevueltos === 0) return
+    if (totalAbono === 0 && balonesDevueltos === 0) { return }
 
     setSavingAbono(true)
-    // Actualizar la rendición: sumar vales/adelantos y devueltos
-    const nuevoTotalVales = (abonoModal.total_vales || 0) + (vales20 * 20) + (vales43 * 43)
-    const nuevoTotalAdelantos = (abonoModal.total_adelantos || 0) + efectivo
-    const nuevosDevueltos = (abonoModal.balones_devueltos || 0) + balonesDevueltos
-    const nuevosFaltantes = Math.max(0, (abonoModal.balones_vendidos || 0) - nuevosDevueltos)
-    const nuevoSaldo = (abonoModal.total_esperado || 0) - nuevoTotalVales - nuevoTotalAdelantos
-    const nuevoEstado = nuevoSaldo <= 0 && nuevosFaltantes <= 0 ? 'cancelado' : 'por_cobrar'
 
-    await supabase.from('cuentas_distribuidor').update({
-      total_vales: nuevoTotalVales,
-      total_adelantos: nuevoTotalAdelantos,
-      balones_devueltos: nuevosDevueltos,
-      balones_faltantes: nuevosFaltantes,
-      estado: nuevoEstado,
-      updated_at: new Date().toISOString()
-    }).eq('id', abonoModal.id)
+    // Registrar en abonos_distribuidor
+    await supabase.from('abonos_distribuidor').insert({
+      distribuidor_id: selected.id,
+      fecha: hoyPeru(),
+      efectivo,
+      vales_20: vales20,
+      vales_43: vales43,
+      balones_devueltos: balonesDevueltos,
+      total_abonado: totalAbono,
+      notas: abonoForm.notas || null
+    })
 
-    // Actualizar vacíos en almacén si devolvió balones
+    // Sumar vacíos al almacén si devolvió balones
     if (balonesDevueltos > 0 && selected.almacen_id) {
       const almacen = almacenes.find(a => a.id === selected.almacen_id)
       if (almacen) {
@@ -205,11 +201,8 @@ export default function Distribuidores() {
       }
     }
 
-    setSavingAbono(false)
-    setAbonoModal(null)
-    setAbonoForm({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', notas: '' })
     // Si pagó efectivo → registrar como ingreso en ventas
-    if (efectivo > 0 && selected?.almacen_id) {
+    if (efectivo > 0 && selected.almacen_id) {
       await supabase.from('ventas').insert({
         almacen_id: selected.almacen_id,
         tipo_balon: '10kg',
@@ -221,7 +214,10 @@ export default function Distribuidores() {
         usuario_id: perfil?.id || null
       })
     }
-    await cargarHistorial(selected.id)
+
+    setSavingAbono(false)
+    setAbonoModal(null)
+    setAbonoForm({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', notas: '' })
     cargar()
   }
 
@@ -457,23 +453,15 @@ export default function Distribuidores() {
 
               {/* Acciones */}
               <div className="grid grid-cols-2 gap-2 mb-2">
-                <button onClick={() => { setSelected(d); setRepoForm({ cantidad: '', notas: '' }); setError(''); setModal('reponer') }}
-                  className="bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
-                  <RefreshCw className="w-3 h-3" />Reponer
-                </button>
-                <button onClick={() => abrirCuenta(d)}
-                  className="bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/30 text-yellow-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
-                  <DollarSign className="w-3 h-3" />Cuenta
-                </button>
                 <button onClick={() => abrirHistorial(d)}
-                  className="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/30 text-blue-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
+                  className="col-span-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/30 text-blue-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
                   <History className="w-3 h-3" />Historial
                 </button>
+                <button onClick={() => { setSelected(d); setAbonoModal(true); setAbonoForm({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', notas: '' }) }}
+                  className="col-span-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
+                  <DollarSign className="w-3 h-3" />💰 Registrar abono / devolución
+                </button>
               </div>
-              <button onClick={() => abrirVales(d)}
-                className="w-full bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/30 text-yellow-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
-                <Ticket className="w-3 h-3" />🎫 Vales A Cuenta ({d.vales_pendientes || 0} pendientes)
-              </button>
             </div>
           ))}
         </div>
@@ -993,25 +981,27 @@ export default function Distribuidores() {
       )}
 
       {/* Modal abono a rendición */}
-      {abonoModal && selected && (
+      {abonoModal !== null && selected && (
         <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
               <div>
-                <h3 className="text-white font-semibold">💰 Registrar abono</h3>
-                <p className="text-gray-500 text-xs mt-0.5">{selected.nombre} · Rendición del {abonoModal.periodo_fin}</p>
+                <h3 className="text-white font-semibold">💰 Registrar abono / devolución</h3>
+                <p className="text-gray-500 text-xs mt-0.5">{selected.nombre} · {selected.almacenes?.nombre}</p>
               </div>
               <button onClick={() => setAbonoModal(null)} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
-              <div className="bg-red-900/20 border border-red-800/40 rounded-xl p-3">
-                <p className="text-xs text-gray-400 mb-1">Saldo pendiente actual</p>
-                <p className="text-2xl font-bold text-red-400">
-                  S/ {Math.max(0, (abonoModal.total_esperado||0) - (abonoModal.total_vales||0) - (abonoModal.total_adelantos||0)).toLocaleString()}
-                </p>
-                {(abonoModal.balones_faltantes||0) > 0 && (
-                  <p className="text-xs text-orange-400 mt-1">⏳ {abonoModal.balones_faltantes} balones pendientes de devolver</p>
-                )}
+              {/* Resumen actual del distribuidor */}
+              <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-3 grid grid-cols-2 gap-3 text-center">
+                <div>
+                  <p className="text-xl font-bold text-yellow-400">{selected.stock_actual || 0}</p>
+                  <p className="text-xs text-gray-500">🟢 Llenos en campo</p>
+                </div>
+                <div>
+                  <p className="text-xl font-bold text-orange-400">S/ {((selected.stock_actual || 0) * (selected.precio_base || 0)).toLocaleString()}</p>
+                  <p className="text-xs text-gray-500">💰 Valor pendiente</p>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1035,34 +1025,31 @@ export default function Distribuidores() {
                     value={abonoForm.vales43} onChange={e => setAbonoForm(f => ({...f, vales43: e.target.value}))} />
                 </div>
               </div>
-              {(parseFloat(abonoForm.efectivo)||0) + (parseInt(abonoForm.vales20)||0)*20 + (parseInt(abonoForm.vales43)||0)*43 > 0 && (() => {
-                const totalAbono = (parseFloat(abonoForm.efectivo)||0) + (parseInt(abonoForm.vales20)||0)*20 + (parseInt(abonoForm.vales43)||0)*43
-                const saldoActual = (abonoModal.total_esperado||0) - (abonoModal.total_vales||0) - (abonoModal.total_adelantos||0)
-                const saldoNuevo = saldoActual - totalAbono
-                return (
-                  <div className="bg-emerald-900/20 border border-emerald-800/40 rounded-xl p-3 text-sm">
-                    <div className="flex justify-between mb-1">
-                      <span className="text-gray-400">Abono total:</span>
-                      <span className="text-emerald-400 font-bold">S/ {totalAbono.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Nuevo saldo:</span>
-                      <span className={`font-bold ${saldoNuevo <= 0 ? 'text-emerald-400' : 'text-yellow-400'}`}>
-                        S/ {Math.max(0, saldoNuevo).toLocaleString()} {saldoNuevo <= 0 ? '✅ CANCELADO' : '⏳ POR COBRAR'}
-                      </span>
-                    </div>
+              {(parseFloat(abonoForm.efectivo)||0) + (parseInt(abonoForm.vales20)||0)*20 + (parseInt(abonoForm.vales43)||0)*43 > 0 && (
+                <div className="bg-emerald-900/20 border border-emerald-800/40 rounded-xl p-3 text-sm space-y-1">
+                  {(parseFloat(abonoForm.efectivo)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">💵 Efectivo:</span><span className="text-white">S/ {(parseFloat(abonoForm.efectivo)||0).toLocaleString()}</span></div>}
+                  {(parseInt(abonoForm.vales20)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">🎫 Vales S/20:</span><span className="text-white">S/ {((parseInt(abonoForm.vales20)||0)*20).toLocaleString()}</span></div>}
+                  {(parseInt(abonoForm.vales43)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">🎫 Vales S/43:</span><span className="text-white">S/ {((parseInt(abonoForm.vales43)||0)*43).toLocaleString()}</span></div>}
+                  <div className="flex justify-between border-t border-gray-700 pt-1">
+                    <span className="text-gray-400 font-semibold">Total abono:</span>
+                    <span className="text-emerald-400 font-bold">S/ {((parseFloat(abonoForm.efectivo)||0) + (parseInt(abonoForm.vales20)||0)*20 + (parseInt(abonoForm.vales43)||0)*43).toLocaleString()}</span>
                   </div>
-                )
-              })()}
+                </div>
+              )}
+              {(parseInt(abonoForm.balones_devueltos)||0) > 0 && (
+                <div className="bg-blue-900/20 border border-blue-800/40 rounded-xl p-3 text-sm">
+                  <p className="text-blue-300">⚪ {abonoForm.balones_devueltos} balones vacíos → irán al almacén {selected.almacenes?.nombre}</p>
+                </div>
+              )}
               <div>
                 <label className="label">Notas (opcional)</label>
-                <input className="input" placeholder="Ej: Pago parcial..."
+                <input className="input" placeholder="Ej: Pago parcial, deja vales..."
                   value={abonoForm.notas} onChange={e => setAbonoForm(f => ({...f, notas: e.target.value}))} />
               </div>
               <div className="flex gap-3 pt-1">
                 <button onClick={() => setAbonoModal(null)} className="btn-secondary flex-1">Cancelar</button>
                 <button onClick={guardarAbono} disabled={savingAbono} className="btn-primary flex-1 justify-center">
-                  {savingAbono ? 'Guardando...' : '✓ Registrar abono'}
+                  {savingAbono ? 'Guardando...' : '✓ Registrar'}
                 </button>
               </div>
             </div>
