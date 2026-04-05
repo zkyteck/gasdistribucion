@@ -36,8 +36,6 @@ export default function Configuracion() {
   const [editandoDistPrecios, setEditandoDistPrecios] = useState({})
   const [costosCompra, setCostosCompra] = useState({ '5kg': '', '10kg': '', '45kg': '' })
   const [savingCostos, setSavingCostos] = useState(false)
-  const [preciosVales, setPreciosVales] = useState({ '20': '20', '43': '43' })
-  const [savingVales, setSavingVales] = useState(false)
 
   const [provForm, setProvForm] = useState({ nombre: '', telefono: '', direccion: '', ruc: '' })
   const [usuarioForm, setUsuarioForm] = useState({ nombre: '', email: '', password: '', rol: 'trabajador' })
@@ -104,14 +102,6 @@ export default function Configuracion() {
       })
       setCostosCompra(mapa)
       setDistribuidores(dists || [])
-    } else if (tab === 'vales') {
-      const { data } = await supabase.from('configuracion').select('*').in('clave', ['precio_vale_20','precio_vale_43'])
-      const mapa = { '20': '20', '43': '43' }
-      data?.forEach(r => {
-        if (r.clave === 'precio_vale_20') mapa['20'] = r.valor || '20'
-        if (r.clave === 'precio_vale_43') mapa['43'] = r.valor || '43'
-      })
-      setPreciosVales(mapa)
     } else if (tab === 'proveedores') {
       const { data } = await supabase.from('proveedores').select('*').eq('activo', true).order('nombre')
       setProveedores(data || [])
@@ -131,16 +121,6 @@ export default function Configuracion() {
     ])
     setSavingCostos(false)
     alert('✅ Costos guardados correctamente')
-  }
-
-  async function guardarPreciosVales() {
-    setSavingVales(true)
-    await Promise.all([
-      supabase.from('configuracion').upsert({ clave: 'precio_vale_20', valor: preciosVales['20']?.toString() || '20', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
-      supabase.from('configuracion').upsert({ clave: 'precio_vale_43', valor: preciosVales['43']?.toString() || '43', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
-    ])
-    setSavingVales(false)
-    alert('✅ Precios de vales guardados correctamente')
   }
 
   async function guardarPreciosTienda() {
@@ -199,12 +179,6 @@ export default function Configuracion() {
     setSaving(false)
     if (e) { setError(e.message); return }
     setModal(null); cargar()
-  }
-
-  async function eliminarProveedor(id) {
-    if (!confirm('¿Eliminar este proveedor?')) return
-    await supabase.from('proveedores').update({ activo: false }).eq('id', id)
-    cargar()
   }
 
   async function guardarUsuario() {
@@ -288,7 +262,6 @@ export default function Configuracion() {
           ['precios','💰 Precios tienda'],
           ['distribuidores_precios','🚛 Precios distribuidores'],
           ['costos','💲 Costos compra'],
-          ['vales','🎫 Vales FISE'],
           ['proveedores','🚚 Proveedores'],
           ['usuarios','👤 Usuarios']
         ].map(([key, label]) => (
@@ -325,7 +298,7 @@ export default function Configuracion() {
                       <td key={tipo} className="px-4 py-4">
                         <div className="relative">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs">S/</span>
-                          <input type="number" className="input pl-7 w-28 text-sm"
+                          <input type="number" className="input pl-9 w-28 text-sm"
                             value={editandoPrecios[p.id]?.[tipo] ?? ''}
                             onChange={e => setEditandoPrecios(prev => ({
                               ...prev, [p.id]: { ...prev[p.id], [tipo]: e.target.value }
@@ -366,7 +339,7 @@ export default function Configuracion() {
                       <td key={tipo} className="px-4 py-4">
                         <div className="relative">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs">S/</span>
-                          <input type="number" className="input pl-7 w-28 text-sm"
+                          <input type="number" className="input pl-9 w-28 text-sm"
                             value={editandoDistPrecios[d.id]?.[tipo] ?? ''}
                             onChange={e => setEditandoDistPrecios(prev => ({
                               ...prev, [d.id]: { ...prev[d.id], [tipo]: e.target.value }
@@ -455,50 +428,6 @@ export default function Configuracion() {
         </div>
       )}
 
-      {/* Tab Vales FISE */}
-      {tab === 'vales' && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <p className="text-gray-400 text-sm">Valor monetario de cada tipo de vale FISE</p>
-            <button onClick={guardarPreciosVales} disabled={savingVales} className="btn-primary">
-              <Save className="w-4 h-4" />{savingVales ? 'Guardando...' : 'Guardar cambios'}
-            </button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {[['20','🟡','yellow','Vale pequeño (antes S/20)'],['43','🟠','orange','Vale grande (antes S/43)']].map(([tipo, icon, color, desc]) => (
-              <div key={tipo} className={`card border border-${color}-800/40`}>
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="text-3xl">{icon}</span>
-                  <div>
-                    <p className="text-white font-bold text-lg">Vale tipo S/{tipo}</p>
-                    <p className="text-gray-500 text-xs">{desc}</p>
-                  </div>
-                </div>
-                <label className="label">Valor actual del vale S/</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium text-sm">S/</span>
-                  <input
-                    type="number" min="1" step="1"
-                    className="input pl-9 text-2xl font-bold text-center"
-                    value={preciosVales[tipo]}
-                    onChange={e => setPreciosVales(v => ({...v, [tipo]: e.target.value}))}
-                    placeholder={tipo}
-                  />
-                </div>
-                <p className="text-xs text-gray-600 mt-2">
-                  Este valor se usará al calcular pagos de deudas y totales del día en Vales FISE.
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="bg-yellow-900/20 border border-yellow-800/40 rounded-xl p-4 text-sm text-gray-400">
-            <p className="text-yellow-300 font-medium mb-1">⚠️ ¿Cuándo cambiar estos valores?</p>
-            <p>• Si el MIDIS actualiza el monto de los vales FISE, actualiza aquí antes de registrar nuevos vales.</p>
-            <p className="mt-1">• Los vales ya registrados mantienen el monto con el que fueron ingresados. Solo afecta a los nuevos.</p>
-          </div>
-        </div>
-      )}
-
       {/* Tab Proveedores */}
       {tab === 'proveedores' && (
         <div className="space-y-4">
@@ -523,16 +452,8 @@ export default function Configuracion() {
                     <td className="px-6 py-4 text-gray-400 text-sm font-mono">{p.ruc || '-'}</td>
                     <td className="px-6 py-4 text-gray-500 text-sm">{p.direccion || '-'}</td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => { setSelected(p); setProvForm({ nombre: p.nombre, telefono: p.telefono||'', direccion: p.direccion||'', ruc: p.ruc||'' }); setError(''); setModal('proveedor') }}
-                          className="text-xs bg-blue-600/20 border border-blue-600/30 text-blue-400 px-2 py-1 rounded-lg flex items-center gap-1">
-                          <Edit2 className="w-3 h-3" />Editar
-                        </button>
-                        <button onClick={() => eliminarProveedor(p.id)}
-                          className="text-xs bg-red-600/20 border border-red-600/30 text-red-400 px-2 py-1 rounded-lg">
-                          🗑️ Borrar
-                        </button>
-                      </div>
+                      <button onClick={() => { setSelected(p); setProvForm({ nombre: p.nombre, telefono: p.telefono||'', direccion: p.direccion||'', ruc: p.ruc||'' }); setError(''); setModal('proveedor') }}
+                        className="text-gray-500 hover:text-blue-400 transition-colors"><Edit2 className="w-4 h-4" /></button>
                     </td>
                   </tr>
                 ))}
