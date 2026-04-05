@@ -75,6 +75,15 @@ export default function Almacenes() {
     }
     await supabase.from('stock_por_tipo').delete().eq('almacen_id', id)
     await supabase.from('reposiciones_distribuidor').delete().eq('almacen_origen_id', id)
+    // Borrar cuentas y abonos de distribuidores asignados a este almacén
+    const { data: distsPrueba } = await supabase.from('distribuidores').select('id').eq('almacen_id', id)
+    if (distsPrueba && distsPrueba.length > 0) {
+      for (const dist of distsPrueba) {
+        await supabase.from('cuentas_distribuidor').delete().eq('distribuidor_id', dist.id)
+        await supabase.from('abonos_distribuidor').delete().eq('distribuidor_id', dist.id)
+        await supabase.from('a_cuenta').delete().eq('distribuidor_id', dist.id)
+      }
+    }
     await supabase.from('almacenes').update({
       stock_actual: 0, balones_vacios: 0,
       vacios_5kg: 0, vacios_10kg: 0, vacios_45kg: 0,
