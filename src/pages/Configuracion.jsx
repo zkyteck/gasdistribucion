@@ -90,9 +90,10 @@ export default function Configuracion() {
       setEditandoDistPrecios(mapa)
       setPreciosDistTipo(pdt || [])
     } else if (tab === 'costos') {
-      const [{ data }, { data: dists }] = await Promise.all([
+      const [{ data }, { data: dists }, { data: pdt }] = await Promise.all([
         supabase.from('configuracion').select('*').in('clave', ['costo_5kg','costo_10kg','costo_45kg']),
-        supabase.from('distribuidores').select('id, nombre, precio_base').eq('activo', true).order('nombre')
+        supabase.from('distribuidores').select('id, nombre, precio_base').eq('activo', true).order('nombre'),
+        supabase.from('precio_distribuidor_tipo').select('*')
       ])
       const mapa = { '5kg': '', '10kg': '', '45kg': '' }
       data?.forEach(r => {
@@ -102,6 +103,7 @@ export default function Configuracion() {
       })
       setCostosCompra(mapa)
       setDistribuidores(dists || [])
+      setPreciosDistTipo(pdt || [])
     } else if (tab === 'proveedores') {
       const { data } = await supabase.from('proveedores').select('*').eq('activo', true).order('nombre')
       setProveedores(data || [])
@@ -403,12 +405,21 @@ export default function Configuracion() {
                       <>
                         <p className="text-gray-400 font-medium mt-3 mb-1 pt-2 border-t border-gray-700">🚛 Distribuidores — Ganancia por precio:</p>
                         {distribuidores.map(d => {
-                          const gan = (d.precio_base || 0) - parseFloat(costosCompra[tipo])
+                          // Usar precio específico por tipo, si no existe usar precio_base solo para 10kg
+                          const precioTipo = preciosDistTipo.find(p => p.distribuidor_id === d.id && p.tipo_balon === tipo)?.precio
+                          const precioUsar = precioTipo || (tipo === '10kg' ? d.precio_base : 0)
+                          if (!precioUsar || precioUsar === 0) return (
+                            <div key={d.id} className="flex justify-between items-center">
+                              <span className="text-gray-500">{d.nombre}</span>
+                              <span className="text-gray-600 text-xs">No vende {tipo}</span>
+                            </div>
+                          )
+                          const gan = precioUsar - parseFloat(costosCompra[tipo])
                           return (
                             <div key={d.id} className="flex justify-between items-center">
                               <span className="text-gray-500">{d.nombre}</span>
                               <span className={`font-bold ${gan > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                S/{d.precio_base} → +S/{gan.toFixed(2)}
+                                S/{precioUsar} → {gan > 0 ? '+' : ''}S/{gan.toFixed(2)}
                               </span>
                             </div>
                           )
