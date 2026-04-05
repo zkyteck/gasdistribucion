@@ -590,7 +590,7 @@ export default function Distribuidores() {
                   className="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/30 text-blue-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
                   <History className="w-3 h-3" />Historial
                 </button>
-                <button onClick={() => { setSelected(d); setAbonoModal(true); setAbonoForm({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', vacios_extra: '', notas: '', modo: 'abono', fecha: hoyPeru() }) }}
+                <button onClick={() => { setSelected(d); setAbonoModal(true); setAbonoForm({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', vacios_extra: '', notas: '', modo: 'abono', fecha: hoyPeru() }); cargarHistorial(d.id) }}
                   className="bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
                   <DollarSign className="w-3 h-3" />💰 Arreglar cuentas
                 </button>
@@ -1199,6 +1199,30 @@ export default function Distribuidores() {
               {/* MODO TOTALIZAR */}
               {abonoForm.modo === 'totalizar' && (
                 <div className="space-y-4">
+
+                  {/* Resumen acumulado de abonos previos */}
+                  {rendiciones.length > 0 && (() => {
+                    const soloAbonos = rendiciones.filter(r => r.notas?.startsWith('Abono parcial'))
+                    const totalAbonadoPrev = soloAbonos.reduce((s, r) => s + (r.total_vales || 0) + (r.total_adelantos || 0), 0)
+                    const totalVaciosPrev = soloAbonos.reduce((s, r) => s + (r.balones_devueltos || 0), 0)
+                    if (soloAbonos.length === 0) return null
+                    return (
+                      <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-xl p-3 space-y-1.5">
+                        <p className="text-xs text-yellow-300 font-semibold uppercase">📋 Abonos previos sin rendir</p>
+                        {soloAbonos.map((r, i) => (
+                          <div key={i} className="flex justify-between text-xs">
+                            <span className="text-gray-400">{r.periodo_fin} — vales S/{(r.total_vales||0).toLocaleString()} + efectivo S/{(r.total_adelantos||0).toLocaleString()}{r.balones_devueltos > 0 ? ` + ${r.balones_devueltos} vacíos` : ''}</span>
+                            <span className="text-yellow-300 font-semibold">S/ {((r.total_vales||0)+(r.total_adelantos||0)).toLocaleString()}</span>
+                          </div>
+                        ))}
+                        <div className="border-t border-yellow-700/40 pt-1.5 flex justify-between font-semibold text-sm">
+                          <span className="text-yellow-300">Total ya abonado:</span>
+                          <span className="text-yellow-300">S/ {totalAbonadoPrev.toLocaleString('es-PE')}</span>
+                        </div>
+                        <p className="text-xs text-gray-500">Este monto se descontará automáticamente del total</p>
+                      </div>
+                    )
+                  })()}
                   <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3">
                     <p className="text-xs text-gray-400 font-semibold uppercase">1. Balones</p>
                     <div className="grid grid-cols-2 gap-3">
@@ -1254,7 +1278,10 @@ export default function Distribuidores() {
                     const v43 = parseInt(abonoForm.vales43) || 0
                     const efectivo = parseFloat(abonoForm.efectivo) || 0
                     const totalBruto = vendidos * precio
-                    const totalDescuentos = v20*20 + v43*43 + efectivo
+                    // Sumar abonos previos
+                    const soloAbonos = rendiciones.filter(r => r.notas?.startsWith('Abono parcial'))
+                    const abonadoPrev = soloAbonos.reduce((s, r) => s + (r.total_vales || 0) + (r.total_adelantos || 0), 0)
+                    const totalDescuentos = v20*20 + v43*43 + efectivo + abonadoPrev
                     const saldo = totalBruto - totalDescuentos
                     const llenosRestantes = Math.max(0, (selected.stock_actual||0) - vaciosDevueltos)
                     const cancelado = saldo <= 0
@@ -1263,11 +1290,12 @@ export default function Distribuidores() {
                         <div className="bg-gray-800 px-4 py-2"><p className="text-xs text-gray-400 font-semibold uppercase">3. Resultado</p></div>
                         <div className="px-4 py-3 space-y-2 text-sm">
                           <div className="flex justify-between"><span className="text-gray-400">{vendidos} bal. × S/{precio}</span><span className="text-white font-semibold">S/ {totalBruto.toLocaleString('es-PE')}</span></div>
+                          {abonadoPrev > 0 && <div className="flex justify-between"><span className="text-yellow-300">📋 Abonos previos</span><span className="text-yellow-400">− S/ {abonadoPrev.toLocaleString()}</span></div>}
                           {v20 > 0 && <div className="flex justify-between"><span className="text-gray-400">{v20} vales S/20</span><span className="text-yellow-400">− S/ {(v20*20).toLocaleString()}</span></div>}
                           {v43 > 0 && <div className="flex justify-between"><span className="text-gray-400">{v43} vales S/43</span><span className="text-yellow-400">− S/ {(v43*43).toLocaleString()}</span></div>}
-                          {efectivo > 0 && <div className="flex justify-between"><span className="text-gray-400">Efectivo</span><span className="text-yellow-400">− S/ {efectivo.toLocaleString()}</span></div>}
+                          {efectivo > 0 && <div className="flex justify-between"><span className="text-gray-400">Efectivo hoy</span><span className="text-yellow-400">− S/ {efectivo.toLocaleString()}</span></div>}
                           <div className="border-t border-gray-600 pt-2 flex justify-between items-center">
-                            <span className="text-white font-bold">Saldo</span>
+                            <span className="text-white font-bold">Saldo final</span>
                             <span className={`font-bold text-xl ${cancelado ? 'text-emerald-400' : 'text-red-400'}`}>S/ {Math.abs(saldo).toLocaleString('es-PE')} {cancelado ? '✅' : '⏳'}</span>
                           </div>
                           <div className="grid grid-cols-2 gap-2 text-xs pt-1">
