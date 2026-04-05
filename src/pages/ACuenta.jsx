@@ -209,12 +209,26 @@ export default function ACuenta() {
   const [registroPendiente, setRegistroPendiente] = useState(null)
 
   useEffect(() => {
-    cargar(); cargarClientes()
+    cargar(); cargarClientes(); cargarPreciosAcuenta()
     const canal = supabase.channel('acuenta-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'a_cuenta' }, () => cargar())
       .subscribe()
     return () => supabase.removeChannel(canal)
   }, [filtro])
+
+  const [preciosAcuenta, setPreciosAcuenta] = useState({ '20': 20, '43': 43 })
+
+  async function cargarPreciosAcuenta() {
+    const { data } = await supabase.from('configuracion').select('*').in('clave', ['precio_acuenta_20','precio_acuenta_43'])
+    if (data?.length) {
+      const mapa = { '20': 20, '43': 43 }
+      data.forEach(r => {
+        if (r.clave === 'precio_acuenta_20') mapa['20'] = parseFloat(r.valor) || 20
+        if (r.clave === 'precio_acuenta_43') mapa['43'] = parseFloat(r.valor) || 43
+      })
+      setPreciosAcuenta(mapa)
+    }
+  }
 
   async function cargarClientes() {
     const { data: cData } = await supabase.from('clientes').select('id, nombre').eq('es_varios', false).order('nombre')
@@ -390,8 +404,8 @@ export default function ACuenta() {
 
   function resumenItems(r) {
     const items = []
-    if (r.vales_20 > 0) items.push(`${r.vales_20} vale(s) S/20`)
-    if (r.vales_43 > 0) items.push(`${r.vales_43} vale(s) S/43`)
+    if (r.vales_20 > 0) items.push(`${r.vales_20} vale(s) S/${preciosAcuenta['20']}`)
+    if (r.vales_43 > 0) items.push(`${r.vales_43} vale(s) S/${preciosAcuenta['43']}`)
     if (r.balones > 0) items.push(`${r.balones} balón(es)`)
     if (r.dinero > 0) items.push(`S/${parseFloat(r.dinero).toFixed(2)}`)
     return items.join(' + ')

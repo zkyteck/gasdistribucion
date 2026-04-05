@@ -37,20 +37,20 @@ export default function Vales() {
   const [smsHistorial, setSmsHistorial] = useState([])
   const [modalSms, setModalSms] = useState(false)
   const [retiroForm, setRetiroForm] = useState({ monto: '', motivo: '', fecha: hoyPeru() })
-  const [preciosVales, setPreciosVales] = useState({ '20': 20, '43': 43 })
 
   useEffect(() => {
-    cargar()
-    cargarPreciosVales()
+    cargar(); cargarPreciosVales()
     const canal = supabase.channel('vales-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vales_fise' }, () => cargar())
       .subscribe()
     return () => supabase.removeChannel(canal)
   }, [filtroFecha])
 
+  const [preciosVales, setPreciosVales] = useState({ '20': 20, '43': 43 })
+
   async function cargarPreciosVales() {
     const { data } = await supabase.from('configuracion').select('*').in('clave', ['precio_vale_20','precio_vale_43'])
-    if (data && data.length > 0) {
+    if (data?.length) {
       const mapa = { '20': 20, '43': 43 }
       data.forEach(r => {
         if (r.clave === 'precio_vale_20') mapa['20'] = parseFloat(r.valor) || 20
@@ -73,11 +73,8 @@ export default function Vales() {
         .gte('lote_dia', inicioMes).lte('lote_dia', finMes).neq('estado', 'anulado')
     ])
     const valesDelDia = v || []
-    const v20 = valesDelDia.filter(x => x.tipo_vale === '20')
-    const v43 = valesDelDia.filter(x => x.tipo_vale === '43')
-    // Usar el monto real de cada vale (guardado en BD) para el total
     const totalDia = valesDelDia.reduce((s, x) => s + (parseFloat(x.monto) || 0), 0)
-    setLotes(valesDelDia.length > 0 ? [{ fecha: filtroFecha, cant20: v20.length, cant43: v43.length, total: totalDia, vales: valesDelDia }] : [])
+    setLotes(valesDelDia.length > 0 ? [{ fecha: filtroFecha, cant20: valesDelDia.filter(x=>x.tipo_vale==='20').length, cant43: valesDelDia.filter(x=>x.tipo_vale==='43').length, total: totalDia, vales: valesDelDia }] : [])
     setSaldo(s || { total_vales: 0, total_retiros: 0, saldo_disponible: 0 })
     setValesMes(totalMes || 0)
     setLoading(false)

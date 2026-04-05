@@ -36,6 +36,8 @@ export default function Configuracion() {
   const [editandoDistPrecios, setEditandoDistPrecios] = useState({})
   const [costosCompra, setCostosCompra] = useState({ '5kg': '', '10kg': '', '45kg': '' })
   const [savingCostos, setSavingCostos] = useState(false)
+  const [preciosVales, setPreciosVales] = useState({ '20': '20', '43': '43' })
+  const [savingVales, setSavingVales] = useState(false)
 
   const [provForm, setProvForm] = useState({ nombre: '', telefono: '', direccion: '', ruc: '' })
   const [usuarioForm, setUsuarioForm] = useState({ nombre: '', email: '', password: '', rol: 'trabajador' })
@@ -104,6 +106,17 @@ export default function Configuracion() {
       setCostosCompra(mapa)
       setDistribuidores(dists || [])
       setPreciosDistTipo(pdt || [])
+    } else if (tab === 'vales') {
+      const { data } = await supabase.from('configuracion').select('*')
+        .in('clave', ['precio_vale_20','precio_vale_43','precio_acuenta_20','precio_acuenta_43'])
+      const mapa = { fise_20: '20', fise_43: '43', acuenta_20: '20', acuenta_43: '43' }
+      data?.forEach(r => {
+        if (r.clave === 'precio_vale_20') mapa['fise_20'] = r.valor || '20'
+        if (r.clave === 'precio_vale_43') mapa['fise_43'] = r.valor || '43'
+        if (r.clave === 'precio_acuenta_20') mapa['acuenta_20'] = r.valor || '20'
+        if (r.clave === 'precio_acuenta_43') mapa['acuenta_43'] = r.valor || '43'
+      })
+      setPreciosVales(mapa)
     } else if (tab === 'proveedores') {
       const { data } = await supabase.from('proveedores').select('*').eq('activo', true).order('nombre')
       setProveedores(data || [])
@@ -170,6 +183,18 @@ export default function Configuracion() {
     setSaving(false)
     alert('✅ Precios de distribuidores guardados y actualizados')
     cargar()
+  }
+
+  async function guardarPreciosVales() {
+    setSavingVales(true)
+    await Promise.all([
+      supabase.from('configuracion').upsert({ clave: 'precio_vale_20', valor: preciosVales['fise_20']?.toString() || '20', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
+      supabase.from('configuracion').upsert({ clave: 'precio_vale_43', valor: preciosVales['fise_43']?.toString() || '43', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
+      supabase.from('configuracion').upsert({ clave: 'precio_acuenta_20', valor: preciosVales['acuenta_20']?.toString() || '20', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
+      supabase.from('configuracion').upsert({ clave: 'precio_acuenta_43', valor: preciosVales['acuenta_43']?.toString() || '43', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
+    ])
+    setSavingVales(false)
+    alert('✅ Precios de vales guardados correctamente')
   }
 
   async function guardarProveedor() {
@@ -265,6 +290,7 @@ export default function Configuracion() {
           ['precios','💰 Precios tienda'],
           ['distribuidores_precios','🚛 Precios distribuidores'],
           ['costos','💲 Costos compra'],
+          ['vales','🎫 Vales FISE'],
           ['proveedores','🚚 Proveedores'],
           ['usuarios','👤 Usuarios']
         ].map(([key, label]) => (
@@ -436,6 +462,72 @@ export default function Configuracion() {
             <p>• Cuando registras una <strong className="text-white">compra nueva</strong>, estos precios se actualizan automáticamente.</p>
             <p className="mt-1">• El reporte de <strong className="text-white">Ganancias</strong> usa estos precios para calcular cuánto ganaste por cada balón vendido.</p>
             <p className="mt-1">• Se calcula por separado para <strong className="text-white">Tienda</strong> y <strong className="text-white">Distribuidores</strong>.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Tab Vales FISE */}
+      {tab === 'vales' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <p className="text-gray-400 text-sm">Configura el valor de cada tipo de vale por separado</p>
+            <button onClick={guardarPreciosVales} disabled={savingVales} className="btn-primary">
+              <Save className="w-4 h-4" />{savingVales ? 'Guardando...' : 'Guardar cambios'}
+            </button>
+          </div>
+
+          {/* Vales procesados FISE */}
+          <div>
+            <p className="text-white font-semibold mb-3">🏦 Vales procesados (FISE)</p>
+            <p className="text-xs text-gray-500 mb-3">Valor que se usa al registrar vales del día en Vales FISE → afecta el fondo acumulado y totales del día.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[['20','🟡'],['43','🟠']].map(([tipo, icon]) => (
+                <div key={tipo} className="card border border-yellow-800/30">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-2xl">{icon}</span>
+                    <p className="text-white font-semibold">Vale FISE tipo "{tipo}"</p>
+                  </div>
+                  <label className="label">Valor S/</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">S/</span>
+                    <input type="number" min="1" step="1" className="input pl-9 text-xl font-bold text-center"
+                      value={preciosVales[`fise_${tipo}`] || tipo}
+                      onChange={e => setPreciosVales(v => ({...v, [`fise_${tipo}`]: e.target.value}))}
+                      placeholder={tipo} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Vales A Cuenta */}
+          <div>
+            <p className="text-white font-semibold mb-3">📋 Vales A Cuenta</p>
+            <p className="text-xs text-gray-500 mb-3">Valor que se usa cuando un cliente deja vales como depósito en A Cuenta → afecta el cálculo del depósito.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[['20','🟡'],['43','🟠']].map(([tipo, icon]) => (
+                <div key={tipo} className="card border border-blue-800/30">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-2xl">{icon}</span>
+                    <p className="text-white font-semibold">Vale A Cuenta tipo "{tipo}"</p>
+                  </div>
+                  <label className="label">Valor S/</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">S/</span>
+                    <input type="number" min="1" step="1" className="input pl-9 text-xl font-bold text-center"
+                      value={preciosVales[`acuenta_${tipo}`] || tipo}
+                      onChange={e => setPreciosVales(v => ({...v, [`acuenta_${tipo}`]: e.target.value}))}
+                      placeholder={tipo} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-yellow-900/20 border border-yellow-800/40 rounded-xl p-4 text-sm text-gray-400">
+            <p className="text-yellow-300 font-medium mb-1">⚠️ Nota</p>
+            <p>• Los registros ya guardados mantienen su monto original. Solo afecta a los nuevos registros.</p>
+            <p className="mt-1">• Puedes volver a S/20 y S/43 cuando el MIDIS los restaure.</p>
           </div>
         </div>
       )}
