@@ -43,7 +43,7 @@ export default function Clientes() {
     monto_pagado: '', cantidad_pagada: '', metodo_pago: 'efectivo',
     fecha_pago: new Date().toISOString().split('T')[0], notas: ''
   })
-  const [clienteForm, setClienteForm] = useState({ nombre: '', dni: '', telefono: '', tipo: 'general', direccion: '' })
+  const [clienteForm, setClienteForm] = useState({ nombre: '', dni: '', telefono: '', tipo: 'general', direccion: '', precio_personalizado: '', tipo_balon_personalizado: '10kg' })
   const [deudaClienteModal, setDeudaClienteModal] = useState(null) // deuda activa a mostrar
 
   useEffect(() => {
@@ -129,6 +129,8 @@ export default function Clientes() {
       ...clienteForm,
       dni: clienteForm.dni?.trim() || null,
       telefono: clienteForm.telefono?.trim() || null,
+      precio_personalizado: clienteForm.precio_personalizado ? parseFloat(clienteForm.precio_personalizado) : null,
+      tipo_balon_personalizado: clienteForm.tipo_balon_personalizado || '10kg',
     }
     const op = selected
       ? supabase.from('clientes').update({ ...datos, updated_at: new Date().toISOString() }).eq('id', selected.id)
@@ -248,7 +250,7 @@ export default function Clientes() {
                           </div>
                         </div>
                         <div className="flex gap-1 flex-shrink-0">
-                          <button onClick={() => { setSelected(c); setClienteForm({ nombre: c.nombre, dni: c.dni||'', telefono: c.telefono||'', tipo: c.tipo||'general', direccion: c.direccion||'' }); setError(''); setModal('cliente') }}
+                          <button onClick={() => { setSelected(c); setClienteForm({ nombre: c.nombre, dni: c.dni||'', telefono: c.telefono||'', tipo: c.tipo||'general', direccion: c.direccion||'', precio_personalizado: c.precio_personalizado||'', tipo_balon_personalizado: c.tipo_balon_personalizado||'10kg' }); setError(''); setModal('cliente') }}
                             className="p-1.5 text-gray-500 hover:text-blue-400 transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
                           {perfil?.rol === 'admin' && (
                             <button onClick={() => eliminarCliente(c.id)}
@@ -375,6 +377,38 @@ export default function Clientes() {
               </div>
             </div>
             <div><label className="label">Dirección</label><input className="input" value={clienteForm.direccion} onChange={e => setClienteForm(f => ({...f, direccion: e.target.value}))} /></div>
+            
+            {/* Precio personalizado */}
+            <div className="bg-blue-900/20 border border-blue-800/40 rounded-xl p-3 space-y-3">
+              <p className="text-xs text-blue-300 font-medium">💰 Precio especial (opcional)</p>
+              <p className="text-xs text-gray-500">Si este cliente siempre compra a un precio fijo, ingrésalo aquí. Se usará automáticamente al vender.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Precio S/</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">S/</span>
+                    <input type="number" min="0" step="0.50" className="input pl-9"
+                      placeholder="Ej: 48"
+                      value={clienteForm.precio_personalizado}
+                      onChange={e => setClienteForm(f => ({...f, precio_personalizado: e.target.value}))} />
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Tipo de balón</label>
+                  <div className="flex gap-1">
+                    {['5kg','10kg','45kg'].map(t => (
+                      <button key={t} type="button" onClick={() => setClienteForm(f => ({...f, tipo_balon_personalizado: t}))}
+                        className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${clienteForm.tipo_balon_personalizado === t ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {clienteForm.precio_personalizado && (
+                <p className="text-xs text-emerald-400">✅ Al vender a este cliente, el precio {clienteForm.tipo_balon_personalizado} se pondrá en S/ {clienteForm.precio_personalizado} automáticamente.</p>
+              )}
+            </div>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setModal(null)} className="btn-secondary flex-1">Cancelar</button>
               <button onClick={guardarCliente} disabled={saving} className="btn-primary flex-1 justify-center">{saving ? 'Guardando...' : selected ? 'Actualizar' : '✓ Registrar cliente'}</button>

@@ -108,11 +108,21 @@ export default function Ventas() {
     const c = clientes.find(c => c.id === clienteId)
     if (!c) return
     const tipoPrecio = precioTipos.find(t => t.nombre.toLowerCase().includes(c.tipo)) || precioTipos[0]
-    const precio = getPrecio(tipoPrecio?.id, form.tipo_balon)
-    setForm(f => ({
-      ...f, cliente_id: c.id, cliente_nombre: c.nombre, es_varios: c.es_varios,
-      precio_tipo_id: tipoPrecio?.id || '', precio_unitario: precio || tipoPrecio?.precio || ''
-    }))
+    // Si el cliente tiene precio personalizado, usarlo directamente
+    if (c.precio_personalizado && c.tipo_balon_personalizado) {
+      setForm(f => ({
+        ...f, cliente_id: c.id, cliente_nombre: c.nombre, es_varios: c.es_varios,
+        precio_tipo_id: tipoPrecio?.id || '',
+        tipo_balon: c.tipo_balon_personalizado,
+        precio_unitario: c.precio_personalizado
+      }))
+    } else {
+      const precio = getPrecio(tipoPrecio?.id, form.tipo_balon)
+      setForm(f => ({
+        ...f, cliente_id: c.id, cliente_nombre: c.nombre, es_varios: c.es_varios,
+        precio_tipo_id: tipoPrecio?.id || '', precio_unitario: precio || tipoPrecio?.precio || ''
+      }))
+    }
   }
 
   async function eliminarVenta(venta) {
