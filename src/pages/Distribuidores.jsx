@@ -173,7 +173,7 @@ export default function Distribuidores() {
     const vales43 = parseInt(abonoForm.vales43) || 0
     const balonesDevueltos = parseInt(abonoForm.balones_devueltos) || 0
     const totalAbono = efectivo + (vales20 * 20) + (vales43 * 43)
-    if (totalAbono === 0 && balonesDevueltos === 0) { return }
+    if (totalAbono === 0 && balonesDevueltos === 0) return
 
     setSavingAbono(true)
 
@@ -189,28 +189,40 @@ export default function Distribuidores() {
       notas: abonoForm.notas || null
     })
 
-    // Sumar vacíos al almacén si devolvió balones
+    // Actualizar almacén: sumar vacíos Y descontar llenos (los devueltos = vendidos)
     if (balonesDevueltos > 0 && selected.almacen_id) {
-      const almacen = almacenes.find(a => a.id === selected.almacen_id)
-      if (almacen) {
+      const { data: almFresco } = await supabase.from('almacenes')
+        .select('stock_actual, balones_vacios, vacios_10kg, balones_pendientes_devolucion')
+        .eq('id', selected.almacen_id).single()
+      if (almFresco) {
         await supabase.from('almacenes').update({
-          balones_vacios: (almacen.balones_vacios || 0) + balonesDevueltos,
-          vacios_10kg: (almacen.vacios_10kg || 0) + balonesDevueltos,
-          balones_pendientes_devolucion: Math.max(0, (almacen.balones_pendientes_devolucion || 0) - balonesDevueltos)
+          stock_actual: Math.max(0, (almFresco.stock_actual || 0) - balonesDevueltos),
+          balones_vacios: (almFresco.balones_vacios || 0) + balonesDevueltos,
+          vacios_10kg: (almFresco.vacios_10kg || 0) + balonesDevueltos,
+          balones_pendientes_devolucion: Math.max(0, (almFresco.balones_pendientes_devolucion || 0) - balonesDevueltos),
+          updated_at: new Date().toISOString()
         }).eq('id', selected.almacen_id)
+        // Actualizar stock_por_tipo también
+        const { data: spt } = await supabase.from('stock_por_tipo')
+          .select('stock_actual').eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg').single()
+        if (spt) {
+          await supabase.from('stock_por_tipo')
+            .update({ stock_actual: Math.max(0, spt.stock_actual - balonesDevueltos) })
+            .eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg')
+        }
       }
     }
 
-    // Si pagó efectivo → registrar como ingreso en ventas
-    if (efectivo > 0 && selected.almacen_id) {
+    // Si pagó dinero → registrar como ingreso en ventas
+    if (totalAbono > 0 && selected.almacen_id) {
       await supabase.from('ventas').insert({
         almacen_id: selected.almacen_id,
         tipo_balon: '10kg',
         fecha: new Date().toISOString(),
-        cantidad: 0,
-        precio_unitario: efectivo,
+        cantidad: balonesDevueltos || 0,
+        precio_unitario: balonesDevueltos > 0 ? (selected.precio_base || 0) : totalAbono,
         metodo_pago: 'abono_distribuidor',
-        notas: `Abono de ${selected.nombre}${abonoForm.notas ? ' — ' + abonoForm.notas : ''}`,
+        notas: `Arreglo cuentas — ${selected.nombre}${abonoForm.notas ? ' · ' + abonoForm.notas : ''}`,
         usuario_id: perfil?.id || null
       })
     }
@@ -454,12 +466,12 @@ export default function Distribuidores() {
               {/* Acciones */}
               <div className="grid grid-cols-2 gap-2 mb-2">
                 <button onClick={() => abrirHistorial(d)}
-                  className="col-span-2 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/30 text-blue-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
+                  className="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/30 text-blue-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
                   <History className="w-3 h-3" />Historial
                 </button>
                 <button onClick={() => { setSelected(d); setAbonoModal(true); setAbonoForm({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', notas: '' }) }}
-                  className="col-span-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
-                  <DollarSign className="w-3 h-3" />💰 Registrar abono / devolución
+                  className="bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
+                  <DollarSign className="w-3 h-3" />💰 Arreglar cuentas
                 </button>
               </div>
             </div>
@@ -983,67 +995,122 @@ export default function Distribuidores() {
       {/* Modal abono a rendición */}
       {abonoModal !== null && selected && (
         <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
               <div>
-                <h3 className="text-white font-semibold">💰 Registrar abono / devolución</h3>
+                <h3 className="text-white font-semibold">💰 Arreglar cuentas</h3>
                 <p className="text-gray-500 text-xs mt-0.5">{selected.nombre} · {selected.almacenes?.nombre}</p>
               </div>
               <button onClick={() => setAbonoModal(null)} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
-              {/* Resumen actual del distribuidor */}
-              <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-3 grid grid-cols-2 gap-3 text-center">
-                <div>
-                  <p className="text-xl font-bold text-yellow-400">{selected.stock_actual || 0}</p>
-                  <p className="text-xs text-gray-500">🟢 Llenos en campo</p>
-                </div>
-                <div>
-                  <p className="text-xl font-bold text-orange-400">S/ {((selected.stock_actual || 0) * (selected.precio_base || 0)).toLocaleString()}</p>
-                  <p className="text-xs text-gray-500">💰 Valor pendiente</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">💵 Efectivo (S/)</label>
-                  <input type="number" min="0" className="input" placeholder="0"
-                    value={abonoForm.efectivo} onChange={e => setAbonoForm(f => ({...f, efectivo: e.target.value}))} />
-                </div>
-                <div>
-                  <label className="label">⚪ Balones vacíos devueltos</label>
-                  <input type="number" min="0" className="input" placeholder="0"
-                    value={abonoForm.balones_devueltos} onChange={e => setAbonoForm(f => ({...f, balones_devueltos: e.target.value}))} />
-                </div>
-                <div>
-                  <label className="label">🎫 Vales S/20</label>
-                  <input type="number" min="0" className="input" placeholder="0"
-                    value={abonoForm.vales20} onChange={e => setAbonoForm(f => ({...f, vales20: e.target.value}))} />
-                </div>
-                <div>
-                  <label className="label">🎫 Vales S/43</label>
-                  <input type="number" min="0" className="input" placeholder="0"
-                    value={abonoForm.vales43} onChange={e => setAbonoForm(f => ({...f, vales43: e.target.value}))} />
-                </div>
-              </div>
-              {(parseFloat(abonoForm.efectivo)||0) + (parseInt(abonoForm.vales20)||0)*20 + (parseInt(abonoForm.vales43)||0)*43 > 0 && (
-                <div className="bg-emerald-900/20 border border-emerald-800/40 rounded-xl p-3 text-sm space-y-1">
-                  {(parseFloat(abonoForm.efectivo)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">💵 Efectivo:</span><span className="text-white">S/ {(parseFloat(abonoForm.efectivo)||0).toLocaleString()}</span></div>}
-                  {(parseInt(abonoForm.vales20)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">🎫 Vales S/20:</span><span className="text-white">S/ {((parseInt(abonoForm.vales20)||0)*20).toLocaleString()}</span></div>}
-                  {(parseInt(abonoForm.vales43)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">🎫 Vales S/43:</span><span className="text-white">S/ {((parseInt(abonoForm.vales43)||0)*43).toLocaleString()}</span></div>}
-                  <div className="flex justify-between border-t border-gray-700 pt-1">
-                    <span className="text-gray-400 font-semibold">Total abono:</span>
-                    <span className="text-emerald-400 font-bold">S/ {((parseFloat(abonoForm.efectivo)||0) + (parseInt(abonoForm.vales20)||0)*20 + (parseInt(abonoForm.vales43)||0)*43).toLocaleString()}</span>
+
+              {/* Resumen actual */}
+              <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4">
+                <p className="text-xs text-gray-400 font-semibold uppercase mb-3">Estado actual</p>
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div>
+                    <p className="text-xl font-bold text-emerald-400">{selected.stock_actual || 0}</p>
+                    <p className="text-xs text-gray-500">🟢 Llenos en campo</p>
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-gray-300">{selected.balones_vacios || 0}</p>
+                    <p className="text-xs text-gray-500">⚪ Vacíos devueltos</p>
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-yellow-400">S/{((selected.stock_actual || 0) * (selected.precio_base || 0)).toLocaleString()}</p>
+                    <p className="text-xs text-gray-500">💰 Total campo</p>
                   </div>
                 </div>
-              )}
-              {(parseInt(abonoForm.balones_devueltos)||0) > 0 && (
-                <div className="bg-blue-900/20 border border-blue-800/40 rounded-xl p-3 text-sm">
-                  <p className="text-blue-300">⚪ {abonoForm.balones_devueltos} balones vacíos → irán al almacén {selected.almacenes?.nombre}</p>
+              </div>
+
+              {/* Ingresar lo que devuelve/paga ahora */}
+              <div>
+                <p className="text-xs text-gray-400 font-semibold uppercase mb-2">¿Qué trae ahora?</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">⚪ Vacíos que devuelve</label>
+                    <input type="number" min="0" className="input" placeholder="0"
+                      value={abonoForm.balones_devueltos}
+                      onChange={e => setAbonoForm(f => ({...f, balones_devueltos: e.target.value}))} />
+                    {parseInt(abonoForm.balones_devueltos) > (selected.stock_actual || 0) && (
+                      <p className="text-xs text-red-400 mt-1">Máximo {selected.stock_actual} (los que lleva)</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="label">💵 Efectivo S/</label>
+                    <input type="number" min="0" className="input" placeholder="0"
+                      value={abonoForm.efectivo}
+                      onChange={e => setAbonoForm(f => ({...f, efectivo: e.target.value}))} />
+                  </div>
+                  <div>
+                    <label className="label">🎫 Vales S/20</label>
+                    <input type="number" min="0" className="input" placeholder="0"
+                      value={abonoForm.vales20}
+                      onChange={e => setAbonoForm(f => ({...f, vales20: e.target.value}))} />
+                  </div>
+                  <div>
+                    <label className="label">🎫 Vales S/43</label>
+                    <input type="number" min="0" className="input" placeholder="0"
+                      value={abonoForm.vales43}
+                      onChange={e => setAbonoForm(f => ({...f, vales43: e.target.value}))} />
+                  </div>
                 </div>
-              )}
+              </div>
+
+              {/* Totalización automática */}
+              {(() => {
+                const llenos = selected.stock_actual || 0
+                const precio = selected.precio_base || 0
+                const devueltos = parseInt(abonoForm.balones_devueltos) || 0
+                const efectivo = parseFloat(abonoForm.efectivo) || 0
+                const v20 = parseInt(abonoForm.vales20) || 0
+                const v43 = parseInt(abonoForm.vales43) || 0
+                const totalVales = v20 * 20 + v43 * 43
+                const totalPagado = efectivo + totalVales
+                const totalDebia = llenos * precio
+                const vendidos = llenos - devueltos  // balones que se queda (no devuelve)
+                const deudaBalones = Math.max(0, llenos - devueltos)
+                const saldoDinero = Math.max(0, totalDebia - totalPagado)
+                const llenosRestantes = Math.max(0, llenos - devueltos)
+                const vaciosNuevos = devueltos
+                if (devueltos === 0 && totalPagado === 0) return null
+                return (
+                  <div className="bg-blue-900/20 border border-blue-800/40 rounded-xl p-4 space-y-2 text-sm">
+                    <p className="text-blue-300 font-semibold text-xs uppercase mb-3">📊 Totalización</p>
+                    <div className="flex justify-between"><span className="text-gray-400">Total que debía ({llenos} bal. × S/{precio})</span><span className="text-white font-semibold">S/ {totalDebia.toLocaleString('es-PE')}</span></div>
+                    {v20 > 0 && <div className="flex justify-between"><span className="text-gray-400">🎫 Vales S/20 ({v20}×20)</span><span className="text-yellow-400">− S/ {(v20*20).toLocaleString()}</span></div>}
+                    {v43 > 0 && <div className="flex justify-between"><span className="text-gray-400">🎫 Vales S/43 ({v43}×43)</span><span className="text-yellow-400">− S/ {(v43*43).toLocaleString()}</span></div>}
+                    {efectivo > 0 && <div className="flex justify-between"><span className="text-gray-400">💵 Efectivo</span><span className="text-yellow-400">− S/ {efectivo.toLocaleString()}</span></div>}
+                    <div className="border-t border-gray-700 pt-2 flex justify-between items-center">
+                      <span className="text-white font-semibold">💰 Saldo en dinero</span>
+                      <span className={`font-bold text-lg ${saldoDinero <= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        S/ {saldoDinero.toLocaleString('es-PE')} {saldoDinero <= 0 ? '✅' : '⏳'}
+                      </span>
+                    </div>
+                    {devueltos > 0 && (
+                      <div className="border-t border-gray-700 pt-2 space-y-1">
+                        <div className="flex justify-between"><span className="text-gray-400">🟢 Llenos restantes en campo</span><span className="text-emerald-400 font-bold">{llenosRestantes} bal.</span></div>
+                        <div className="flex justify-between"><span className="text-gray-400">⚪ Vacíos que ingresan al almacén</span><span className="text-gray-300 font-bold">+{vaciosNuevos} bal.</span></div>
+                      </div>
+                    )}
+                    {saldoDinero <= 0 && deudaBalones <= 0 && (
+                      <div className="bg-emerald-900/30 border border-emerald-700/40 rounded-lg p-2 text-center">
+                        <p className="text-emerald-300 font-bold text-sm">✅ CUENTA CANCELADA</p>
+                      </div>
+                    )}
+                    {saldoDinero > 0 && (
+                      <div className="bg-orange-900/20 border border-orange-700/40 rounded-lg p-2 text-center">
+                        <p className="text-orange-300 text-xs">⏳ Queda pendiente S/ {saldoDinero.toLocaleString('es-PE')} {deudaBalones > 0 ? `+ ${deudaBalones} bal.` : ''}</p>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+
               <div>
                 <label className="label">Notas (opcional)</label>
-                <input className="input" placeholder="Ej: Pago parcial, deja vales..."
+                <input className="input" placeholder="Ej: Pago parcial, próxima semana el resto..."
                   value={abonoForm.notas} onChange={e => setAbonoForm(f => ({...f, notas: e.target.value}))} />
               </div>
               <div className="flex gap-3 pt-1">
