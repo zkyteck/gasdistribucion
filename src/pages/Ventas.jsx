@@ -387,12 +387,8 @@ export default function Ventas() {
               <label className="label">Almacén</label>
               <select className="input" value={form.almacen_id} onChange={e => {
                 const almacenId = e.target.value
-                console.log('almacenId seleccionado:', almacenId)
-                console.log('distribuidores cargados:', distribuidores)
                 const dist = distribuidores.find(d => d.almacen_id === almacenId)
-                console.log('distribuidor encontrado:', dist)
                 if (dist) {
-                  // Autocompletar con el distribuidor
                   setBusquedaCliente(dist.nombre)
                   setForm(f => ({
                     ...f,
@@ -401,11 +397,10 @@ export default function Ventas() {
                     cliente_nombre: dist.nombre,
                     es_varios: false,
                     precio_unitario: dist.precio_base || f.precio_unitario,
-                    al_credito: true, // distribuidor siempre al crédito
+                    al_credito: true,
                     precio_especial_activo: !!dist.precio_base
                   }))
                 } else {
-                  // Almacén normal — limpiar distribuidor si había uno
                   const clienteVarios = clientes.find(c => c.es_varios)
                   setBusquedaCliente('')
                   setForm(f => ({
@@ -429,7 +424,6 @@ export default function Ventas() {
                   🚛 Almacén de distribuidor — venta al crédito activada automáticamente
                 </p>
               )}
-            </div>
             </div>
             <div>
               <label className="label">Tipo de balón</label>
