@@ -54,7 +54,9 @@ export default function Inventario() {
   const [editDist, setEditDist] = useState([]) // [{almacen_id, nombre, responsable, tipo_balon, cantidad, detalle_id}]
   const [compraForm, setCompraForm] = useState({
     proveedor_id: '', marca_id: '', fecha: hoyPeru(),
-    cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, precios: { '5kg': '', '10kg': '', '45kg': '' }, notas: '', distribucion: []
+    cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, precios: { '5kg': '', '10kg': '', '45kg': '' },
+    notas: '', distribucion: [],
+    monto_amortizado: '', estado_pago: 'cancelado'
   })
 
   useEffect(() => { cargar() }, [])
@@ -97,6 +99,21 @@ export default function Inventario() {
     setLoading(false)
   }
 
+
+  async function actualizarEstadoPago(compraId, nuevoEstado, montoExtra) {
+    const { data: compra } = await supabase.from('compras').select('monto_amortizado, monto_total').eq('id', compraId).single()
+    if (!compra) return
+    const nuevoAmortizado = (compra.monto_amortizado || 0) + (parseFloat(montoExtra) || 0)
+    const nuevoPendiente = Math.max(0, (compra.monto_total || 0) - nuevoAmortizado)
+    const estadoFinal = nuevoPendiente <= 0 ? 'cancelado' : 'por_cancelar'
+    await supabase.from('compras').update({
+      monto_amortizado: nuevoAmortizado,
+      monto_pendiente: nuevoPendiente,
+      estado_pago: estadoFinal,
+      updated_at: new Date().toISOString()
+    }).eq('id', compraId)
+    cargar()
+  }
 
   async function eliminarCompra(compra) {
     if (!confirm(`¿Eliminar esta compra de ${compra.cantidad_total} balones? Esto también restará el stock de los almacenes.`)) return
@@ -173,6 +190,12 @@ export default function Inventario() {
     const precioPromedio = totalCompra > 0 ? ['5kg','10kg','45kg'].reduce((s,t) => {
       return s + (parseInt(compraForm.cantidades[t])||0) * (parseFloat(compraForm.precios[t])||0)
     }, 0) / totalCompra : 0
+    const montoTotal = ['5kg','10kg','45kg'].reduce((s,t) =>
+      s + (parseInt(compraForm.cantidades[t])||0) * (parseFloat(compraForm.precios[t])||0), 0)
+    const montoAmortizado = parseFloat(compraForm.monto_amortizado) || 0
+    const montoPendiente = Math.max(0, montoTotal - montoAmortizado)
+    const estadoPago = montoPendiente <= 0 ? 'cancelado' : 'por_cancelar'
+
     const { data: compra, error: e1 } = await supabase.from('compras').insert({
       proveedor_id: compraForm.proveedor_id || null,
       marca_id: compraForm.marca_id || null,
@@ -180,7 +203,11 @@ export default function Inventario() {
       fecha: compraForm.fecha,
       cantidad_total: totalCompra,
       precio_unitario: precioPromedio,
-      notas: compraForm.notas
+      notas: compraForm.notas,
+      monto_total: montoTotal,
+      monto_amortizado: montoAmortizado,
+      monto_pendiente: montoPendiente,
+      estado_pago: estadoPago
     }).select().single()
     if (e1) { setError(e1.message); setSaving(false); return }
     const detalles = compraForm.distribucion.filter(d => d.cantidad > 0).map(d => ({
@@ -201,7 +228,7 @@ export default function Inventario() {
     }
     setSaving(false)
     setModal(null)
-    setCompraForm({ proveedor_id: '', marca_id: '', fecha: hoyPeru(), cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, precios: { '5kg': '', '10kg': '', '45kg': '' }, notas: '', distribucion: [] })
+    setCompraForm({ proveedor_id: '', marca_id: '', fecha: hoyPeru(), cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, precios: { '5kg': '', '10kg': '', '45kg': '' }, notas: '', distribucion: [], monto_amortizado: '', estado_pago: 'cancelado' })
     // Actualizar costos de compra en configuracion
     for (const tipo of ['5kg','10kg','45kg']) {
       if (parseFloat(compraForm.precios[tipo]) > 0) {
@@ -529,12 +556,17 @@ export default function Inventario() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="border-b border-gray-800">
-                  {['Fecha','Proveedor','Marca','Cantidad','Costo/bal.','Total invertido','Notas',''].map(h => (
+                  {['Fecha','Proveedor','Marca','Cantidad','Costo/bal.','Total','Amortizado','Pendiente','Estado','Notas',''].map(h => (
                     <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">{h}</th>
                   ))}
                 </tr></thead>
                 <tbody className="divide-y divide-gray-800/50">
-                  {compras.map(c => (
+                  {compras.map(c => {
+                    const montoTotal = c.monto_total || (c.cantidad_total * c.precio_unitario)
+                    const amortizado = c.monto_amortizado || 0
+                    const pendiente = c.monto_pendiente ?? Math.max(0, montoTotal - amortizado)
+                    const estado = c.estado_pago || (pendiente <= 0 ? 'cancelado' : 'por_cancelar')
+                    return (
                     <tr key={c.id} className="table-row-hover">
                       <td className="px-4 py-4 text-gray-400 text-sm whitespace-nowrap">{format(new Date(c.fecha + 'T12:00:00'), 'dd/MM/yyyy', { locale: es })}</td>
                       <td className="px-4 py-4 text-white text-sm">{c.proveedores?.nombre || '-'}</td>
@@ -545,7 +577,18 @@ export default function Inventario() {
                       </td>
                       <td className="px-4 py-4 text-emerald-400 font-bold">{c.cantidad_total} bal.</td>
                       <td className="px-4 py-4 text-gray-400 text-sm">S/ {c.precio_unitario}</td>
-                      <td className="px-4 py-4 text-yellow-400 font-bold">S/ {(c.cantidad_total * c.precio_unitario).toLocaleString('es-PE')}</td>
+                      <td className="px-4 py-4 text-yellow-400 font-bold">S/ {montoTotal.toLocaleString('es-PE')}</td>
+                      <td className="px-4 py-4 text-blue-400 text-sm">S/ {amortizado.toLocaleString('es-PE')}</td>
+                      <td className="px-4 py-4 font-bold">
+                        <span className={pendiente > 0 ? 'text-red-400' : 'text-emerald-400'}>
+                          S/ {pendiente.toLocaleString('es-PE')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className={`text-xs font-bold px-2 py-1 rounded-lg ${estado === 'cancelado' ? 'bg-emerald-900/30 text-emerald-300' : 'bg-orange-900/20 text-orange-300'}`}>
+                          {estado === 'cancelado' ? '✅ Cancelado' : '⏳ Por cancelar'}
+                        </span>
+                      </td>
                       <td className="px-4 py-4 text-gray-500 text-xs">{c.notas || '-'}</td>
                       <td className="px-4 py-4">
                         <div className="flex gap-2 flex-wrap">
@@ -558,6 +601,17 @@ export default function Inventario() {
                             className="text-xs bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 px-2 py-1 rounded-lg transition-all">
                             👁️ Detalle
                           </button>
+                          {estado === 'por_cancelar' && (
+                            <button onClick={async () => {
+                              const extra = prompt(`Pendiente: S/${pendiente.toLocaleString('es-PE')}\n¿Cuánto pagas ahora? (deja en blanco para cancelar todo)`)
+                              if (extra === null) return
+                              const monto = extra === '' ? pendiente : parseFloat(extra) || 0
+                              await actualizarEstadoPago(c.id, 'cancelado', monto)
+                            }}
+                              className="text-xs bg-orange-600/20 hover:bg-orange-600/30 border border-orange-600/30 text-orange-300 px-2 py-1 rounded-lg transition-all">
+                              💰 Abonar
+                            </button>
+                          )}
                           <button onClick={() => { 
                             setEditCompraSelected(c)
                             setEditCompraForm({ fecha: c.fecha, notas: c.notas||'', proveedor_id: c.proveedor_id||'', marca_id: c.marca_id||'' })
@@ -582,7 +636,7 @@ export default function Inventario() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>
@@ -1028,7 +1082,7 @@ export default function Inventario() {
                       <div className="flex-1">
                         <div className="relative">
                           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">S/</span>
-                          <input type="number" min="0" step="0.5" className="input pl-9 w-full"
+                          <input type="number" min="0" step="0.5" className="input pl-8 w-full"
                             value={compraForm.precios[tipo] || ''}
                             placeholder="Precio"
                             onChange={e => setCompraForm(f => ({ ...f, precios: { ...f.precios, [tipo]: e.target.value } }))} />
@@ -1096,6 +1150,42 @@ export default function Inventario() {
               </div>
             )}
             <div><label className="label">Notas</label><textarea className="input" rows={2} value={compraForm.notas} onChange={e => setCompraForm(f => ({...f, notas: e.target.value}))} /></div>
+
+            {/* Campos de pago */}
+            {(() => {
+              const montoTotal = ['5kg','10kg','45kg'].reduce((s,t) =>
+                s + (parseInt(compraForm.cantidades[t])||0) * (parseFloat(compraForm.precios[t])||0), 0)
+              const amortizado = parseFloat(compraForm.monto_amortizado) || 0
+              const pendiente = Math.max(0, montoTotal - amortizado)
+              return (
+                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3">
+                  <p className="text-xs text-gray-400 font-semibold uppercase">💰 Estado de pago</p>
+                  <div className="grid grid-cols-3 gap-3 text-center text-sm">
+                    <div className="bg-gray-900 rounded-lg p-2">
+                      <p className="text-white font-bold">S/ {montoTotal.toLocaleString('es-PE')}</p>
+                      <p className="text-xs text-gray-500">Monto total</p>
+                    </div>
+                    <div className="bg-gray-900 rounded-lg p-2">
+                      <p className={`font-bold ${pendiente > 0 ? 'text-red-400' : 'text-emerald-400'}`}>S/ {pendiente.toLocaleString('es-PE')}</p>
+                      <p className="text-xs text-gray-500">Pendiente</p>
+                    </div>
+                    <div className={`rounded-lg p-2 ${pendiente <= 0 ? 'bg-emerald-900/30' : 'bg-orange-900/20'}`}>
+                      <p className={`font-bold text-xs ${pendiente <= 0 ? 'text-emerald-400' : 'text-orange-300'}`}>
+                        {pendiente <= 0 ? '✅ Cancelado' : '⏳ Por cancelar'}
+                      </p>
+                      <p className="text-xs text-gray-500">Estado</p>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="label">Amortizado (lo que pagas ahora) S/</label>
+                    <input type="number" min="0" step="0.01" className="input"
+                      placeholder="0 — si pagas todo pon el monto total"
+                      value={compraForm.monto_amortizado}
+                      onChange={e => setCompraForm(f => ({...f, monto_amortizado: e.target.value}))} />
+                  </div>
+                </div>
+              )
+            })()}
             <div className="flex gap-3 pt-2">
               <button onClick={() => setModal(null)} className="btn-secondary flex-1">Cancelar</button>
               <button onClick={guardarCompra} disabled={saving || !distribOk} className="btn-primary flex-1 justify-center disabled:opacity-50">
