@@ -197,16 +197,22 @@ export default function Deudas() {
     const vales20 = parseInt(pagoForm.vales_20) || 0
     const vales43 = parseInt(pagoForm.vales_43) || 0
     if (monto === 0 && balones === 0 && vales20 === 0 && vales43 === 0) { setError('Ingresa al menos un pago'); return }
-    // Los vales descuentan del monto en dinero
-    const totalVales = (vales20 * 20) + (vales43 * 43)
-    const totalPago = monto + totalVales
-    if (totalPago > (parseFloat(selected.monto_pendiente) || 0)) { setError(`El total (S/${totalPago}) supera la deuda (S/${selected.monto_pendiente})`); return }
+    const montoPendiente = parseFloat(selected.monto_pendiente) || 0
+    const vales20Pendiente = parseInt(selected.vales_20_pendiente) || 0
+    const vales43Pendiente = parseInt(selected.vales_43_pendiente) || 0
+    // Validar: si la deuda es en dinero, el pago en dinero+vales no debe superar el monto
+    const totalValesEnDinero = (vales20 * 20) + (vales43 * 43)
+    const totalPago = monto + (montoPendiente > 0 ? totalValesEnDinero : 0)
+    if (montoPendiente > 0 && totalPago > montoPendiente) { setError(`El total (S/${totalPago}) supera la deuda (S/${montoPendiente})`); return }
+    // Validar vales en especie
+    if (vales20Pendiente > 0 && vales20 > vales20Pendiente) { setError(`Máximo ${vales20Pendiente} vales S/20`); return }
+    if (vales43Pendiente > 0 && vales43 > vales43Pendiente) { setError(`Máximo ${vales43Pendiente} vales S/43`); return }
     if (balones > (parseInt(selected.balones_pendiente) || 0)) { setError(`Máximo ${selected.balones_pendiente} balones`); return }
     setSaving(true); setError('')
-    const nuevoMonto = Math.max(0, (parseFloat(selected.monto_pendiente) || 0) - totalPago)
+    const nuevoMonto = Math.max(0, montoPendiente - totalPago)
     const nuevoBal = Math.max(0, (parseInt(selected.balones_pendiente) || 0) - balones)
-    const nuevoV20 = Math.max(0, (parseInt(selected.vales_20_pendiente) || 0) - vales20)
-    const nuevoV43 = Math.max(0, (parseInt(selected.vales_43_pendiente) || 0) - vales43)
+    const nuevoV20 = Math.max(0, vales20Pendiente - vales20)
+    const nuevoV43 = Math.max(0, vales43Pendiente - vales43)
     const liquidada = nuevoMonto === 0 && nuevoBal === 0 && nuevoV20 === 0 && nuevoV43 === 0
     const metodo = vales20 > 0 || vales43 > 0 ? (monto > 0 ? 'mixto' : 'vale') : pagoForm.metodo_pago
     const entradaHistorial = { tipo: 'pago', fecha: pagoForm.fecha, monto: totalPago, balones, vales_20: vales20, vales_43: vales43, metodo_pago: metodo, notas: pagoForm.notas || null }
@@ -600,20 +606,42 @@ export default function Deudas() {
                 </div>
               )}
             </div>
-            {/* Preview del total pagado */}
-            {((parseFloat(pagoForm.monto)||0) + (parseInt(pagoForm.vales_20)||0)*20 + (parseInt(pagoForm.vales_43)||0)*43) > 0 && (
+            {/* Preview del pago */}
+            {((parseFloat(pagoForm.monto)||0) + (parseInt(pagoForm.vales_20)||0) + (parseInt(pagoForm.vales_43)||0) + (parseInt(pagoForm.balones)||0)) > 0 && (
               <div className="bg-emerald-900/20 border border-emerald-800/40 rounded-lg p-3 text-sm space-y-1">
                 {(parseFloat(pagoForm.monto)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">💵 Efectivo:</span><span className="text-white">S/ {(parseFloat(pagoForm.monto)||0).toLocaleString()}</span></div>}
-                {(parseInt(pagoForm.vales_20)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">🎫 {pagoForm.vales_20} vale(s) S/20:</span><span className="text-white">S/ {((parseInt(pagoForm.vales_20)||0)*20).toLocaleString()}</span></div>}
-                {(parseInt(pagoForm.vales_43)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">🎫 {pagoForm.vales_43} vale(s) S/43:</span><span className="text-white">S/ {((parseInt(pagoForm.vales_43)||0)*43).toLocaleString()}</span></div>}
-                <div className="flex justify-between border-t border-gray-700 pt-1 mt-1">
-                  <span className="text-gray-400 font-semibold">Total abono:</span>
-                  <span className="text-emerald-400 font-bold">S/ {((parseFloat(pagoForm.monto)||0) + (parseInt(pagoForm.vales_20)||0)*20 + (parseInt(pagoForm.vales_43)||0)*43).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Saldo restante:</span>
-                  <span className="text-yellow-400 font-bold">S/ {Math.max(0, (parseFloat(selected.monto_pendiente)||0) - (parseFloat(pagoForm.monto)||0) - (parseInt(pagoForm.vales_20)||0)*20 - (parseInt(pagoForm.vales_43)||0)*43).toLocaleString()}</span>
-                </div>
+                {(parseInt(pagoForm.vales_20)||0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">🎫 {pagoForm.vales_20} vale(s) S/20:</span>
+                    <span className="text-white">{parseInt(selected.vales_20_pendiente) > 0 ? `${pagoForm.vales_20} de ${selected.vales_20_pendiente} vales` : `S/ ${((parseInt(pagoForm.vales_20)||0)*20).toLocaleString()}`}</span>
+                  </div>
+                )}
+                {(parseInt(pagoForm.vales_43)||0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">🎫 {pagoForm.vales_43} vale(s) S/43:</span>
+                    <span className="text-white">{parseInt(selected.vales_43_pendiente) > 0 ? `${pagoForm.vales_43} de ${selected.vales_43_pendiente} vales` : `S/ ${((parseInt(pagoForm.vales_43)||0)*43).toLocaleString()}`}</span>
+                  </div>
+                )}
+                {(parseInt(pagoForm.balones)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">🔵 Balones:</span><span className="text-white">{pagoForm.balones}</span></div>}
+                {/* Saldo restante según tipo de deuda */}
+                {parseFloat(selected.monto_pendiente) > 0 && (
+                  <div className="flex justify-between border-t border-gray-700 pt-1">
+                    <span className="text-gray-400">Saldo dinero restante:</span>
+                    <span className="text-yellow-400 font-bold">S/ {Math.max(0, (parseFloat(selected.monto_pendiente)||0) - (parseFloat(pagoForm.monto)||0) - (parseInt(pagoForm.vales_20)||0)*20 - (parseInt(pagoForm.vales_43)||0)*43).toLocaleString()}</span>
+                  </div>
+                )}
+                {parseInt(selected.vales_20_pendiente) > 0 && (
+                  <div className="flex justify-between border-t border-gray-700 pt-1">
+                    <span className="text-gray-400">Vales S/20 restantes:</span>
+                    <span className="text-yellow-400 font-bold">{Math.max(0, (parseInt(selected.vales_20_pendiente)||0) - (parseInt(pagoForm.vales_20)||0))} vales</span>
+                  </div>
+                )}
+                {parseInt(selected.vales_43_pendiente) > 0 && (
+                  <div className="flex justify-between border-t border-gray-700 pt-1">
+                    <span className="text-gray-400">Vales S/43 restantes:</span>
+                    <span className="text-yellow-400 font-bold">{Math.max(0, (parseInt(selected.vales_43_pendiente)||0) - (parseInt(pagoForm.vales_43)||0))} vales</span>
+                  </div>
+                )}
               </div>
             )}
             {parseFloat(selected.monto_pendiente) > 0 && (
