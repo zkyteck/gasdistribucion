@@ -62,20 +62,14 @@ export default function Deudas() {
   const [editForm, setEditForm] = useState({ monto_pendiente: '', balones_pendiente: '', vales_20_pendiente: '', vales_43_pendiente: '', fecha_deuda: '', notas: '' })
   const [historialCompleto, setHistorialCompleto] = useState([])
   const [loadingHistorial, setLoadingHistorial] = useState(false)
-  const [almacenes, setAlmacenes] = useState([])
 
   useEffect(() => {
-    cargar(); cargarClientes(); cargarAlmacenes()
+    cargar(); cargarClientes()
     const canal = supabase.channel('deudas-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'deudas' }, () => cargar())
       .subscribe()
     return () => supabase.removeChannel(canal)
   }, [filtroEstado])
-
-  async function cargarAlmacenes() {
-    const { data } = await supabase.from('almacenes').select('id, nombre, stock_actual, balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg').eq('activo', true).order('nombre')
-    setAlmacenes(data || [])
-  }
 
   async function cargar() {
     setLoading(true)
@@ -203,6 +197,7 @@ export default function Deudas() {
     const vales20 = parseInt(pagoForm.vales_20) || 0
     const vales43 = parseInt(pagoForm.vales_43) || 0
     if (monto === 0 && balones === 0 && vales20 === 0 && vales43 === 0) { setError('Ingresa al menos un pago'); return }
+    // Los vales descuentan del monto en dinero
     const totalVales = (vales20 * 20) + (vales43 * 43)
     const totalPago = monto + totalVales
     if (totalPago > (parseFloat(selected.monto_pendiente) || 0)) { setError(`El total (S/${totalPago}) supera la deuda (S/${selected.monto_pendiente})`); return }
@@ -224,44 +219,8 @@ export default function Deudas() {
       historial: [...historialAnterior, entradaHistorial],
       updated_at: new Date().toISOString()
     }).eq('id', selected.id)
-    if (e) { setError(e.message); setSaving(false); return }
-
-    // ── Efectos en stock e ingresos ──────────────────────────────
-    const almacenId = selected.almacen_id
-    const tipoBalonDeuda = selected.historial?.[0]?.tipo_balon || '10kg'
-
-    // 1. Si devuelve balones → sumar a vacíos del almacén origen
-    if (balones > 0 && almacenId) {
-      const { data: almFresco } = await supabase.from('almacenes')
-        .select('balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg')
-        .eq('id', almacenId).single()
-      if (almFresco) {
-        const campoVacios = tipoBalonDeuda === '5kg' ? 'vacios_5kg' : tipoBalonDeuda === '45kg' ? 'vacios_45kg' : 'vacios_10kg'
-        await supabase.from('almacenes').update({
-          balones_vacios: (almFresco.balones_vacios || 0) + balones,
-          [campoVacios]: (almFresco[campoVacios] || 0) + balones,
-          updated_at: new Date().toISOString()
-        }).eq('id', almacenId)
-      }
-    }
-
-    // 2. Si paga dinero → registrar como ingreso en ventas (cobro de crédito)
-    if (totalPago > 0 && almacenId) {
-      await supabase.from('ventas').insert({
-        cliente_id: selected.cliente_id || null,
-        almacen_id: almacenId,
-        tipo_balon: tipoBalonDeuda,
-        fecha: pagoForm.fecha + 'T12:00:00-05:00',
-        cantidad: balones || 0,
-        precio_unitario: balones > 0 ? totalPago / balones : totalPago,
-        metodo_pago: 'cobro_credito',
-        notas: `Cobro de crédito — ${selected.nombre_deudor}${pagoForm.notas ? ' · ' + pagoForm.notas : ''}`,
-        usuario_id: perfil?.id || null
-      })
-    }
-    // ────────────────────────────────────────────────────────────
-
     setSaving(false)
+    if (e) { setError(e.message); return }
     setModal(null); cargar()
   }
 
@@ -609,40 +568,36 @@ export default function Deudas() {
             <div className="bg-red-900/20 border border-red-800/40 rounded-lg p-3">
               <p className="text-xs text-gray-500 mb-1">Deuda pendiente:</p>
               <p className="text-red-300 font-bold">{resumenDeuda(selected)}</p>
-              {selected.almacen_id && (
-                <p className="text-xs text-gray-500 mt-1">
-                  🏪 Almacén origen: <span className="text-blue-400 font-medium">{almacenes.find(a => a.id === selected.almacen_id)?.nombre || '—'}</span>
-                  {parseInt(selected.balones_pendiente) > 0 && <span className="text-gray-600"> · los balones devueltos irán aquí como vacíos</span>}
-                </p>
-              )}
-              {parseInt(selected.balones_pendiente) > 0 && selected.almacen_id && (
-                <p className="text-xs text-emerald-400/70 mt-1">💰 El cobro se registrará como ingreso en reportes</p>
-              )}
             </div>
             <p className="text-xs text-gray-500">¿Cuánto paga ahora? (puede ser parcial):</p>
             <div className="grid grid-cols-2 gap-3">
               {parseFloat(selected.monto_pendiente) > 0 && (
                 <div><label className="label">💰 Efectivo S/ <span className="text-gray-600 text-xs">(max {Number(selected.monto_pendiente).toLocaleString()})</span></label>
-                  <input type="number" min="0" step="0.50" className="input"
-                    placeholder="0"
+                  <input type="number" min="0" step="0.50" className="input" placeholder="0"
                     value={pagoForm.monto} onChange={e => setPagoForm(f => ({...f, monto: e.target.value}))} /></div>
               )}
               {parseInt(selected.balones_pendiente) > 0 && (
                 <div><label className="label">🔵 Balones <span className="text-gray-600 text-xs">(max {selected.balones_pendiente})</span></label>
-                  <input type="number" min="0" className="input"
-                    placeholder="0"
+                  <input type="number" min="0" className="input" placeholder="0"
                     value={pagoForm.balones} onChange={e => setPagoForm(f => ({...f, balones: e.target.value}))} /></div>
               )}
-              {/* Vales siempre visibles si hay deuda en dinero */}
-              {parseFloat(selected.monto_pendiente) > 0 && (
-                <div><label className="label">🎫 Vales S/20</label>
+              {(parseFloat(selected.monto_pendiente) > 0 || parseInt(selected.vales_20_pendiente) > 0) && (
+                <div>
+                  <label className="label">🎫 Vales S/20
+                    {parseInt(selected.vales_20_pendiente) > 0 && <span className="text-orange-400 text-xs ml-1">(debe {selected.vales_20_pendiente})</span>}
+                  </label>
                   <input type="number" min="0" className="input" placeholder="0"
-                    value={pagoForm.vales_20} onChange={e => setPagoForm(f => ({...f, vales_20: e.target.value}))} /></div>
+                    value={pagoForm.vales_20} onChange={e => setPagoForm(f => ({...f, vales_20: e.target.value}))} />
+                </div>
               )}
-              {parseFloat(selected.monto_pendiente) > 0 && (
-                <div><label className="label">🎫 Vales S/43</label>
+              {(parseFloat(selected.monto_pendiente) > 0 || parseInt(selected.vales_43_pendiente) > 0) && (
+                <div>
+                  <label className="label">🎫 Vales S/43
+                    {parseInt(selected.vales_43_pendiente) > 0 && <span className="text-orange-400 text-xs ml-1">(debe {selected.vales_43_pendiente})</span>}
+                  </label>
                   <input type="number" min="0" className="input" placeholder="0"
-                    value={pagoForm.vales_43} onChange={e => setPagoForm(f => ({...f, vales_43: e.target.value}))} /></div>
+                    value={pagoForm.vales_43} onChange={e => setPagoForm(f => ({...f, vales_43: e.target.value}))} />
+                </div>
               )}
             </div>
             {/* Preview del total pagado */}
