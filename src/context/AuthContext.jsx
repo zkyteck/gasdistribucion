@@ -23,7 +23,11 @@ export function AuthProvider({ children }) {
   }, [])
 
   async function cargarPerfil(authId) {
-    const { data } = await supabase.from('usuarios').select('*').eq('auth_id', authId).single()
+    const { data } = await supabase
+      .from('usuarios')
+      .select('*, almacenes(id, nombre)')
+      .eq('auth_id', authId)
+      .single()
     setPerfil(data)
     setLoading(false)
   }
