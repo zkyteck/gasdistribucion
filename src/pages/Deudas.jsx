@@ -225,8 +225,22 @@ export default function Deudas() {
       historial: [...historialAnterior, entradaHistorial],
       updated_at: new Date().toISOString()
     }).eq('id', selected.id)
+    if (e) { setSaving(false); setError(e.message); return }
+
+    // Si pagó con balones vacíos → sumarlos al almacén origen de la deuda
+    if (balones > 0 && selected.almacen_id) {
+      const { data: alm } = await supabase.from('almacenes')
+        .select('balones_vacios, vacios_10kg').eq('id', selected.almacen_id).single()
+      if (alm) {
+        await supabase.from('almacenes').update({
+          balones_vacios: (alm.balones_vacios || 0) + balones,
+          vacios_10kg: (alm.vacios_10kg || 0) + balones,
+          updated_at: new Date().toISOString()
+        }).eq('id', selected.almacen_id)
+      }
+    }
+
     setSaving(false)
-    if (e) { setError(e.message); return }
     setModal(null); cargar()
   }
 
