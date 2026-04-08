@@ -214,12 +214,18 @@ export default function Configuracion() {
       if (!resp.ok) { setError(authData.msg || authData.message || JSON.stringify(authData)); setSaving(false); return }
       // El trigger ya creó el perfil — solo actualizamos por si acaso
       const newAuthId = (authData.user || authData).id
-      await supabase.from('usuarios').update({
+      // Esperar un momento para que el trigger cree el perfil
+      await new Promise(r => setTimeout(r, 1000))
+      // Upsert — por si el trigger ya lo creó o no
+      await supabase.from('usuarios').upsert({
+        auth_id: newAuthId,
+        email: usuarioForm.email,
         nombre: usuarioForm.nombre,
         rol: usuarioForm.rol,
         permisos: permisosToSave,
-        almacen_id: usuarioForm.almacen_id || null
-      }).eq('auth_id', newAuthId)
+        almacen_id: usuarioForm.almacen_id || null,
+        activo: true
+      }, { onConflict: 'auth_id' })
       setModal(null); cargar()
     } catch(e) { setError(e.message) }
     setSaving(false)
