@@ -150,6 +150,31 @@ export default function Deudas() {
     setSaving(true); setError('')
     const tipoBalonDeuda = deudaForm.tipo_balon || '10kg'
     const entradaHistorial = { tipo: 'deuda', fecha: deudaForm.fecha, monto, balones, tipo_balon: balones > 0 ? tipoBalonDeuda : null, vales_20: vales20, vales_43: vales43, notas: deudaForm.notas || null }
+
+    // Buscar almacén del usuario o tienda principal
+    let almacenId = null
+    if (balones > 0) {
+      const { data: alms } = await supabase.from('almacenes').select('id, nombre, stock_actual').eq('activo', true)
+      const almPerfil = perfil?.almacen_id ? alms?.find(a => a.id === perfil.almacen_id) : null
+      const tienda = almPerfil || alms?.find(a => a.nombre?.toLowerCase().includes('tienda')) || alms?.[0]
+      if (tienda) {
+        almacenId = tienda.id
+        // Descontar llenos
+        await supabase.from('almacenes').update({
+          stock_actual: Math.max(0, (tienda.stock_actual || 0) - balones),
+          updated_at: new Date().toISOString()
+        }).eq('id', tienda.id)
+        // Descontar stock_por_tipo
+        const { data: spt } = await supabase.from('stock_por_tipo')
+          .select('stock_actual').eq('almacen_id', tienda.id).eq('tipo_balon', tipoBalonDeuda).single()
+        if (spt) {
+          await supabase.from('stock_por_tipo')
+            .update({ stock_actual: Math.max(0, spt.stock_actual - balones) })
+            .eq('almacen_id', tienda.id).eq('tipo_balon', tipoBalonDeuda)
+        }
+      }
+    }
+
     const { error: e } = await supabase.from('deudas').insert({
       cliente_id: deudaForm.cliente_id || null,
       nombre_deudor: deudaForm.nombre_deudor.trim(),
@@ -158,7 +183,8 @@ export default function Deudas() {
       cantidad_original: balones, cantidad_pendiente: balones,
       balones_pendiente: balones, vales_20_pendiente: vales20, vales_43_pendiente: vales43,
       fecha_deuda: deudaForm.fecha, estado: 'activa', notas: deudaForm.notas,
-      historial: [entradaHistorial], usuario_id: perfil?.id || null
+      historial: [entradaHistorial], usuario_id: perfil?.id || null,
+      almacen_id: almacenId
     })
     setSaving(false)
     if (e) { setError(e.message); return }
@@ -175,6 +201,27 @@ export default function Deudas() {
     const tipoBalonAdd = deudaForm.tipo_balon || '10kg'
     const entradaHistorial = { tipo: 'deuda', fecha: deudaForm.fecha, monto, balones, tipo_balon: balones > 0 ? tipoBalonAdd : null, vales_20: vales20, vales_43: vales43, notas: deudaForm.notas || null }
     const historialAnterior = deudaPendiente.historial || []
+
+    // Descontar llenos si agrega balones
+    if (balones > 0) {
+      const almacenId = deudaPendiente.almacen_id || perfil?.almacen_id
+      const { data: alms } = await supabase.from('almacenes').select('id, nombre, stock_actual').eq('activo', true)
+      const almPerfil = almacenId ? alms?.find(a => a.id === almacenId) : null
+      const tienda = almPerfil || alms?.find(a => a.nombre?.toLowerCase().includes('tienda')) || alms?.[0]
+      if (tienda) {
+        await supabase.from('almacenes').update({
+          stock_actual: Math.max(0, (tienda.stock_actual || 0) - balones),
+          updated_at: new Date().toISOString()
+        }).eq('id', tienda.id)
+        const { data: spt } = await supabase.from('stock_por_tipo')
+          .select('stock_actual').eq('almacen_id', tienda.id).eq('tipo_balon', tipoBalonAdd).single()
+        if (spt) {
+          await supabase.from('stock_por_tipo')
+            .update({ stock_actual: Math.max(0, spt.stock_actual - balones) })
+            .eq('almacen_id', tienda.id).eq('tipo_balon', tipoBalonAdd)
+        }
+      }
+    }
     const { error: e } = await supabase.from('deudas').update({
       monto_pendiente: (parseFloat(deudaPendiente.monto_pendiente) || 0) + monto,
       monto_original: (parseFloat(deudaPendiente.monto_original) || 0) + monto,
@@ -227,16 +274,19 @@ export default function Deudas() {
     }).eq('id', selected.id)
     if (e) { setSaving(false); setError(e.message); return }
 
-    // Si pagó con balones vacíos → sumarlos al almacén origen de la deuda
-    if (balones > 0 && selected.almacen_id) {
-      const { data: alm } = await supabase.from('almacenes')
-        .select('balones_vacios, vacios_10kg').eq('id', selected.almacen_id).single()
-      if (alm) {
+    // Si pagó con balones vacíos → sumarlos al almacén del usuario o al principal
+    if (balones > 0) {
+      const { data: almacenes } = await supabase.from('almacenes')
+        .select('id, balones_vacios, vacios_10kg, nombre').eq('activo', true)
+      // Usar almacén del perfil si tiene, sino buscar tienda
+      const almacenPerfil = perfil?.almacen_id ? almacenes?.find(a => a.id === perfil.almacen_id) : null
+      const tienda = almacenPerfil || almacenes?.find(a => a.nombre?.toLowerCase().includes('tienda')) || almacenes?.[0]
+      if (tienda) {
         await supabase.from('almacenes').update({
-          balones_vacios: (alm.balones_vacios || 0) + balones,
-          vacios_10kg: (alm.vacios_10kg || 0) + balones,
+          balones_vacios: (tienda.balones_vacios || 0) + balones,
+          vacios_10kg: (tienda.vacios_10kg || 0) + balones,
           updated_at: new Date().toISOString()
-        }).eq('id', selected.almacen_id)
+        }).eq('id', tienda.id)
       }
     }
 
