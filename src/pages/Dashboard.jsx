@@ -78,62 +78,46 @@ export default function Dashboard() {
     setLoading(true)
     try {
       const hoy = new Date().toISOString().split('T')[0]
+      const almacenId = perfil?.almacen_id // null = admin ve todo
 
       // Ventas de hoy
-      const { data: ventasHoy } = await supabase
-        .from('ventas')
-        .select('cantidad, precio_unitario')
-        .gte('fecha', hoy)
-
+      let ventasQuery = supabase.from('ventas').select('cantidad, precio_unitario').gte('fecha', hoy)
+      if (almacenId) ventasQuery = ventasQuery.eq('almacen_id', almacenId)
+      const { data: ventasHoy } = await ventasQuery
       const montoHoy = ventasHoy?.reduce((s, v) => s + (v.cantidad * v.precio_unitario), 0) || 0
 
       // Stock total llenos
-      const { data: stockView } = await supabase
-        .from('vista_stock_total')
-        .select('*')
-      const stockTotal = stockView?.reduce((s, r) => s + r.stock_actual, 0) || 0
+      let stockQuery = supabase.from('almacenes').select('stock_actual, balones_vacios, nombre').eq('activo', true)
+      if (almacenId) stockQuery = stockQuery.eq('id', almacenId)
+      const { data: almacenesData } = await stockQuery
+      const stockTotal = almacenesData?.reduce((s, a) => s + (a.stock_actual || 0), 0) || 0
+      const stockVacios = almacenesData?.reduce((s, a) => s + (a.balones_vacios || 0), 0) || 0
 
-      // Balones vacíos en almacenes
-      const { data: almacenes } = await supabase
-        .from('almacenes')
-        .select('balones_vacios')
-        .eq('activo', true)
-      const stockVacios = almacenes?.reduce((s, a) => s + (a.balones_vacios || 0), 0) || 0
-
-      // Balones en deuda (pendientes de cobro)
-      const { data: deudasBal } = await supabase
-        .from('deudas')
-        .select('balones_pendiente')
-        .neq('estado', 'liquidada')
+      // Balones en deuda
+      let deudasQuery = supabase.from('deudas').select('balones_pendiente').neq('estado', 'liquidada')
+      if (almacenId) deudasQuery = deudasQuery.eq('almacen_id', almacenId)
+      const { data: deudasBal } = await deudasQuery
       const balonesEnDeuda = deudasBal?.reduce((s, d) => s + (parseInt(d.balones_pendiente) || 0), 0) || 0
 
-      // Vales del mes (usando lote_dia)
+      // Vales del mes
       const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
       const finMes = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]
-      const { count: valesMes } = await supabase
-        .from('vales_fise')
-        .select('*', { count: 'exact', head: true })
-        .gte('lote_dia', inicioMes)
-        .lte('lote_dia', finMes)
+      const { count: valesMes } = await supabase.from('vales_fise').select('*', { count: 'exact', head: true })
+        .gte('lote_dia', inicioMes).lte('lote_dia', finMes)
 
       // Deudas activas
-      const { count: deudasActivas } = await supabase
-        .from('deudas')
-        .select('*', { count: 'exact', head: true })
-        .neq('estado', 'liquidada')
+      let deudasCountQuery = supabase.from('deudas').select('*', { count: 'exact', head: true }).neq('estado', 'liquidada')
+      if (almacenId) deudasCountQuery = deudasCountQuery.eq('almacen_id', almacenId)
+      const { count: deudasActivas } = await deudasCountQuery
 
-      // Distribuidores activos
-      const { count: distribuidores } = await supabase
-        .from('distribuidores')
-        .select('*', { count: 'exact', head: true })
-        .eq('activo', true)
+      // Distribuidores activos — solo admin ve
+      const { count: distribuidores } = !almacenId
+        ? await supabase.from('distribuidores').select('*', { count: 'exact', head: true }).eq('activo', true)
+        : { count: 0 }
 
       setStats({
         ventasHoy: ventasHoy?.length || 0,
-        montoHoy,
-        stockTotal,
-        stockVacios,
-        balonesEnDeuda,
+        montoHoy, stockTotal, stockVacios, balonesEnDeuda,
         valesMes: valesMes || 0,
         deudasActivas: deudasActivas || 0,
         distribuidores: distribuidores || 0,
@@ -144,12 +128,10 @@ export default function Dashboard() {
       for (let i = 6; i >= 0; i--) {
         const fecha = subDays(new Date(), i)
         const fechaStr = fecha.toISOString().split('T')[0]
-        const { data } = await supabase
-          .from('ventas')
-          .select('cantidad, precio_unitario')
-          .gte('fecha', fechaStr)
-          .lt('fecha', subDays(fecha, -1).toISOString().split('T')[0])
-
+        let diaQuery = supabase.from('ventas').select('cantidad, precio_unitario')
+          .gte('fecha', fechaStr).lt('fecha', subDays(fecha, -1).toISOString().split('T')[0])
+        if (almacenId) diaQuery = diaQuery.eq('almacen_id', almacenId)
+        const { data } = await diaQuery
         dias.push({
           dia: format(fecha, 'EEE', { locale: es }),
           ventas: data?.reduce((s, v) => s + (v.cantidad * v.precio_unitario), 0) || 0,
@@ -158,12 +140,12 @@ export default function Dashboard() {
       }
       setVentasSemana(dias)
 
-      // Stock por almacén/distribuidor
-      setStockAlmacenes(stockView?.map(s => ({
-        nombre: s.nombre.length > 15 ? s.nombre.substring(0, 15) + '…' : s.nombre,
-        stock: s.stock_actual,
-        tipo: s.origen,
-      })) || [])
+      // Stock por almacén
+      setStockAlmacenes((almacenesData || []).map(a => ({
+        nombre: a.nombre.length > 15 ? a.nombre.substring(0, 15) + '…' : a.nombre,
+        stock: a.stock_actual || 0,
+        tipo: 'almacen',
+      })))
 
       setLastUpdate(new Date())
     } catch (e) {
