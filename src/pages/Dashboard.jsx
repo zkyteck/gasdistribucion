@@ -72,7 +72,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState(new Date())
 
-  useEffect(() => { cargarDatos() }, [])
+  useEffect(() => { 
+    if (perfil !== null) cargarDatos() 
+  }, [perfil])
 
   async function cargarDatos() {
     setLoading(true)
