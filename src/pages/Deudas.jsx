@@ -532,6 +532,10 @@ export default function Deudas() {
             )}
 
             <div className="grid grid-cols-2 gap-3">
+              <div><label className="label">💰 Dinero S/</label>
+                <input type="number" min="0" step="0.50" className="input" placeholder="0.00"
+                  value={deudaForm.monto} onChange={e => setDeudaForm(f => ({...f, monto: e.target.value}))} /></div>
+              <div><label className="label">🔵 Balones</label>
                 <input type="number" min="0" className="input" placeholder="0"
                   value={deudaForm.balones} onChange={e => setDeudaForm(f => ({...f, balones: e.target.value}))} />
                 {parseInt(deudaForm.balones) > 0 && (
