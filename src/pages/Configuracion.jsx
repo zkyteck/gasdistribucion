@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase, supabaseAdmin } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import { Plus, X, AlertCircle, Edit2, Eye, EyeOff, Save } from 'lucide-react'
 
 const TIPOS_BALON = ['5kg', '10kg', '45kg']
