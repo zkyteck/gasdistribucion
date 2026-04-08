@@ -36,14 +36,15 @@ export default function Configuracion() {
   const [editandoDistPrecios, setEditandoDistPrecios] = useState({})
   const [costosCompra, setCostosCompra] = useState({ '5kg': '', '10kg': '', '45kg': '' })
   const [savingCostos, setSavingCostos] = useState(false)
-  const [preciosVales, setPreciosVales] = useState({ '20': '20', '43': '43' })
-  const [savingVales, setSavingVales] = useState(false)
+  const [almacenesLista, setAlmacenesLista] = useState([])
 
   const [provForm, setProvForm] = useState({ nombre: '', telefono: '', direccion: '', ruc: '' })
-  const [usuarioForm, setUsuarioForm] = useState({ nombre: '', email: '', password: '', rol: 'trabajador' })
+  const [usuarioForm, setUsuarioForm] = useState({ nombre: '', email: '', password: '', rol: 'trabajador', almacen_id: '' })
   const [permisos, setPermisos] = useState({ ventas:false, vales:false, acuenta:false, clientes:false, deudas:false, inventario:false, distribuidores:false, almacenes:false, reportes:false, configuracion:false })
   const [editUsuarioSelected, setEditUsuarioSelected] = useState(null)
   const [editPermisos, setEditPermisos] = useState({})
+  const [editPassword, setEditPassword] = useState('')
+  const [showEditPass, setShowEditPass] = useState(false)
 
   useEffect(() => { cargar() }, [tab])
 
@@ -92,10 +93,9 @@ export default function Configuracion() {
       setEditandoDistPrecios(mapa)
       setPreciosDistTipo(pdt || [])
     } else if (tab === 'costos') {
-      const [{ data }, { data: dists }, { data: pdt }] = await Promise.all([
+      const [{ data }, { data: dists }] = await Promise.all([
         supabase.from('configuracion').select('*').in('clave', ['costo_5kg','costo_10kg','costo_45kg']),
-        supabase.from('distribuidores').select('id, nombre, precio_base').eq('activo', true).order('nombre'),
-        supabase.from('precio_distribuidor_tipo').select('*')
+        supabase.from('distribuidores').select('id, nombre, precio_base').eq('activo', true).order('nombre')
       ])
       const mapa = { '5kg': '', '10kg': '', '45kg': '' }
       data?.forEach(r => {
@@ -105,26 +105,17 @@ export default function Configuracion() {
       })
       setCostosCompra(mapa)
       setDistribuidores(dists || [])
-      setPreciosDistTipo(pdt || [])
-    } else if (tab === 'vales') {
-      const { data } = await supabase.from('configuracion').select('*')
-        .in('clave', ['precio_vale_20','precio_vale_43','precio_acuenta_20','precio_acuenta_43'])
-      const mapa = { fise_20: '20', fise_43: '43', acuenta_20: '20', acuenta_43: '43' }
-      data?.forEach(r => {
-        if (r.clave === 'precio_vale_20') mapa['fise_20'] = r.valor || '20'
-        if (r.clave === 'precio_vale_43') mapa['fise_43'] = r.valor || '43'
-        if (r.clave === 'precio_acuenta_20') mapa['acuenta_20'] = r.valor || '20'
-        if (r.clave === 'precio_acuenta_43') mapa['acuenta_43'] = r.valor || '43'
-      })
-      setPreciosVales(mapa)
     } else if (tab === 'proveedores') {
       const { data } = await supabase.from('proveedores').select('*').eq('activo', true).order('nombre')
       setProveedores(data || [])
     } else if (tab === 'usuarios') {
-      const { data } = await supabase.from('usuarios').select('*').order('nombre')
+      const [{ data }, { data: alms }] = await Promise.all([
+        supabase.from('usuarios').select('*, almacenes(nombre)').order('nombre'),
+        supabase.from('almacenes').select('id, nombre').eq('activo', true).order('nombre')
+      ])
       setUsuarios(data || [])
-    }
-    setLoading(false)
+      setAlmacenesLista(alms || [])
+    }    setLoading(false)
   }
 
   async function guardarCostos() {
@@ -136,7 +127,6 @@ export default function Configuracion() {
     ])
     setSavingCostos(false)
     alert('✅ Costos guardados correctamente')
-    cargar()
   }
 
   async function guardarPreciosTienda() {
@@ -185,18 +175,6 @@ export default function Configuracion() {
     cargar()
   }
 
-  async function guardarPreciosVales() {
-    setSavingVales(true)
-    await Promise.all([
-      supabase.from('configuracion').upsert({ clave: 'precio_vale_20', valor: preciosVales['fise_20']?.toString() || '20', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
-      supabase.from('configuracion').upsert({ clave: 'precio_vale_43', valor: preciosVales['fise_43']?.toString() || '43', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
-      supabase.from('configuracion').upsert({ clave: 'precio_acuenta_20', valor: preciosVales['acuenta_20']?.toString() || '20', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
-      supabase.from('configuracion').upsert({ clave: 'precio_acuenta_43', valor: preciosVales['acuenta_43']?.toString() || '43', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
-    ])
-    setSavingVales(false)
-    alert('✅ Precios de vales guardados correctamente')
-  }
-
   async function guardarProveedor() {
     if (!provForm.nombre) { setError('El nombre es obligatorio'); return }
     setSaving(true); setError('')
@@ -236,7 +214,12 @@ export default function Configuracion() {
       if (!resp.ok) { setError(authData.msg || authData.message || JSON.stringify(authData)); setSaving(false); return }
       // El trigger ya creó el perfil — solo actualizamos por si acaso
       const newAuthId = (authData.user || authData).id
-      await supabase.from('usuarios').update({ nombre: usuarioForm.nombre, rol: usuarioForm.rol, permisos: permisosToSave }).eq('auth_id', newAuthId)
+      await supabase.from('usuarios').update({
+        nombre: usuarioForm.nombre,
+        rol: usuarioForm.rol,
+        permisos: permisosToSave,
+        almacen_id: usuarioForm.almacen_id || null
+      }).eq('auth_id', newAuthId)
       setModal(null); cargar()
     } catch(e) { setError(e.message) }
     setSaving(false)
@@ -270,8 +253,26 @@ export default function Configuracion() {
     const { error: e } = await supabase.from('usuarios').update({
       nombre: editUsuarioSelected.nombre,
       rol: editUsuarioSelected.rol,
-      permisos: permisosToSave
+      permisos: permisosToSave,
+      almacen_id: editUsuarioSelected.almacen_id || null
     }).eq('id', editUsuarioSelected.id)
+    if (e) { setError(e.message); setSaving(false); return }
+    // Cambiar contraseña si se ingresó una nueva
+    if (editPassword && editPassword.length >= 6 && editUsuarioSelected.auth_id) {
+      const serviceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY
+      if (serviceKey) {
+        await fetch(`${import.meta.env.VITE_SUPABASE_URL}/auth/v1/admin/users/${editUsuarioSelected.auth_id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'apikey': serviceKey, 'Authorization': `Bearer ${serviceKey}` },
+          body: JSON.stringify({ password: editPassword })
+        })
+      }
+    }
+    setSaving(false)
+    setEditPassword('')
+    setModal(null)
+    cargar()
+  }
     setSaving(false)
     if (e) { setError(e.message); return }
     setModal(null)
@@ -290,7 +291,6 @@ export default function Configuracion() {
           ['precios','💰 Precios tienda'],
           ['distribuidores_precios','🚛 Precios distribuidores'],
           ['costos','💲 Costos compra'],
-          ['vales','🎫 Vales FISE'],
           ['proveedores','🚚 Proveedores'],
           ['usuarios','👤 Usuarios']
         ].map(([key, label]) => (
@@ -431,21 +431,12 @@ export default function Configuracion() {
                       <>
                         <p className="text-gray-400 font-medium mt-3 mb-1 pt-2 border-t border-gray-700">🚛 Distribuidores — Ganancia por precio:</p>
                         {distribuidores.map(d => {
-                          // Usar precio específico por tipo, si no existe usar precio_base solo para 10kg
-                          const precioTipo = preciosDistTipo.find(p => p.distribuidor_id === d.id && p.tipo_balon === tipo)?.precio
-                          const precioUsar = precioTipo || (tipo === '10kg' ? d.precio_base : 0)
-                          if (!precioUsar || precioUsar === 0) return (
-                            <div key={d.id} className="flex justify-between items-center">
-                              <span className="text-gray-500">{d.nombre}</span>
-                              <span className="text-gray-600 text-xs">No vende {tipo}</span>
-                            </div>
-                          )
-                          const gan = precioUsar - parseFloat(costosCompra[tipo])
+                          const gan = (d.precio_base || 0) - parseFloat(costosCompra[tipo])
                           return (
                             <div key={d.id} className="flex justify-between items-center">
                               <span className="text-gray-500">{d.nombre}</span>
                               <span className={`font-bold ${gan > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                S/{precioUsar} → {gan > 0 ? '+' : ''}S/{gan.toFixed(2)}
+                                S/{d.precio_base} → +S/{gan.toFixed(2)}
                               </span>
                             </div>
                           )
@@ -462,72 +453,6 @@ export default function Configuracion() {
             <p>• Cuando registras una <strong className="text-white">compra nueva</strong>, estos precios se actualizan automáticamente.</p>
             <p className="mt-1">• El reporte de <strong className="text-white">Ganancias</strong> usa estos precios para calcular cuánto ganaste por cada balón vendido.</p>
             <p className="mt-1">• Se calcula por separado para <strong className="text-white">Tienda</strong> y <strong className="text-white">Distribuidores</strong>.</p>
-          </div>
-        </div>
-      )}
-
-      {/* Tab Vales FISE */}
-      {tab === 'vales' && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <p className="text-gray-400 text-sm">Configura el valor de cada tipo de vale por separado</p>
-            <button onClick={guardarPreciosVales} disabled={savingVales} className="btn-primary">
-              <Save className="w-4 h-4" />{savingVales ? 'Guardando...' : 'Guardar cambios'}
-            </button>
-          </div>
-
-          {/* Vales procesados FISE */}
-          <div>
-            <p className="text-white font-semibold mb-3">🏦 Vales procesados (FISE)</p>
-            <p className="text-xs text-gray-500 mb-3">Valor que se usa al registrar vales del día en Vales FISE → afecta el fondo acumulado y totales del día.</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {[['20','🟡'],['43','🟠']].map(([tipo, icon]) => (
-                <div key={tipo} className="card border border-yellow-800/30">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-2xl">{icon}</span>
-                    <p className="text-white font-semibold">Vale FISE tipo "{tipo}"</p>
-                  </div>
-                  <label className="label">Valor S/</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">S/</span>
-                    <input type="number" min="1" step="1" className="input pl-9 text-xl font-bold text-center"
-                      value={preciosVales[`fise_${tipo}`] || tipo}
-                      onChange={e => setPreciosVales(v => ({...v, [`fise_${tipo}`]: e.target.value}))}
-                      placeholder={tipo} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Vales A Cuenta */}
-          <div>
-            <p className="text-white font-semibold mb-3">📋 Vales A Cuenta</p>
-            <p className="text-xs text-gray-500 mb-3">Valor que se usa cuando un cliente deja vales como depósito en A Cuenta → afecta el cálculo del depósito.</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {[['20','🟡'],['43','🟠']].map(([tipo, icon]) => (
-                <div key={tipo} className="card border border-blue-800/30">
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-2xl">{icon}</span>
-                    <p className="text-white font-semibold">Vale A Cuenta tipo "{tipo}"</p>
-                  </div>
-                  <label className="label">Valor S/</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">S/</span>
-                    <input type="number" min="1" step="1" className="input pl-9 text-xl font-bold text-center"
-                      value={preciosVales[`acuenta_${tipo}`] || tipo}
-                      onChange={e => setPreciosVales(v => ({...v, [`acuenta_${tipo}`]: e.target.value}))}
-                      placeholder={tipo} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-yellow-900/20 border border-yellow-800/40 rounded-xl p-4 text-sm text-gray-400">
-            <p className="text-yellow-300 font-medium mb-1">⚠️ Nota</p>
-            <p>• Los registros ya guardados mantienen su monto original. Solo afecta a los nuevos registros.</p>
-            <p className="mt-1">• Puedes volver a S/20 y S/43 cuando el MIDIS los restaure.</p>
           </div>
         </div>
       )}
@@ -586,10 +511,21 @@ export default function Configuracion() {
                   <div className="flex-1 min-w-0">
                     <p className="text-white font-semibold text-sm">{u.nombre}</p>
                     <p className="text-gray-500 text-xs truncate">{u.email}</p>
+                    {u.almacen_id && (
+                      <p className="text-blue-400 text-xs mt-0.5">🏪 {u.almacenes?.nombre || 'Almacén asignado'}</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={u.rol === 'admin' ? 'badge-blue' : 'badge-green'}>{u.rol === 'admin' ? '👑 Admin' : '👷 Trabajador'}</span>
-                    <button onClick={() => { setEditUsuarioSelected({...u}); setEditPermisos(u.permisos || {}); setError(''); setModal('editUsuario') }}
+                    <button onClick={async () => {
+                      setEditUsuarioSelected({...u}); setEditPermisos(u.permisos || {}); setError(''); setEditPassword('')
+                      // Cargar almacenes si no están cargados
+                      if (almacenesLista.length === 0) {
+                        const { data: alms } = await supabase.from('almacenes').select('id, nombre').eq('activo', true).order('nombre')
+                        setAlmacenesLista(alms || [])
+                      }
+                      setModal('editUsuario')
+                    }}
                       className="text-xs bg-gray-700/50 hover:bg-gray-700 border border-gray-600 text-gray-300 px-2 py-1 rounded-lg transition-all">
                       ✏️
                     </button>
@@ -644,6 +580,17 @@ export default function Configuracion() {
             </div>
             {usuarioForm.rol === 'trabajador' && (
               <div>
+                <label className="label">🏪 Almacén asignado</label>
+                <select className="input" value={usuarioForm.almacen_id}
+                  onChange={e => setUsuarioForm(f => ({...f, almacen_id: e.target.value}))}>
+                  <option value="">Sin almacén específico (ve todos)</option>
+                  {almacenesLista.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Si asignas un almacén, el usuario solo operará en ese almacén.</p>
+              </div>
+            )}
+            {usuarioForm.rol === 'trabajador' && (
+              <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="label mb-0">Módulos con acceso</label>
                   <div className="flex gap-2">
@@ -675,12 +622,38 @@ export default function Configuracion() {
       )}
 
       {modal === 'editUsuario' && editUsuarioSelected && (
-        <Modal title="Editar usuario" onClose={() => setModal(null)}>
+        <Modal title="Editar usuario" onClose={() => { setModal(null); setEditPassword('') }}>
           <div className="space-y-4">
             {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
+
+            {/* Email (solo lectura) */}
+            <div>
+              <label className="label">Email</label>
+              <input className="input opacity-60 cursor-not-allowed" value={editUsuarioSelected.email || ''} readOnly />
+            </div>
+
             <div><label className="label">Nombre</label>
               <input className="input" value={editUsuarioSelected.nombre} onChange={e => setEditUsuarioSelected(u => ({...u, nombre: e.target.value}))} />
             </div>
+
+            {/* Cambiar contraseña */}
+            <div>
+              <label className="label">Nueva contraseña <span className="text-gray-600 font-normal">(dejar vacío para no cambiar)</span></label>
+              <div className="relative">
+                <input type={showEditPass ? 'text' : 'password'} className="input pr-10"
+                  placeholder="Mínimo 6 caracteres"
+                  value={editPassword}
+                  onChange={e => setEditPassword(e.target.value)} />
+                <button type="button" onClick={() => setShowEditPass(p => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                  {showEditPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {editPassword && editPassword.length < 6 && (
+                <p className="text-xs text-red-400 mt-1">Mínimo 6 caracteres</p>
+              )}
+            </div>
+
             <div>
               <label className="label">Rol</label>
               <div className="grid grid-cols-2 gap-3">
@@ -696,6 +669,21 @@ export default function Configuracion() {
                 </button>
               </div>
             </div>
+
+            {/* Almacén asignado */}
+            {editUsuarioSelected.rol === 'trabajador' && (
+              <div>
+                <label className="label">🏪 Almacén asignado</label>
+                <select className="input" value={editUsuarioSelected.almacen_id || ''}
+                  onChange={e => setEditUsuarioSelected(u => ({...u, almacen_id: e.target.value || null}))}>
+                  <option value="">Sin almacén específico (ve todos)</option>
+                  {almacenesLista.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Si asignas un almacén, el usuario solo operará en ese almacén.</p>
+              </div>
+            )}
+
+            {/* Módulos */}
             {editUsuarioSelected.rol === 'trabajador' && (
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -720,13 +708,17 @@ export default function Configuracion() {
                 </div>
               </div>
             )}
+
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setModal(null)} className="btn-secondary">Cancelar</button>
+              <button onClick={() => { setModal(null); setEditPassword('') }} className="btn-secondary">Cancelar</button>
               <button onClick={eliminarUsuario} disabled={saving || editUsuarioSelected?.rol === 'admin'}
                 className="px-4 py-2 rounded-xl border border-red-600/40 bg-red-900/20 text-red-400 text-sm font-medium hover:bg-red-900/30 transition-all disabled:opacity-30">
                 🗑️ Eliminar
               </button>
-              <button onClick={guardarEditUsuario} disabled={saving} className="btn-primary flex-1 justify-center">{saving ? 'Guardando...' : '✓ Guardar'}</button>
+              <button onClick={guardarEditUsuario} disabled={saving || (editPassword && editPassword.length < 6)}
+                className="btn-primary flex-1 justify-center disabled:opacity-50">
+                {saving ? 'Guardando...' : '✓ Guardar'}
+              </button>
             </div>
           </div>
         </Modal>
