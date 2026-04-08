@@ -273,11 +273,6 @@ export default function Configuracion() {
     setModal(null)
     cargar()
   }
-    setSaving(false)
-    if (e) { setError(e.message); return }
-    setModal(null)
-    cargar()
-  }
 
   return (
     <div className="space-y-6">
