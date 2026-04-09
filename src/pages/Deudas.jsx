@@ -62,11 +62,9 @@ export default function Deudas() {
   const [editForm, setEditForm] = useState({ monto_pendiente: '', balones_pendiente: '', vales_20_pendiente: '', vales_43_pendiente: '', fecha_deuda: '', notas: '' })
   const [historialCompleto, setHistorialCompleto] = useState([])
   const [loadingHistorial, setLoadingHistorial] = useState(false)
-  const [almacenes, setAlmacenes] = useState([])
-  const [almacenDeudaId, setAlmacenDeudaId] = useState('')
 
   useEffect(() => {
-    cargar(); cargarClientes(); cargarAlmacenes()
+    cargar(); cargarClientes()
     const canal = supabase.channel('deudas-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'deudas' }, () => cargar())
       .subscribe()
@@ -118,22 +116,18 @@ export default function Deudas() {
 
   async function cargarClientes() {
     const { data: cData } = await supabase.from('clientes').select('id, nombre').eq('es_varios', false).order('nombre')
+    // Also include existing deudors as suggestions
     const { data: dData } = await supabase.from('deudas').select('nombre_deudor').in('estado', ['activa','pagada_parcial'])
     const deudorNames = (dData || []).map(d => ({ id: 'deudor_' + d.nombre_deudor, nombre: d.nombre_deudor }))
     const clienteNames = cData || []
+    // Merge, deduplicate by name
     const allNames = [...clienteNames]
     deudorNames.forEach(d => {
-      if (!allNames.find(c => c.nombre.toLowerCase() === d.nombre.toLowerCase())) allNames.push(d)
+      if (!allNames.find(c => c.nombre.toLowerCase() === d.nombre.toLowerCase())) {
+        allNames.push(d)
+      }
     })
     setClientes(allNames)
-  }
-
-  async function cargarAlmacenes() {
-    const { data } = await supabase.from('almacenes').select('id, nombre').eq('activo', true).order('nombre')
-    setAlmacenes(data || [])
-    // Pre-seleccionar tienda principal
-    const tienda = (data || []).find(a => a.nombre?.toLowerCase().includes('tienda'))
-    setAlmacenDeudaId(tienda?.id || data?.[0]?.id || '')
   }
 
   async function guardarDeuda(forzarNuevo = false) {
@@ -156,28 +150,6 @@ export default function Deudas() {
     setSaving(true); setError('')
     const tipoBalonDeuda = deudaForm.tipo_balon || '10kg'
     const entradaHistorial = { tipo: 'deuda', fecha: deudaForm.fecha, monto, balones, tipo_balon: balones > 0 ? tipoBalonDeuda : null, vales_20: vales20, vales_43: vales43, notas: deudaForm.notas || null }
-
-    // Determinar almacén: trabajador usa el suyo, admin usa el selector
-    let almacenId = perfil?.almacen_id || almacenDeudaId || null
-
-    // Descontar llenos si hay balones
-    if (balones > 0 && almacenId) {
-      const { data: alm } = await supabase.from('almacenes').select('stock_actual').eq('id', almacenId).single()
-      if (alm) {
-        await supabase.from('almacenes').update({
-          stock_actual: Math.max(0, (alm.stock_actual || 0) - balones),
-          updated_at: new Date().toISOString()
-        }).eq('id', almacenId)
-        const { data: spt } = await supabase.from('stock_por_tipo')
-          .select('stock_actual').eq('almacen_id', almacenId).eq('tipo_balon', tipoBalonDeuda).single()
-        if (spt) {
-          await supabase.from('stock_por_tipo')
-            .update({ stock_actual: Math.max(0, spt.stock_actual - balones) })
-            .eq('almacen_id', almacenId).eq('tipo_balon', tipoBalonDeuda)
-        }
-      }
-    }
-
     const { error: e } = await supabase.from('deudas').insert({
       cliente_id: deudaForm.cliente_id || null,
       nombre_deudor: deudaForm.nombre_deudor.trim(),
@@ -186,8 +158,7 @@ export default function Deudas() {
       cantidad_original: balones, cantidad_pendiente: balones,
       balones_pendiente: balones, vales_20_pendiente: vales20, vales_43_pendiente: vales43,
       fecha_deuda: deudaForm.fecha, estado: 'activa', notas: deudaForm.notas,
-      historial: [entradaHistorial], usuario_id: perfil?.id || null,
-      almacen_id: almacenId
+      historial: [entradaHistorial], usuario_id: perfil?.id || null
     })
     setSaving(false)
     if (e) { setError(e.message); return }
@@ -226,16 +197,21 @@ export default function Deudas() {
     const vales20 = parseInt(pagoForm.vales_20) || 0
     const vales43 = parseInt(pagoForm.vales_43) || 0
     if (monto === 0 && balones === 0 && vales20 === 0 && vales43 === 0) { setError('Ingresa al menos un pago'); return }
-    // Los vales descuentan del monto en dinero
-    const totalVales = (vales20 * 20) + (vales43 * 43)
-    const totalPago = monto + totalVales
-    if (totalPago > (parseFloat(selected.monto_pendiente) || 0)) { setError(`El total (S/${totalPago}) supera la deuda (S/${selected.monto_pendiente})`); return }
+    const montoPendiente = parseFloat(selected.monto_pendiente) || 0
+    const vales20Pendiente = parseInt(selected.vales_20_pendiente) || 0
+    const vales43Pendiente = parseInt(selected.vales_43_pendiente) || 0
+    // Validar según tipo de deuda
+    const totalValesEnDinero = (vales20 * 20) + (vales43 * 43)
+    const totalPago = monto + (montoPendiente > 0 ? totalValesEnDinero : 0)
+    if (montoPendiente > 0 && totalPago > montoPendiente) { setError(`El total (S/${totalPago}) supera la deuda (S/${montoPendiente})`); return }
+    if (vales20Pendiente > 0 && vales20 > vales20Pendiente) { setError(`Máximo ${vales20Pendiente} vales S/20`); return }
+    if (vales43Pendiente > 0 && vales43 > vales43Pendiente) { setError(`Máximo ${vales43Pendiente} vales S/43`); return }
     if (balones > (parseInt(selected.balones_pendiente) || 0)) { setError(`Máximo ${selected.balones_pendiente} balones`); return }
     setSaving(true); setError('')
-    const nuevoMonto = Math.max(0, (parseFloat(selected.monto_pendiente) || 0) - totalPago)
+    const nuevoMonto = Math.max(0, montoPendiente - totalPago)
     const nuevoBal = Math.max(0, (parseInt(selected.balones_pendiente) || 0) - balones)
-    const nuevoV20 = Math.max(0, (parseInt(selected.vales_20_pendiente) || 0) - vales20)
-    const nuevoV43 = Math.max(0, (parseInt(selected.vales_43_pendiente) || 0) - vales43)
+    const nuevoV20 = Math.max(0, vales20Pendiente - vales20)
+    const nuevoV43 = Math.max(0, vales43Pendiente - vales43)
     const liquidada = nuevoMonto === 0 && nuevoBal === 0 && nuevoV20 === 0 && nuevoV43 === 0
     const metodo = vales20 > 0 || vales43 > 0 ? (monto > 0 ? 'mixto' : 'vale') : pagoForm.metodo_pago
     const entradaHistorial = { tipo: 'pago', fecha: pagoForm.fecha, monto: totalPago, balones, vales_20: vales20, vales_43: vales43, metodo_pago: metodo, notas: pagoForm.notas || null }
@@ -248,6 +224,18 @@ export default function Deudas() {
       historial: [...historialAnterior, entradaHistorial],
       updated_at: new Date().toISOString()
     }).eq('id', selected.id)
+    // Si pagó con balones vacíos → sumarlos al almacén
+    if (balones > 0) {
+      const { data: alms } = await supabase.from('almacenes').select('id, balones_vacios, vacios_10kg, nombre').eq('activo', true)
+      const tienda = alms?.find(a => a.nombre?.toLowerCase().includes('tienda')) || alms?.[0]
+      if (tienda) {
+        await supabase.from('almacenes').update({
+          balones_vacios: (tienda.balones_vacios || 0) + balones,
+          vacios_10kg: (tienda.vacios_10kg || 0) + balones,
+          updated_at: new Date().toISOString()
+        }).eq('id', tienda.id)
+      }
+    }
     setSaving(false)
     if (e) { setError(e.message); return }
     setModal(null); cargar()
@@ -517,20 +505,6 @@ export default function Deudas() {
               </div>
             )}
             <p className="text-xs text-gray-500">¿Qué debe? (puede ser varios tipos a la vez):</p>
-            {/* Selector de almacén — solo para admin */}
-            {perfil?.rol === 'admin' && (
-              <div>
-                <label className="label">🏪 Almacén de origen</label>
-                <select className="input" value={almacenDeudaId}
-                  onChange={e => setAlmacenDeudaId(e.target.value)}>
-                  {almacenes.map(a => (
-                    <option key={a.id} value={a.id}>{a.nombre}</option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-1">De aquí se descontarán los balones prestados.</p>
-              </div>
-            )}
-
             <div className="grid grid-cols-2 gap-3">
               <div><label className="label">💰 Dinero S/</label>
                 <input type="number" min="0" step="0.50" className="input" placeholder="0.00"
@@ -616,42 +590,68 @@ export default function Deudas() {
             <div className="grid grid-cols-2 gap-3">
               {parseFloat(selected.monto_pendiente) > 0 && (
                 <div><label className="label">💰 Efectivo S/ <span className="text-gray-600 text-xs">(max {Number(selected.monto_pendiente).toLocaleString()})</span></label>
-                  <input type="number" min="0" step="0.50" className="input"
-                    placeholder="0"
+                  <input type="number" min="0" step="0.50" className="input" placeholder="0"
                     value={pagoForm.monto} onChange={e => setPagoForm(f => ({...f, monto: e.target.value}))} /></div>
               )}
               {parseInt(selected.balones_pendiente) > 0 && (
                 <div><label className="label">🔵 Balones <span className="text-gray-600 text-xs">(max {selected.balones_pendiente})</span></label>
-                  <input type="number" min="0" className="input"
-                    placeholder="0"
+                  <input type="number" min="0" className="input" placeholder="0"
                     value={pagoForm.balones} onChange={e => setPagoForm(f => ({...f, balones: e.target.value}))} /></div>
               )}
-              {/* Vales siempre visibles si hay deuda en dinero */}
-              {parseFloat(selected.monto_pendiente) > 0 && (
-                <div><label className="label">🎫 Vales S/20</label>
+              {(parseFloat(selected.monto_pendiente) > 0 || parseInt(selected.vales_20_pendiente) > 0) && (
+                <div>
+                  <label className="label">🎫 Vales S/20
+                    {parseInt(selected.vales_20_pendiente) > 0 && <span className="text-orange-400 text-xs ml-1">(debe {selected.vales_20_pendiente})</span>}
+                  </label>
                   <input type="number" min="0" className="input" placeholder="0"
-                    value={pagoForm.vales_20} onChange={e => setPagoForm(f => ({...f, vales_20: e.target.value}))} /></div>
+                    value={pagoForm.vales_20} onChange={e => setPagoForm(f => ({...f, vales_20: e.target.value}))} />
+                </div>
               )}
-              {parseFloat(selected.monto_pendiente) > 0 && (
-                <div><label className="label">🎫 Vales S/43</label>
+              {(parseFloat(selected.monto_pendiente) > 0 || parseInt(selected.vales_43_pendiente) > 0) && (
+                <div>
+                  <label className="label">🎫 Vales S/43
+                    {parseInt(selected.vales_43_pendiente) > 0 && <span className="text-orange-400 text-xs ml-1">(debe {selected.vales_43_pendiente})</span>}
+                  </label>
                   <input type="number" min="0" className="input" placeholder="0"
-                    value={pagoForm.vales_43} onChange={e => setPagoForm(f => ({...f, vales_43: e.target.value}))} /></div>
+                    value={pagoForm.vales_43} onChange={e => setPagoForm(f => ({...f, vales_43: e.target.value}))} />
+                </div>
               )}
             </div>
-            {/* Preview del total pagado */}
-            {((parseFloat(pagoForm.monto)||0) + (parseInt(pagoForm.vales_20)||0)*20 + (parseInt(pagoForm.vales_43)||0)*43) > 0 && (
+            {/* Preview del pago */}
+            {((parseFloat(pagoForm.monto)||0) + (parseInt(pagoForm.vales_20)||0) + (parseInt(pagoForm.vales_43)||0) + (parseInt(pagoForm.balones)||0)) > 0 && (
               <div className="bg-emerald-900/20 border border-emerald-800/40 rounded-lg p-3 text-sm space-y-1">
                 {(parseFloat(pagoForm.monto)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">💵 Efectivo:</span><span className="text-white">S/ {(parseFloat(pagoForm.monto)||0).toLocaleString()}</span></div>}
-                {(parseInt(pagoForm.vales_20)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">🎫 {pagoForm.vales_20} vale(s) S/20:</span><span className="text-white">S/ {((parseInt(pagoForm.vales_20)||0)*20).toLocaleString()}</span></div>}
-                {(parseInt(pagoForm.vales_43)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">🎫 {pagoForm.vales_43} vale(s) S/43:</span><span className="text-white">S/ {((parseInt(pagoForm.vales_43)||0)*43).toLocaleString()}</span></div>}
-                <div className="flex justify-between border-t border-gray-700 pt-1 mt-1">
-                  <span className="text-gray-400 font-semibold">Total abono:</span>
-                  <span className="text-emerald-400 font-bold">S/ {((parseFloat(pagoForm.monto)||0) + (parseInt(pagoForm.vales_20)||0)*20 + (parseInt(pagoForm.vales_43)||0)*43).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Saldo restante:</span>
-                  <span className="text-yellow-400 font-bold">S/ {Math.max(0, (parseFloat(selected.monto_pendiente)||0) - (parseFloat(pagoForm.monto)||0) - (parseInt(pagoForm.vales_20)||0)*20 - (parseInt(pagoForm.vales_43)||0)*43).toLocaleString()}</span>
-                </div>
+                {(parseInt(pagoForm.vales_20)||0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">🎫 {pagoForm.vales_20} vale(s) S/20:</span>
+                    <span className="text-white">{parseInt(selected.vales_20_pendiente) > 0 ? `${pagoForm.vales_20} de ${selected.vales_20_pendiente} vales` : `S/ ${((parseInt(pagoForm.vales_20)||0)*20).toLocaleString()}`}</span>
+                  </div>
+                )}
+                {(parseInt(pagoForm.vales_43)||0) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">🎫 {pagoForm.vales_43} vale(s) S/43:</span>
+                    <span className="text-white">{parseInt(selected.vales_43_pendiente) > 0 ? `${pagoForm.vales_43} de ${selected.vales_43_pendiente} vales` : `S/ ${((parseInt(pagoForm.vales_43)||0)*43).toLocaleString()}`}</span>
+                  </div>
+                )}
+                {(parseInt(pagoForm.balones)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">🔵 Balones:</span><span className="text-white">{pagoForm.balones}</span></div>}
+                {parseFloat(selected.monto_pendiente) > 0 && (
+                  <div className="flex justify-between border-t border-gray-700 pt-1">
+                    <span className="text-gray-400">Saldo dinero restante:</span>
+                    <span className="text-yellow-400 font-bold">S/ {Math.max(0, (parseFloat(selected.monto_pendiente)||0) - (parseFloat(pagoForm.monto)||0) - (parseInt(pagoForm.vales_20)||0)*20 - (parseInt(pagoForm.vales_43)||0)*43).toLocaleString()}</span>
+                  </div>
+                )}
+                {parseInt(selected.vales_20_pendiente) > 0 && (
+                  <div className="flex justify-between border-t border-gray-700 pt-1">
+                    <span className="text-gray-400">Vales S/20 restantes:</span>
+                    <span className="text-yellow-400 font-bold">{Math.max(0, (parseInt(selected.vales_20_pendiente)||0) - (parseInt(pagoForm.vales_20)||0))} vales</span>
+                  </div>
+                )}
+                {parseInt(selected.vales_43_pendiente) > 0 && (
+                  <div className="flex justify-between border-t border-gray-700 pt-1">
+                    <span className="text-gray-400">Vales S/43 restantes:</span>
+                    <span className="text-yellow-400 font-bold">{Math.max(0, (parseInt(selected.vales_43_pendiente)||0) - (parseInt(pagoForm.vales_43)||0))} vales</span>
+                  </div>
+                )}
               </div>
             )}
             {parseFloat(selected.monto_pendiente) > 0 && (
