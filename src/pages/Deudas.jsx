@@ -252,15 +252,19 @@ export default function Deudas() {
     }).eq('id', selected.id)
     // Si pagó con balones vacíos → sumarlos al almacén
     if (balones > 0) {
-      const { data: alms } = await supabase.from('almacenes').select('id, balones_vacios, vacios_10kg, vacios_5kg, vacios_45kg, nombre').eq('activo', true)
+      const tipoBalonDeuda = selected.historial?.[0]?.tipo_balon || '10kg'
+      const campoVacios = tipoBalonDeuda === '5kg' ? 'vacios_5kg' : tipoBalonDeuda === '45kg' ? 'vacios_45kg' : 'vacios_10kg'
+      const { data: alms } = await supabase.from('almacenes').select('id, nombre').eq('activo', true)
       const almacenDeuda = selected.almacen_id ? alms?.find(a => a.id === selected.almacen_id) : null
       const tienda = almacenDeuda || alms?.find(a => a.nombre?.toLowerCase().includes('tienda')) || alms?.[0]
       if (tienda) {
-        const { data: almFresco } = await supabase.from('almacenes').select('balones_vacios, vacios_10kg').eq('id', tienda.id).single()
+        const { data: almFresco } = await supabase.from('almacenes')
+          .select('balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg')
+          .eq('id', tienda.id).single()
         if (almFresco) {
           await supabase.from('almacenes').update({
             balones_vacios: (almFresco.balones_vacios || 0) + balones,
-            vacios_10kg: (almFresco.vacios_10kg || 0) + balones,
+            [campoVacios]: (almFresco[campoVacios] || 0) + balones,
             updated_at: new Date().toISOString()
           }).eq('id', tienda.id)
         }
