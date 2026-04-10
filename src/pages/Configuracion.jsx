@@ -95,9 +95,10 @@ export default function Configuracion() {
       setEditandoDistPrecios(mapa)
       setPreciosDistTipo(pdt || [])
     } else if (tab === 'costos') {
-      const [{ data }, { data: dists }] = await Promise.all([
+      const [{ data }, { data: dists }, { data: pdt }] = await Promise.all([
         supabase.from('configuracion').select('*').in('clave', ['costo_5kg','costo_10kg','costo_45kg','costo_balon_5kg','costo_balon_10kg','costo_balon_45kg']),
-        supabase.from('distribuidores').select('id, nombre, precio_base').eq('activo', true).order('nombre')
+        supabase.from('distribuidores').select('id, nombre, precio_base').eq('activo', true).order('nombre'),
+        supabase.from('precio_distribuidor_tipo').select('*')
       ])
       const mapa = { '5kg': '', '10kg': '', '45kg': '' }
       const mapaBalon = { '5kg': '', '10kg': '', '45kg': '' }
@@ -112,6 +113,7 @@ export default function Configuracion() {
       setCostosCompra(mapa)
       setCostoBalon(mapaBalon)
       setDistribuidores(dists || [])
+      setPreciosDistTipo(pdt || [])
     } else if (tab === 'proveedores') {
       const { data } = await supabase.from('proveedores').select('*').eq('activo', true).order('nombre')
       setProveedores(data || [])
@@ -485,12 +487,14 @@ export default function Configuracion() {
                       <>
                         <p className="text-gray-400 font-medium mt-3 mb-1 pt-2 border-t border-gray-700">🚛 Distribuidores:</p>
                         {distribuidores.map(d => {
-                          const gan = (d.precio_base || 0) - parseFloat(costosCompra[tipo])
+                          const precioDistTipo = preciosDistTipo?.find(x => x.distribuidor_id === d.id && x.tipo_balon === tipo)?.precio || 0
+                          if (!precioDistTipo || precioDistTipo === 0) return null
+                          const gan = precioDistTipo - parseFloat(costosCompra[tipo])
                           return (
                             <div key={d.id} className="flex justify-between items-center">
                               <span className="text-gray-500">{d.nombre}</span>
                               <span className={`font-bold ${gan > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                S/{d.precio_base} → +S/{gan.toFixed(2)}
+                                S/{precioDistTipo} → +S/{gan.toFixed(2)}
                               </span>
                             </div>
                           )
