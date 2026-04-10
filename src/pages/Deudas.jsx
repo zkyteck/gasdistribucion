@@ -150,6 +150,31 @@ export default function Deudas() {
     setSaving(true); setError('')
     const tipoBalonDeuda = deudaForm.tipo_balon || '10kg'
     const entradaHistorial = { tipo: 'deuda', fecha: deudaForm.fecha, monto, balones, tipo_balon: balones > 0 ? tipoBalonDeuda : null, vales_20: vales20, vales_43: vales43, notas: deudaForm.notas || null }
+
+    // Descontar llenos del almacén si hay balones prestados
+    let almacenId = perfil?.almacen_id || null
+    if (balones > 0) {
+      const { data: alms } = await supabase.from('almacenes').select('id, nombre, stock_actual').eq('activo', true)
+      const almPerfil = almacenId ? alms?.find(a => a.id === almacenId) : null
+      const tienda = almPerfil || alms?.find(a => a.nombre?.toLowerCase().includes('tienda')) || alms?.[0]
+      if (tienda) {
+        almacenId = tienda.id
+        const campoVacios = tipoBalonDeuda === '5kg' ? 'vacios_5kg' : tipoBalonDeuda === '45kg' ? 'vacios_45kg' : 'vacios_10kg'
+        const { data: almFresco } = await supabase.from('almacenes').select('stock_actual, balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg').eq('id', tienda.id).single()
+        if (almFresco) {
+          await supabase.from('almacenes').update({
+            stock_actual: Math.max(0, (almFresco.stock_actual || 0) - balones),
+            updated_at: new Date().toISOString()
+          }).eq('id', tienda.id)
+          // Actualizar stock_por_tipo
+          const { data: spt } = await supabase.from('stock_por_tipo').select('stock_actual').eq('almacen_id', tienda.id).eq('tipo_balon', tipoBalonDeuda).single()
+          if (spt) {
+            await supabase.from('stock_por_tipo').update({ stock_actual: Math.max(0, spt.stock_actual - balones) }).eq('almacen_id', tienda.id).eq('tipo_balon', tipoBalonDeuda)
+          }
+        }
+      }
+    }
+
     const { error: e } = await supabase.from('deudas').insert({
       cliente_id: deudaForm.cliente_id || null,
       nombre_deudor: deudaForm.nombre_deudor.trim(),
@@ -158,7 +183,8 @@ export default function Deudas() {
       cantidad_original: balones, cantidad_pendiente: balones,
       balones_pendiente: balones, vales_20_pendiente: vales20, vales_43_pendiente: vales43,
       fecha_deuda: deudaForm.fecha, estado: 'activa', notas: deudaForm.notas,
-      historial: [entradaHistorial], usuario_id: perfil?.id || null
+      historial: [entradaHistorial], usuario_id: perfil?.id || null,
+      almacen_id: almacenId
     })
     setSaving(false)
     if (e) { setError(e.message); return }
@@ -226,14 +252,35 @@ export default function Deudas() {
     }).eq('id', selected.id)
     // Si pagó con balones vacíos → sumarlos al almacén
     if (balones > 0) {
-      const { data: alms } = await supabase.from('almacenes').select('id, balones_vacios, vacios_10kg, nombre').eq('activo', true)
-      const tienda = alms?.find(a => a.nombre?.toLowerCase().includes('tienda')) || alms?.[0]
+      const { data: alms } = await supabase.from('almacenes').select('id, balones_vacios, vacios_10kg, vacios_5kg, vacios_45kg, nombre').eq('activo', true)
+      const almacenDeuda = selected.almacen_id ? alms?.find(a => a.id === selected.almacen_id) : null
+      const tienda = almacenDeuda || alms?.find(a => a.nombre?.toLowerCase().includes('tienda')) || alms?.[0]
       if (tienda) {
-        await supabase.from('almacenes').update({
-          balones_vacios: (tienda.balones_vacios || 0) + balones,
-          vacios_10kg: (tienda.vacios_10kg || 0) + balones,
-          updated_at: new Date().toISOString()
-        }).eq('id', tienda.id)
+        const { data: almFresco } = await supabase.from('almacenes').select('balones_vacios, vacios_10kg').eq('id', tienda.id).single()
+        if (almFresco) {
+          await supabase.from('almacenes').update({
+            balones_vacios: (almFresco.balones_vacios || 0) + balones,
+            vacios_10kg: (almFresco.vacios_10kg || 0) + balones,
+            updated_at: new Date().toISOString()
+          }).eq('id', tienda.id)
+        }
+      }
+    }
+    // Registrar ingreso en ventas si pagó en efectivo o vales con valor monetario
+    const montoIngreso = monto + (montoPendiente > 0 ? (vales20 * 20) + (vales43 * 43) : 0)
+    if (montoIngreso > 0) {
+      const almacenIngreso = selected.almacen_id || perfil?.almacen_id
+      if (almacenIngreso) {
+        await supabase.from('ventas').insert({
+          almacen_id: almacenIngreso,
+          tipo_balon: '10kg',
+          fecha: new Date().toISOString(),
+          cantidad: balones || 0,
+          precio_unitario: balones > 0 ? montoIngreso / balones : montoIngreso,
+          metodo_pago: metodo === 'vale' ? 'cobro_credito' : pagoForm.metodo_pago || 'efectivo',
+          notas: `Cobro deuda — ${selected.nombre_deudor}`,
+          usuario_id: perfil?.id || null
+        })
       }
     }
     setSaving(false)
