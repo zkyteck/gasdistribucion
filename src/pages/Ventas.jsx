@@ -238,7 +238,7 @@ export default function Ventas() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="border-b border-gray-800">
-                  {['Hora','Cliente','Almacén','Tipo cliente','Balón','Cant.','Precio','Total','Pago',''].map(h => (
+                  {['Hora','Cliente','Almacén','Tipo cliente','Balón','Cant.','Precio','Total','Pago','Notas',''].map(h => (
                     <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">{h}</th>
                   ))}
                 </tr></thead>
@@ -254,6 +254,7 @@ export default function Ventas() {
                       <td className="px-4 py-3 text-gray-400 text-sm">S/{v.precio_unitario}</td>
                       <td className="px-4 py-3 text-emerald-400 font-bold">S/{(v.cantidad * v.precio_unitario).toLocaleString()}</td>
                       <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${v.metodo_pago === 'efectivo' ? 'bg-emerald-900/40 text-emerald-400' : v.metodo_pago === 'yape' ? 'bg-blue-900/40 text-blue-400' : v.metodo_pago === 'vale' ? 'bg-yellow-900/40 text-yellow-400' : 'bg-purple-900/40 text-purple-400'}`}>{v.metodo_pago}</span></td>
+                      <td className="px-4 py-3 text-gray-400 text-xs max-w-32 truncate" title={v.notas || ''}>{v.notas || <span className="text-gray-700">—</span>}</td>
                       <td className="px-4 py-3">
                         <button onClick={() => eliminarVenta(v)}
                           className="text-gray-600 hover:text-red-400 transition-colors p-1 rounded hover:bg-red-900/20"
