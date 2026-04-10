@@ -37,6 +37,7 @@ export default function Configuracion() {
   const [costosCompra, setCostosCompra] = useState({ '5kg': '', '10kg': '', '45kg': '' })
   const [savingCostos, setSavingCostos] = useState(false)
   const [costoBalon, setCostoBalon] = useState({ '5kg': '', '10kg': '', '45kg': '' })
+  const [precioVentaBalon, setPrecioVentaBalon] = useState({ '5kg': '100', '10kg': '100', '45kg': '100' })
   const [almacenesLista, setAlmacenesLista] = useState([])
 
   const [provForm, setProvForm] = useState({ nombre: '', telefono: '', direccion: '', ruc: '' })
@@ -437,7 +438,8 @@ export default function Configuracion() {
                   <div className="mt-3 bg-gray-800/50 rounded-lg p-3 text-xs space-y-1">
                     <p className="text-gray-400 font-medium mb-2">🏪 Ganancia venta gas:</p>
                     {precios.map(p => {
-                      const precioVenta = preciosPorTipo.find(x => x.precio_tipo_id === p.id && x.tipo_balon === tipo)?.precio || p.precio || 0
+                      const found = preciosPorTipo.find(x => x.precio_tipo_id === p.id && x.tipo_balon === tipo)
+                      const precioVenta = found?.precio || 0
                       if (!precioVenta || precioVenta === 0) return null
                       const gan = precioVenta - parseFloat(costosCompra[tipo])
                       return (
@@ -450,18 +452,24 @@ export default function Configuracion() {
                       )
                     })}
                     {parseFloat(costoBalon[tipo]) > 0 && (
-                      <div className="pt-2 mt-1 border-t border-gray-700 space-y-1">
+                      <div className="pt-2 mt-1 border-t border-gray-700 space-y-2">
                         <p className="text-gray-400 font-medium">🔵 Ganancia venta balón vacío:</p>
-                        <div className="flex justify-between items-center">
-                          <span className="text-gray-500">Precio venta - costo</span>
-                          <span className="text-blue-400 font-bold">S/? - S/{costoBalon[tipo]} = editable</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-500">Precio venta S/</span>
+                          <input type="number" min="0" className="input text-xs py-1 px-2 w-20 text-center"
+                            value={precioVentaBalon[tipo]}
+                            onChange={e => setPrecioVentaBalon(c => ({...c, [tipo]: e.target.value}))} />
+                          <span className={`font-bold ${(parseFloat(precioVentaBalon[tipo]||0) - parseFloat(costoBalon[tipo])) > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            → +S/{(parseFloat(precioVentaBalon[tipo]||0) - parseFloat(costoBalon[tipo])).toFixed(2)}
+                          </span>
                         </div>
-                        <p className="text-gray-400 font-medium mt-1">⛽🔵 Ganancia gas + balón:</p>
+                        <p className="text-gray-400 font-medium">⛽🔵 Ganancia gas + balón:</p>
                         {precios.map(p => {
-                          const precioGas = preciosPorTipo.find(x => x.precio_tipo_id === p.id && x.tipo_balon === tipo)?.precio || p.precio || 0
+                          const found = preciosPorTipo.find(x => x.precio_tipo_id === p.id && x.tipo_balon === tipo)
+                          const precioGas = found?.precio || 0
                           if (!precioGas || precioGas === 0) return null
                           const ganGas = precioGas - parseFloat(costosCompra[tipo])
-                          const ganBalon = 100 - parseFloat(costoBalon[tipo])
+                          const ganBalon = parseFloat(precioVentaBalon[tipo]||0) - parseFloat(costoBalon[tipo])
                           return (
                             <div key={p.id} className="flex justify-between items-center">
                               <span className="text-gray-500">{p.nombre}</span>
@@ -471,6 +479,8 @@ export default function Configuracion() {
                             </div>
                           )
                         })}
+                      </div>
+                    )}
                       </div>
                     )}
                     {distribuidores.length > 0 && (
