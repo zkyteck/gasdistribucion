@@ -481,8 +481,6 @@ export default function Configuracion() {
                         })}
                       </div>
                     )}
-                      </div>
-                    )}
                     {distribuidores.length > 0 && (
                       <>
                         <p className="text-gray-400 font-medium mt-3 mb-1 pt-2 border-t border-gray-700">🚛 Distribuidores:</p>
