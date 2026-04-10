@@ -95,7 +95,7 @@ export default function Configuracion() {
       setPreciosDistTipo(pdt || [])
     } else if (tab === 'costos') {
       const [{ data }, { data: dists }] = await Promise.all([
-        supabase.from('configuracion').select('*').in('clave', ['costo_5kg','costo_10kg','costo_45kg']),
+        supabase.from('configuracion').select('*').in('clave', ['costo_5kg','costo_10kg','costo_45kg','costo_balon_5kg','costo_balon_10kg','costo_balon_45kg']),
         supabase.from('distribuidores').select('id, nombre, precio_base').eq('activo', true).order('nombre')
       ])
       const mapa = { '5kg': '', '10kg': '', '45kg': '' }
