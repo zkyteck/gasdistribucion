@@ -441,24 +441,46 @@ export default function Ventas() {
                 })}
               </div>
             </div>
-            {/* Tipo de venta */}
-            <div>
-              <label className="label">¿Qué se lleva el cliente?</label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  ['gas','⛽ Solo gas','Cliente trae su balón'],
-                  ['gas_balon','⛽🔵 Gas + Balón','Se lleva balón lleno'],
-                  ['balon_vacio','🔵 Balón vacío','Compra el envase'],
-                ].map(([val, label, desc]) => (
-                  <button key={val} type="button"
-                    onClick={() => setForm(f => ({...f, tipo_venta: val}))}
-                    className={`p-2 rounded-lg border text-xs font-medium transition-all text-center ${form.tipo_venta === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
-                    <p>{label}</p>
-                    <p className="text-gray-500 font-normal mt-0.5">{desc}</p>
-                  </button>
-                ))}
+            {/* Tipo de venta — toggle */}
+            <div className={`rounded-xl border p-3 cursor-pointer transition-all ${form.tipo_venta !== 'gas' ? 'bg-blue-900/20 border-blue-600/50' : 'bg-gray-800/50 border-gray-700'}`}
+              onClick={() => setForm(f => ({...f, tipo_venta: f.tipo_venta === 'gas' ? 'gas_balon' : 'gas', precio_balon: '100'}))}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={`text-sm font-medium ${form.tipo_venta !== 'gas' ? 'text-blue-300' : 'text-gray-400'}`}>🔵 ¿Incluye balón?</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Activa si el cliente se lleva el envase también</p>
+                </div>
+                <div className={`w-10 h-5 rounded-full transition-all relative ${form.tipo_venta !== 'gas' ? 'bg-blue-500' : 'bg-gray-700'}`}>
+                  <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all ${form.tipo_venta !== 'gas' ? 'left-5' : 'left-0.5'}`} />
+                </div>
               </div>
             </div>
+
+            {/* Opciones de balón — aparecen solo si está activado */}
+            {form.tipo_venta !== 'gas' && (
+              <div className="bg-blue-900/10 border border-blue-800/30 rounded-xl p-3 space-y-3">
+                <p className="text-xs text-blue-300 font-medium">¿Qué tipo de balón?</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    ['gas_balon','⛽🔵 Gas + Balón lleno','Se lleva balón lleno con gas'],
+                    ['balon_vacio','🔵 Solo balón vacío','Compra solo el envase'],
+                  ].map(([val, label, desc]) => (
+                    <button key={val} type="button"
+                      onClick={e => { e.stopPropagation(); setForm(f => ({...f, tipo_venta: val})) }}
+                      className={`p-2 rounded-lg border text-xs font-medium transition-all text-center ${form.tipo_venta === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-gray-800 border-gray-700 text-gray-400'}`}>
+                      <p>{label}</p>
+                      <p className="text-gray-500 font-normal mt-0.5">{desc}</p>
+                    </button>
+                  ))}
+                </div>
+                <div>
+                  <label className="label">Precio balón S/</label>
+                  <input type="number" className="input" placeholder="100"
+                    value={form.precio_balon}
+                    onClick={e => e.stopPropagation()}
+                    onChange={e => setForm(f => ({...f, precio_balon: e.target.value}))} />
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div>
