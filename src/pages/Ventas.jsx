@@ -45,7 +45,8 @@ export default function Ventas() {
     cliente_id: '', cliente_nombre: '', es_varios: false,
     almacen_id: '', precio_tipo_id: '', tipo_balon: '10kg',
     cantidad: '', precio_unitario: '', metodo_pago: 'efectivo', notas: '',
-    fecha: hoyPeru()
+    fecha: hoyPeru(), es_credito: false, credito_tipo: 'dinero',
+    tipo_venta: 'gas', precio_balon: '100'
   })
 
   useEffect(() => { cargar() }, [filtroFecha])
@@ -91,7 +92,8 @@ export default function Ventas() {
       almacen_id: almacenDefault?.id || '', precio_tipo_id: primerTipo?.id || '',
       tipo_balon: '10kg', cantidad: '',
       precio_unitario: getPrecio(primerTipo?.id, '10kg') || primerTipo?.precio || '',
-      metodo_pago: 'efectivo', notas: '', es_credito: false
+      metodo_pago: 'efectivo', notas: '', es_credito: false, credito_tipo: 'dinero',
+      tipo_venta: 'gas', precio_balon: '100'
     })
     setError(''); setModal(true); setBusquedaCliente(''); setSubModal(null)
   }
@@ -156,47 +158,89 @@ export default function Ventas() {
   }
 
   async function guardar() {
-    if (!form.almacen_id || !form.cantidad || !form.precio_unitario) { setError('Completa todos los campos'); return }
-    const stockDisp = getStock(form.almacen_id, form.tipo_balon)
-    if (stockDisp < parseInt(form.cantidad)) {
-      setError(`Stock insuficiente de ${form.tipo_balon}. Disponible: ${stockDisp} balones`); return
-    }
-    setSaving(true); setError('')
-    const { error: e } = await supabase.from('ventas').insert({
-      cliente_id: form.cliente_id || null,
-      almacen_id: form.almacen_id,
-      precio_tipo_id: form.precio_tipo_id || null,
-      tipo_balon: form.tipo_balon,
-      fecha: (form.fecha || hoyPeru()) + 'T12:00:00-05:00',
-      cantidad: parseInt(form.cantidad),
-      precio_unitario: parseFloat(form.precio_unitario),
-      metodo_pago: form.metodo_pago,
-      notas: form.notas,
-      usuario_id: perfil?.id || null
-    })
-    if (e) { setError(e.message); setSaving(false); return }
-    // Descontar stock_por_tipo (por tipo de balón)
-    await supabase.from('stock_por_tipo')
-      .update({ stock_actual: stockDisp - parseInt(form.cantidad), updated_at: new Date().toISOString() })
-      .eq('almacen_id', form.almacen_id).eq('tipo_balon', form.tipo_balon)
-    // Descontar stock_actual en almacenes y sumar vacíos automáticamente
     const cant = parseInt(form.cantidad)
-    const campoVacios = form.tipo_balon === '5kg' ? 'vacios_5kg' : form.tipo_balon === '10kg' ? 'vacios_10kg' : 'vacios_45kg'
-    // Traer almacén fresco de BD para no usar datos desactualizados
-    const { data: almacenFresco } = await supabase.from('almacenes')
+    const precioBajon = parseFloat(form.precio_balon) || 0
+    const precioGas = parseFloat(form.precio_unitario) || 0
+
+    // Validaciones según tipo de venta
+    if (form.tipo_venta === 'gas' || form.tipo_venta === 'gas_balon') {
+      if (!form.almacen_id || !cant || !precioGas) { setError('Completa todos los campos'); return }
+      const stockDisp = getStock(form.almacen_id, form.tipo_balon)
+      if (stockDisp < cant) { setError(`Stock insuficiente. Disponible: ${stockDisp} balones`); return }
+    }
+    if (form.tipo_venta === 'balon_vacio') {
+      if (!form.almacen_id || !cant || !precioBajon) { setError('Completa todos los campos'); return }
+    }
+
+    setSaving(true); setError('')
+    const campoVacios = form.tipo_balon === '5kg' ? 'vacios_5kg' : form.tipo_balon === '45kg' ? 'vacios_45kg' : 'vacios_10kg'
+    const { data: almFresco } = await supabase.from('almacenes')
       .select('stock_actual, balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg')
       .eq('id', form.almacen_id).single()
-    if (almacenFresco) {
-      const updateData = {
-        stock_actual: Math.max(0, (almacenFresco.stock_actual || 0) - cant),
+
+    if (form.tipo_venta === 'gas') {
+      // Venta normal — solo gas, cliente trae su vacío
+      const stockDisp = getStock(form.almacen_id, form.tipo_balon)
+      const { error: e } = await supabase.from('ventas').insert({
+        cliente_id: form.cliente_id || null, almacen_id: form.almacen_id,
+        precio_tipo_id: form.precio_tipo_id || null, tipo_balon: form.tipo_balon,
+        fecha: (form.fecha || hoyPeru()) + 'T12:00:00-05:00',
+        cantidad: cant, precio_unitario: precioGas, metodo_pago: form.metodo_pago,
+        notas: form.notas, usuario_id: perfil?.id || null
+      })
+      if (e) { setError(e.message); setSaving(false); return }
+      await supabase.from('stock_por_tipo')
+        .update({ stock_actual: stockDisp - cant }).eq('almacen_id', form.almacen_id).eq('tipo_balon', form.tipo_balon)
+      if (almFresco) {
+        const debeBalon = form.es_credito && (form.credito_tipo === 'balon' || form.credito_tipo === 'ambos')
+        const updateData = { stock_actual: Math.max(0, (almFresco.stock_actual || 0) - cant) }
+        if (!debeBalon) {
+          updateData.balones_vacios = (almFresco.balones_vacios || 0) + cant
+          updateData[campoVacios] = (almFresco[campoVacios] || 0) + cant
+        }
+        await supabase.from('almacenes').update(updateData).eq('id', form.almacen_id)
       }
-      // Solo sumar vacíos si NO es crédito de balón (balón sigue en calle)
-      const debeBalon = form.es_credito && (form.credito_tipo === 'balon' || form.credito_tipo === 'ambos')
-      if (!debeBalon) {
-        updateData.balones_vacios = (almacenFresco.balones_vacios || 0) + cant
-        updateData[campoVacios] = (almacenFresco[campoVacios] || 0) + cant
+
+    } else if (form.tipo_venta === 'gas_balon') {
+      // Venta gas + balón — precio total = gas + balón
+      const precioTotal = precioGas + precioBajon
+      const stockDisp = getStock(form.almacen_id, form.tipo_balon)
+      const { error: e } = await supabase.from('ventas').insert({
+        cliente_id: form.cliente_id || null, almacen_id: form.almacen_id,
+        precio_tipo_id: form.precio_tipo_id || null, tipo_balon: form.tipo_balon,
+        fecha: (form.fecha || hoyPeru()) + 'T12:00:00-05:00',
+        cantidad: cant, precio_unitario: precioTotal, metodo_pago: form.metodo_pago,
+        notas: `Gas+Balón (gas:S/${precioGas} bal:S/${precioBajon})${form.notas ? ' — ' + form.notas : ''}`,
+        usuario_id: perfil?.id || null
+      })
+      if (e) { setError(e.message); setSaving(false); return }
+      await supabase.from('stock_por_tipo')
+        .update({ stock_actual: stockDisp - cant }).eq('almacen_id', form.almacen_id).eq('tipo_balon', form.tipo_balon)
+      // Descuenta lleno, NO suma vacío (el balón se fue con el cliente)
+      if (almFresco) {
+        await supabase.from('almacenes').update({
+          stock_actual: Math.max(0, (almFresco.stock_actual || 0) - cant)
+        }).eq('id', form.almacen_id)
       }
-      await supabase.from('almacenes').update(updateData).eq('id', form.almacen_id)
+
+    } else if (form.tipo_venta === 'balon_vacio') {
+      // Venta de balón vacío — sale del stock de vacíos
+      const { error: e } = await supabase.from('ventas').insert({
+        cliente_id: form.cliente_id || null, almacen_id: form.almacen_id,
+        tipo_balon: form.tipo_balon,
+        fecha: (form.fecha || hoyPeru()) + 'T12:00:00-05:00',
+        cantidad: cant, precio_unitario: precioBajon, metodo_pago: form.metodo_pago,
+        notas: `Venta balón vacío${form.notas ? ' — ' + form.notas : ''}`,
+        usuario_id: perfil?.id || null
+      })
+      if (e) { setError(e.message); setSaving(false); return }
+      // Descontar vacíos del stock
+      if (almFresco) {
+        await supabase.from('almacenes').update({
+          balones_vacios: Math.max(0, (almFresco.balones_vacios || 0) - cant),
+          [campoVacios]: Math.max(0, (almFresco[campoVacios] || 0) - cant)
+        }).eq('id', form.almacen_id)
+      }
     }
     // Si es venta al crédito → crear o sumar a deuda existente
     if (form.es_credito) {
@@ -397,21 +441,66 @@ export default function Ventas() {
                 })}
               </div>
             </div>
+            {/* Tipo de venta */}
+            <div>
+              <label className="label">¿Qué se lleva el cliente?</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  ['gas','⛽ Solo gas','Cliente trae su balón'],
+                  ['gas_balon','⛽🔵 Gas + Balón','Se lleva balón lleno'],
+                  ['balon_vacio','🔵 Balón vacío','Compra el envase'],
+                ].map(([val, label, desc]) => (
+                  <button key={val} type="button"
+                    onClick={() => setForm(f => ({...f, tipo_venta: val}))}
+                    className={`p-2 rounded-lg border text-xs font-medium transition-all text-center ${form.tipo_venta === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                    <p>{label}</p>
+                    <p className="text-gray-500 font-normal mt-0.5">{desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="label">Cantidad</label>
                 <input type="number" className="input" placeholder="1" value={form.cantidad} onChange={e => setForm(f => ({...f, cantidad: e.target.value}))} />
-                <p className="text-xs text-gray-500 mt-1">Stock: {getStock(form.almacen_id, form.tipo_balon)} bal. de {form.tipo_balon}</p>
+                {form.tipo_venta !== 'balon_vacio' && <p className="text-xs text-gray-500 mt-1">Stock llenos: {getStock(form.almacen_id, form.tipo_balon)} bal.</p>}
               </div>
               <div>
-                <label className="label">Precio unitario (S/)</label>
-                <input type="number" className="input" value={form.precio_unitario} onChange={e => setForm(f => ({...f, precio_unitario: e.target.value}))} />
+                {form.tipo_venta === 'balon_vacio' ? (
+                  <div>
+                    <label className="label">Precio balón vacío S/</label>
+                    <input type="number" className="input" placeholder="100" value={form.precio_balon} onChange={e => setForm(f => ({...f, precio_balon: e.target.value}))} />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="label">Precio gas S/</label>
+                    <input type="number" className="input" value={form.precio_unitario} onChange={e => setForm(f => ({...f, precio_unitario: e.target.value}))} />
+                  </div>
+                )}
               </div>
             </div>
-            {form.cantidad && form.precio_unitario && (
+
+            {/* Campo precio balón si es gas+balón */}
+            {form.tipo_venta === 'gas_balon' && (
+              <div>
+                <label className="label">Precio balón S/</label>
+                <input type="number" className="input" placeholder="100" value={form.precio_balon} onChange={e => setForm(f => ({...f, precio_balon: e.target.value}))} />
+              </div>
+            )}
+
+            {/* Total */}
+            {form.cantidad && (
               <div className="bg-emerald-900/20 border border-emerald-800/50 rounded-lg px-4 py-3 flex justify-between items-center">
                 <span className="text-gray-400 text-sm">Total venta:</span>
-                <span className="text-emerald-400 font-bold text-lg">S/ {((parseInt(form.cantidad)||0) * (parseFloat(form.precio_unitario)||0)).toLocaleString('es-PE')}</span>
+                <span className="text-emerald-400 font-bold text-lg">
+                  S/ {(() => {
+                    const cant = parseInt(form.cantidad) || 0
+                    if (form.tipo_venta === 'balon_vacio') return (cant * (parseFloat(form.precio_balon)||0)).toLocaleString('es-PE')
+                    if (form.tipo_venta === 'gas_balon') return (cant * ((parseFloat(form.precio_unitario)||0) + (parseFloat(form.precio_balon)||0))).toLocaleString('es-PE')
+                    return (cant * (parseFloat(form.precio_unitario)||0)).toLocaleString('es-PE')
+                  })()}
+                </span>
               </div>
             )}
             <div>
