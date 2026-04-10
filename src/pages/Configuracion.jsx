@@ -356,6 +356,28 @@ export default function Configuracion() {
             </table>
           </div>
           <p className="text-gray-600 text-xs">💡 Los precios se usarán automáticamente al registrar ventas según el tipo de cliente y tamaño de balón.</p>
+
+          {/* Precio venta balón vacío */}
+          <div className="card p-0 overflow-hidden">
+            <div className="px-6 py-3 border-b border-gray-800">
+              <p className="text-white font-semibold text-sm">🔵 Precio venta balón vacío</p>
+              <p className="text-gray-500 text-xs">Precio al que vendes el envase solo (sin gas)</p>
+            </div>
+            <div className="flex gap-8 px-6 py-4">
+              {TIPOS_BALON.map(tipo => (
+                <div key={tipo} className="flex items-center gap-2">
+                  <span className="text-gray-400 text-sm font-medium">{tipo}:</span>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs">S/</span>
+                    <input type="number" className="input pl-7 w-24 text-sm"
+                      value={precioVentaBalon[tipo]}
+                      onChange={e => setPrecioVentaBalon(c => ({...c, [tipo]: e.target.value}))}
+                      placeholder="100" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -456,13 +478,10 @@ export default function Configuracion() {
                     {parseFloat(costoBalon[tipo]) > 0 && (
                       <div className="pt-2 mt-1 border-t border-gray-700 space-y-2">
                         <p className="text-gray-400 font-medium">🔵 Ganancia venta balón vacío:</p>
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-500">Precio venta S/</span>
-                          <input type="number" min="0" className="input text-xs py-1 px-2 w-20 text-center"
-                            value={precioVentaBalon[tipo]}
-                            onChange={e => setPrecioVentaBalon(c => ({...c, [tipo]: e.target.value}))} />
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-500">Precio venta - costo envase</span>
                           <span className={`font-bold ${(parseFloat(precioVentaBalon[tipo]||0) - parseFloat(costoBalon[tipo])) > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            → +S/{(parseFloat(precioVentaBalon[tipo]||0) - parseFloat(costoBalon[tipo])).toFixed(2)}
+                            S/{precioVentaBalon[tipo]||0} - S/{costoBalon[tipo]} = +S/{(parseFloat(precioVentaBalon[tipo]||0) - parseFloat(costoBalon[tipo])).toFixed(2)}
                           </span>
                         </div>
                         <p className="text-gray-400 font-medium">⛽🔵 Ganancia gas + balón:</p>
