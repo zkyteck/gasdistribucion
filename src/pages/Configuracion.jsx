@@ -36,6 +36,7 @@ export default function Configuracion() {
   const [editandoDistPrecios, setEditandoDistPrecios] = useState({})
   const [costosCompra, setCostosCompra] = useState({ '5kg': '', '10kg': '', '45kg': '' })
   const [savingCostos, setSavingCostos] = useState(false)
+  const [costoBalon, setCostoBalon] = useState({ '5kg': '', '10kg': '', '45kg': '' })
   const [almacenesLista, setAlmacenesLista] = useState([])
 
   const [provForm, setProvForm] = useState({ nombre: '', telefono: '', direccion: '', ruc: '' })
@@ -98,12 +99,17 @@ export default function Configuracion() {
         supabase.from('distribuidores').select('id, nombre, precio_base').eq('activo', true).order('nombre')
       ])
       const mapa = { '5kg': '', '10kg': '', '45kg': '' }
+      const mapaBalon = { '5kg': '', '10kg': '', '45kg': '' }
       data?.forEach(r => {
         if (r.clave === 'costo_5kg') mapa['5kg'] = r.valor || ''
         if (r.clave === 'costo_10kg') mapa['10kg'] = r.valor || ''
         if (r.clave === 'costo_45kg') mapa['45kg'] = r.valor || ''
+        if (r.clave === 'costo_balon_5kg') mapaBalon['5kg'] = r.valor || ''
+        if (r.clave === 'costo_balon_10kg') mapaBalon['10kg'] = r.valor || ''
+        if (r.clave === 'costo_balon_45kg') mapaBalon['45kg'] = r.valor || ''
       })
       setCostosCompra(mapa)
+      setCostoBalon(mapaBalon)
       setDistribuidores(dists || [])
     } else if (tab === 'proveedores') {
       const { data } = await supabase.from('proveedores').select('*').eq('activo', true).order('nombre')
@@ -124,9 +130,13 @@ export default function Configuracion() {
       supabase.from('configuracion').upsert({ clave: 'costo_5kg', valor: costosCompra['5kg']?.toString() || '0', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
       supabase.from('configuracion').upsert({ clave: 'costo_10kg', valor: costosCompra['10kg']?.toString() || '0', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
       supabase.from('configuracion').upsert({ clave: 'costo_45kg', valor: costosCompra['45kg']?.toString() || '0', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
+      supabase.from('configuracion').upsert({ clave: 'costo_balon_5kg', valor: costoBalon['5kg']?.toString() || '0', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
+      supabase.from('configuracion').upsert({ clave: 'costo_balon_10kg', valor: costoBalon['10kg']?.toString() || '0', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
+      supabase.from('configuracion').upsert({ clave: 'costo_balon_45kg', valor: costoBalon['45kg']?.toString() || '0', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
     ])
     setSavingCostos(false)
     alert('✅ Costos guardados correctamente')
+    cargar()
   }
 
   async function guardarPreciosTienda() {
@@ -413,9 +423,19 @@ export default function Configuracion() {
                     onChange={e => setCostosCompra(c => ({...c, [tipo]: e.target.value}))}
                     placeholder="0.00" />
                 </div>
+                <div className="mt-3">
+                  <p className="text-gray-500 text-xs mb-1">Costo balón (envase)</p>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium text-sm">S/</span>
+                    <input type="number" min="0" step="1" className="input pl-9 text-sm text-center"
+                      value={costoBalon[tipo]}
+                      onChange={e => setCostoBalon(c => ({...c, [tipo]: e.target.value}))}
+                      placeholder="0.00" />
+                  </div>
+                </div>
                 {parseFloat(costosCompra[tipo]) > 0 && (
                   <div className="mt-3 bg-gray-800/50 rounded-lg p-3 text-xs space-y-1">
-                    <p className="text-gray-400 font-medium mb-2">🏪 Tienda — Ganancia por tipo:</p>
+                    <p className="text-gray-400 font-medium mb-2">🏪 Ganancia venta gas:</p>
                     {precios.map(p => {
                       const precioVenta = preciosPorTipo.find(x => x.precio_tipo_id === p.id && x.tipo_balon === tipo)?.precio || p.precio || 0
                       const gan = precioVenta - parseFloat(costosCompra[tipo])
@@ -428,9 +448,32 @@ export default function Configuracion() {
                         </div>
                       )
                     })}
+                    {parseFloat(costoBalon[tipo]) > 0 && (
+                      <div className="pt-2 mt-1 border-t border-gray-700 space-y-1">
+                        <p className="text-gray-400 font-medium">🔵 Ganancia venta balón vacío:</p>
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-500">Precio venta - costo</span>
+                          <span className="text-blue-400 font-bold">S/? - S/{costoBalon[tipo]} = editable</span>
+                        </div>
+                        <p className="text-gray-400 font-medium mt-1">⛽🔵 Ganancia gas + balón:</p>
+                        {precios.map(p => {
+                          const precioGas = preciosPorTipo.find(x => x.precio_tipo_id === p.id && x.tipo_balon === tipo)?.precio || p.precio || 0
+                          const ganGas = precioGas - parseFloat(costosCompra[tipo])
+                          const ganBalon = 100 - parseFloat(costoBalon[tipo])
+                          return (
+                            <div key={p.id} className="flex justify-between items-center">
+                              <span className="text-gray-500">{p.nombre}</span>
+                              <span className={`font-bold ${(ganGas + ganBalon) > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                gas S/{ganGas.toFixed(0)} + bal S/{ganBalon.toFixed(0)} = S/{(ganGas + ganBalon).toFixed(0)}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                     {distribuidores.length > 0 && (
                       <>
-                        <p className="text-gray-400 font-medium mt-3 mb-1 pt-2 border-t border-gray-700">🚛 Distribuidores — Ganancia por precio:</p>
+                        <p className="text-gray-400 font-medium mt-3 mb-1 pt-2 border-t border-gray-700">🚛 Distribuidores:</p>
                         {distribuidores.map(d => {
                           const gan = (d.precio_base || 0) - parseFloat(costosCompra[tipo])
                           return (
