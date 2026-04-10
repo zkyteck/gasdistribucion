@@ -45,24 +45,21 @@ export default function Ventas() {
     cliente_id: '', cliente_nombre: '', es_varios: false,
     almacen_id: '', precio_tipo_id: '', tipo_balon: '10kg',
     cantidad: '', precio_unitario: '', metodo_pago: 'efectivo', notas: '',
-    fecha: hoyPeru(), al_credito: false, precio_especial_activo: false
+    fecha: hoyPeru()
   })
 
   useEffect(() => { cargar() }, [filtroFecha])
 
-  const [distribuidores, setDistribuidores] = useState([])
-
   async function cargar() {
     setLoading(true)
-    const [{ data: v }, { data: a }, { data: pt }, { data: c }, { data: ptb }, { data: spt }, { data: dist }] = await Promise.all([
+    const [{ data: v }, { data: a }, { data: pt }, { data: c }, { data: ptb }, { data: spt }] = await Promise.all([
       supabase.from('ventas').select('*, clientes(nombre), almacenes(nombre), precio_tipos(nombre)')
         .gte('fecha', filtroFecha + 'T00:00:00-05:00').lte('fecha', filtroFecha + 'T23:59:59-05:00').order('fecha', { ascending: false }),
       supabase.from('almacenes').select('id, nombre, stock_actual').eq('activo', true).order('nombre'),
       supabase.from('precio_tipos').select('*').eq('activo', true),
-      supabase.from('clientes').select('id, nombre, tipo, es_varios, precio_personalizado, tipo_balon_personalizado').order('nombre').limit(100),
+      supabase.from('clientes').select('id, nombre, tipo, es_varios').order('nombre').limit(100),
       supabase.from('precio_tipo_balon').select('*'),
-      supabase.from('stock_por_tipo').select('*'),
-      supabase.from('distribuidores').select('id, nombre, almacen_id, precio_base').eq('activo', true)
+      supabase.from('stock_por_tipo').select('*')
     ])
     setVentas(v || [])
     setAlmacenes(a || [])
@@ -70,7 +67,6 @@ export default function Ventas() {
     setClientes(c || [])
     setPreciosPorTipo(ptb || [])
     setStockPorTipo(spt || [])
-    setDistribuidores(dist || [])
     setLoading(false)
   }
 
@@ -86,31 +82,24 @@ export default function Ventas() {
 
   function abrirModal() {
     const clienteVarios = clientes.find(c => c.es_varios)
-    const tiendaPrincipal = almacenes.find(a => a.nombre.toLowerCase().includes('tienda')) || almacenes[0]
+    const primerAlmacen = almacenes[0]
     const primerTipo = precioTipos[0]
     setForm({
       cliente_id: clienteVarios?.id || '', cliente_nombre: 'Cliente Varios', es_varios: true,
-      almacen_id: tiendaPrincipal?.id || '', precio_tipo_id: primerTipo?.id || '',
+      almacen_id: primerAlmacen?.id || '', precio_tipo_id: primerTipo?.id || '',
       tipo_balon: '10kg', cantidad: '',
       precio_unitario: getPrecio(primerTipo?.id, '10kg') || primerTipo?.precio || '',
-      metodo_pago: 'efectivo', notas: '', fecha: hoyPeru(), al_credito: false, precio_especial_activo: false
+      metodo_pago: 'efectivo', notas: ''
     })
     setError(''); setModal(true); setBusquedaCliente(''); setSubModal(null)
   }
 
   function seleccionarTipoPrecio(tipoId) {
-    // Si el cliente tiene precio especial, no sobreescribir
-    if (form.precio_especial_activo) return
     const precio = getPrecio(tipoId, form.tipo_balon)
     setForm(f => ({ ...f, precio_tipo_id: tipoId, precio_unitario: precio }))
   }
 
   function seleccionarTipoBalon(tipoBalon) {
-    // Si el cliente tiene precio especial, solo cambiar el tipo, no el precio
-    if (form.precio_especial_activo) {
-      setForm(f => ({ ...f, tipo_balon: tipoBalon }))
-      return
-    }
     const precio = getPrecio(form.precio_tipo_id, tipoBalon)
     setForm(f => ({ ...f, tipo_balon: tipoBalon, precio_unitario: precio }))
   }
@@ -119,22 +108,11 @@ export default function Ventas() {
     const c = clientes.find(c => c.id === clienteId)
     if (!c) return
     const tipoPrecio = precioTipos.find(t => t.nombre.toLowerCase().includes(c.tipo)) || precioTipos[0]
-    if (c.precio_personalizado && c.tipo_balon_personalizado) {
-      setForm(f => ({
-        ...f, cliente_id: c.id, cliente_nombre: c.nombre, es_varios: c.es_varios,
-        precio_tipo_id: tipoPrecio?.id || '',
-        tipo_balon: c.tipo_balon_personalizado,
-        precio_unitario: c.precio_personalizado,
-        precio_especial_activo: true
-      }))
-    } else {
-      const precio = getPrecio(tipoPrecio?.id, form.tipo_balon)
-      setForm(f => ({
-        ...f, cliente_id: c.id, cliente_nombre: c.nombre, es_varios: c.es_varios,
-        precio_tipo_id: tipoPrecio?.id || '', precio_unitario: precio || tipoPrecio?.precio || '',
-        precio_especial_activo: false
-      }))
-    }
+    const precio = getPrecio(tipoPrecio?.id, form.tipo_balon)
+    setForm(f => ({
+      ...f, cliente_id: c.id, cliente_nombre: c.nombre, es_varios: c.es_varios,
+      precio_tipo_id: tipoPrecio?.id || '', precio_unitario: precio || tipoPrecio?.precio || ''
+    }))
   }
 
   async function eliminarVenta(venta) {
@@ -177,13 +155,11 @@ export default function Ventas() {
 
   async function guardar() {
     if (!form.almacen_id || !form.cantidad || !form.precio_unitario) { setError('Completa todos los campos'); return }
-    if (form.al_credito && form.es_varios) { setError('Para venta al crédito debes seleccionar un cliente específico'); return }
     const stockDisp = getStock(form.almacen_id, form.tipo_balon)
     if (stockDisp < parseInt(form.cantidad)) {
       setError(`Stock insuficiente de ${form.tipo_balon}. Disponible: ${stockDisp} balones`); return
     }
     setSaving(true); setError('')
-    const metodo = form.al_credito ? 'credito' : form.metodo_pago
     const { error: e } = await supabase.from('ventas').insert({
       cliente_id: form.cliente_id || null,
       almacen_id: form.almacen_id,
@@ -192,60 +168,30 @@ export default function Ventas() {
       fecha: (form.fecha || hoyPeru()) + 'T12:00:00-05:00',
       cantidad: parseInt(form.cantidad),
       precio_unitario: parseFloat(form.precio_unitario),
-      metodo_pago: metodo,
+      metodo_pago: form.metodo_pago,
       notas: form.notas,
       usuario_id: perfil?.id || null
     })
     if (e) { setError(e.message); setSaving(false); return }
-    // Descontar stock_por_tipo
+    // Descontar stock_por_tipo (por tipo de balón)
     await supabase.from('stock_por_tipo')
       .update({ stock_actual: stockDisp - parseInt(form.cantidad), updated_at: new Date().toISOString() })
       .eq('almacen_id', form.almacen_id).eq('tipo_balon', form.tipo_balon)
-    // Descontar stock_actual en almacenes
-    // Si es al crédito NO suma vacíos (el balón está en la calle, no regresó)
-    const almacen = almacenes.find(a => a.id === form.almacen_id)
-    if (almacen) {
-      const cant = parseInt(form.cantidad)
-      const campoVacios = form.tipo_balon === '5kg' ? 'vacios_5kg' : form.tipo_balon === '10kg' ? 'vacios_10kg' : 'vacios_45kg'
-      if (form.al_credito) {
-        // Solo descuenta llenos, NO suma vacíos (balón en la calle)
-        await supabase.from('almacenes')
-          .update({ stock_actual: Math.max(0, (almacen.stock_actual || 0) - cant) })
-          .eq('id', form.almacen_id)
-      } else {
-        await supabase.from('almacenes')
-          .update({
-            stock_actual: Math.max(0, (almacen.stock_actual || 0) - cant),
-            balones_vacios: (almacen.balones_vacios || 0) + cant,
-            [campoVacios]: (almacen[campoVacios] || 0) + cant
-          })
-          .eq('id', form.almacen_id)
-      }
-    }
-    // Si es al crédito → crear deuda automáticamente
-    if (form.al_credito) {
-      const monto = parseInt(form.cantidad) * parseFloat(form.precio_unitario)
-      const entradaHistorial = {
-        tipo: 'deuda', fecha: form.fecha,
-        monto, balones: parseInt(form.cantidad),
-        tipo_balon: form.tipo_balon,
-        vales_20: 0, vales_43: 0,
-        notas: `Venta al crédito — ${form.tipo_balon} × ${form.cantidad}`
-      }
-      await supabase.from('deudas').insert({
-        cliente_id: form.cliente_id || null,
-        nombre_deudor: form.cliente_nombre,
-        tipo_deuda: 'mixto',
-        monto_original: monto, monto_pendiente: monto,
-        cantidad_original: parseInt(form.cantidad), cantidad_pendiente: parseInt(form.cantidad),
-        balones_pendiente: parseInt(form.cantidad),
-        vales_20_pendiente: 0, vales_43_pendiente: 0,
-        fecha_deuda: form.fecha, estado: 'activa',
-        notas: form.notas || `Venta al crédito ${form.tipo_balon}`,
-        historial: [entradaHistorial],
-        almacen_id: form.almacen_id || null,
-        usuario_id: perfil?.id || null
-      })
+    // Descontar stock_actual en almacenes y sumar vacíos automáticamente
+    const cant = parseInt(form.cantidad)
+    const campoVacios = form.tipo_balon === '5kg' ? 'vacios_5kg' : form.tipo_balon === '10kg' ? 'vacios_10kg' : 'vacios_45kg'
+    // Traer almacén fresco de BD para no usar datos desactualizados
+    const { data: almacenFresco } = await supabase.from('almacenes')
+      .select('stock_actual, balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg')
+      .eq('id', form.almacen_id).single()
+    if (almacenFresco) {
+      await supabase.from('almacenes')
+        .update({
+          stock_actual: Math.max(0, (almacenFresco.stock_actual || 0) - cant),
+          balones_vacios: (almacenFresco.balones_vacios || 0) + cant,
+          [campoVacios]: (almacenFresco[campoVacios] || 0) + cant
+        })
+        .eq('id', form.almacen_id)
     }
     setSaving(false); setModal(false); cargar()
   }
@@ -307,24 +253,7 @@ export default function Ventas() {
                       <td className="px-4 py-3 text-blue-400 font-bold">{v.cantidad}</td>
                       <td className="px-4 py-3 text-gray-400 text-sm">S/{v.precio_unitario}</td>
                       <td className="px-4 py-3 text-emerald-400 font-bold">S/{(v.cantidad * v.precio_unitario).toLocaleString()}</td>
-                      <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        v.metodo_pago === 'efectivo' ? 'bg-emerald-900/40 text-emerald-400' :
-                        v.metodo_pago === 'yape' ? 'bg-blue-900/40 text-blue-400' :
-                        v.metodo_pago === 'vale' ? 'bg-yellow-900/40 text-yellow-400' :
-                        v.metodo_pago === 'credito' ? 'bg-orange-900/40 text-orange-400' :
-                        v.metodo_pago === 'cobro_credito' ? 'bg-teal-900/40 text-teal-400' :
-                        v.metodo_pago === 'credito_distribuidor' ? 'bg-purple-900/40 text-purple-400' :
-                        v.metodo_pago === 'cobro_distribuidor' ? 'bg-indigo-900/40 text-indigo-400' :
-                        v.metodo_pago === 'abono_distribuidor' ? 'bg-cyan-900/40 text-cyan-400' :
-                        'bg-gray-900/40 text-gray-400'
-                      }`}>{
-                        v.metodo_pago === 'credito' ? '💳 Crédito' :
-                        v.metodo_pago === 'cobro_credito' ? '✅ Cobro crédito' :
-                        v.metodo_pago === 'credito_distribuidor' ? '🚛 Distribuidor' :
-                        v.metodo_pago === 'cobro_distribuidor' ? '✅ Cobro dist.' :
-                        v.metodo_pago === 'abono_distribuidor' ? '💰 Abono dist.' :
-                        v.metodo_pago
-                      }</span></td>
+                      <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${v.metodo_pago === 'efectivo' ? 'bg-emerald-900/40 text-emerald-400' : v.metodo_pago === 'yape' ? 'bg-blue-900/40 text-blue-400' : v.metodo_pago === 'vale' ? 'bg-yellow-900/40 text-yellow-400' : 'bg-purple-900/40 text-purple-400'}`}>{v.metodo_pago}</span></td>
                       <td className="px-4 py-3">
                         <button onClick={() => eliminarVenta(v)}
                           className="text-gray-600 hover:text-red-400 transition-colors p-1 rounded hover:bg-red-900/20"
@@ -385,45 +314,9 @@ export default function Ventas() {
             </div>
             <div>
               <label className="label">Almacén</label>
-              <select className="input" value={form.almacen_id} onChange={e => {
-                const almacenId = e.target.value
-                const dist = distribuidores.find(d => d.almacen_id === almacenId)
-                if (dist) {
-                  setBusquedaCliente(dist.nombre)
-                  setForm(f => ({
-                    ...f,
-                    almacen_id: almacenId,
-                    cliente_id: '',
-                    cliente_nombre: dist.nombre,
-                    es_varios: false,
-                    precio_unitario: dist.precio_base || f.precio_unitario,
-                    al_credito: true,
-                    precio_especial_activo: !!dist.precio_base
-                  }))
-                } else {
-                  const clienteVarios = clientes.find(c => c.es_varios)
-                  setBusquedaCliente('')
-                  setForm(f => ({
-                    ...f,
-                    almacen_id: almacenId,
-                    cliente_id: clienteVarios?.id || '',
-                    cliente_nombre: 'Cliente Varios',
-                    es_varios: true,
-                    al_credito: false,
-                    precio_especial_activo: false
-                  }))
-                }
-              }}>
-                {almacenes.map(a => {
-                  const dist = distribuidores.find(d => d.almacen_id === a.id)
-                  return <option key={a.id} value={a.id}>{a.nombre}{dist ? ` — ${dist.nombre}` : ''}</option>
-                })}
+              <select className="input" value={form.almacen_id} onChange={e => setForm(f => ({...f, almacen_id: e.target.value}))}>
+                {almacenes.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
               </select>
-              {distribuidores.find(d => d.almacen_id === form.almacen_id) && (
-                <p className="text-xs text-purple-400 mt-1 px-1">
-                  🚛 Almacén de distribuidor — venta al crédito activada automáticamente
-                </p>
-              )}
             </div>
             <div>
               <label className="label">Tipo de balón</label>
@@ -442,13 +335,6 @@ export default function Ventas() {
             </div>
             <div>
               <label className="label">Tipo de cliente / precio</label>
-              {form.precio_especial_activo ? (
-                <div className="bg-emerald-900/20 border border-emerald-700/40 rounded-xl px-4 py-2.5 flex items-center justify-between">
-                  <p className="text-xs text-emerald-300">⭐ Precio especial del cliente activo</p>
-                  <button onClick={() => setForm(f => ({...f, precio_especial_activo: false, precio_unitario: getPrecio(f.precio_tipo_id, f.tipo_balon)}))}
-                    className="text-xs text-gray-500 hover:text-gray-300 underline">usar precio normal</button>
-                </div>
-              ) : (
               <div className="grid grid-cols-3 gap-2">
                 {precioTipos.map(t => {
                   const precio = getPrecio(t.id, form.tipo_balon) || t.precio
@@ -460,7 +346,6 @@ export default function Ventas() {
                   )
                 })}
               </div>
-              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -479,30 +364,6 @@ export default function Ventas() {
                 <span className="text-emerald-400 font-bold text-lg">S/ {((parseInt(form.cantidad)||0) * (parseFloat(form.precio_unitario)||0)).toLocaleString('es-PE')}</span>
               </div>
             )}
-            {/* Toggle al crédito */}
-            <div
-              onClick={() => setForm(f => ({...f, al_credito: !f.al_credito, metodo_pago: !f.al_credito ? 'credito' : 'efectivo'}))}
-              className={`flex items-center justify-between rounded-xl border p-3 cursor-pointer transition-all ${form.al_credito ? 'bg-orange-900/30 border-orange-600/50' : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'}`}>
-              <div>
-                <p className={`text-sm font-semibold ${form.al_credito ? 'text-orange-300' : 'text-gray-300'}`}>💳 Venta al crédito</p>
-                <p className="text-xs text-gray-500 mt-0.5">Descuenta stock y crea deuda automáticamente</p>
-              </div>
-              <div className={`w-10 h-6 rounded-full transition-all relative ${form.al_credito ? 'bg-orange-500' : 'bg-gray-600'}`}>
-                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${form.al_credito ? 'left-5' : 'left-1'}`} />
-              </div>
-            </div>
-
-            {form.al_credito && (
-              <div className="bg-orange-900/20 border border-orange-800/40 rounded-xl p-3 text-xs text-gray-400 space-y-1">
-                <p className="text-orange-300 font-medium">⚠️ Venta al crédito activa</p>
-                <p>• Se descontarán <strong className="text-white">{form.cantidad || '?'} balones</strong> del stock</p>
-                <p>• Se creará una deuda de <strong className="text-white">S/ {((parseInt(form.cantidad)||0)*(parseFloat(form.precio_unitario)||0)).toLocaleString('es-PE')}</strong> a nombre de <strong className="text-white">{form.cliente_nombre || '—'}</strong></p>
-                <p>• Los vacíos <strong className="text-white">no</strong> se suman (el balón está en la calle)</p>
-              </div>
-            )}
-
-            {/* Método de pago — solo si NO es crédito */}
-            {!form.al_credito && (
             <div>
               <label className="label">Método de pago</label>
               <div className="grid grid-cols-4 gap-2">
@@ -514,7 +375,6 @@ export default function Ventas() {
                 ))}
               </div>
             </div>
-            )}
             <div><label className="label">Fecha</label><input type="date" className="input" value={form.fecha} onChange={e => setForm(f => ({...f, fecha: e.target.value}))} /></div>
             <div><label className="label">Notas</label><input className="input" placeholder="Observaciones..." value={form.notas} onChange={e => setForm(f => ({...f, notas: e.target.value}))} /></div>
             <div className="flex gap-3 pt-2">
