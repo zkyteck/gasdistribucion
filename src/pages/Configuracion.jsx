@@ -438,6 +438,7 @@ export default function Configuracion() {
                     <p className="text-gray-400 font-medium mb-2">🏪 Ganancia venta gas:</p>
                     {precios.map(p => {
                       const precioVenta = preciosPorTipo.find(x => x.precio_tipo_id === p.id && x.tipo_balon === tipo)?.precio || p.precio || 0
+                      if (!precioVenta || precioVenta === 0) return null
                       const gan = precioVenta - parseFloat(costosCompra[tipo])
                       return (
                         <div key={p.id} className="flex justify-between items-center">
@@ -458,6 +459,7 @@ export default function Configuracion() {
                         <p className="text-gray-400 font-medium mt-1">⛽🔵 Ganancia gas + balón:</p>
                         {precios.map(p => {
                           const precioGas = preciosPorTipo.find(x => x.precio_tipo_id === p.id && x.tipo_balon === tipo)?.precio || p.precio || 0
+                          if (!precioGas || precioGas === 0) return null
                           const ganGas = precioGas - parseFloat(costosCompra[tipo])
                           const ganBalon = 100 - parseFloat(costoBalon[tipo])
                           return (
