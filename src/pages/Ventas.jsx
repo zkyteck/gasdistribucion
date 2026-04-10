@@ -82,14 +82,16 @@ export default function Ventas() {
 
   function abrirModal() {
     const clienteVarios = clientes.find(c => c.es_varios)
-    const primerAlmacen = almacenes[0]
+    const almacenPerfil = perfil?.almacen_id ? almacenes.find(a => a.id === perfil.almacen_id) : null
+    const almacenTienda = almacenes.find(a => a.nombre?.toLowerCase().includes('tienda'))
+    const almacenDefault = almacenPerfil || almacenTienda || almacenes[0]
     const primerTipo = precioTipos[0]
     setForm({
       cliente_id: clienteVarios?.id || '', cliente_nombre: 'Cliente Varios', es_varios: true,
-      almacen_id: primerAlmacen?.id || '', precio_tipo_id: primerTipo?.id || '',
+      almacen_id: almacenDefault?.id || '', precio_tipo_id: primerTipo?.id || '',
       tipo_balon: '10kg', cantidad: '',
       precio_unitario: getPrecio(primerTipo?.id, '10kg') || primerTipo?.precio || '',
-      metodo_pago: 'efectivo', notas: ''
+      metodo_pago: 'efectivo', notas: '', es_credito: false
     })
     setError(''); setModal(true); setBusquedaCliente(''); setSubModal(null)
   }
@@ -185,13 +187,35 @@ export default function Ventas() {
       .select('stock_actual, balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg')
       .eq('id', form.almacen_id).single()
     if (almacenFresco) {
-      await supabase.from('almacenes')
-        .update({
-          stock_actual: Math.max(0, (almacenFresco.stock_actual || 0) - cant),
-          balones_vacios: (almacenFresco.balones_vacios || 0) + cant,
-          [campoVacios]: (almacenFresco[campoVacios] || 0) + cant
-        })
-        .eq('id', form.almacen_id)
+      const updateData = {
+        stock_actual: Math.max(0, (almacenFresco.stock_actual || 0) - cant),
+      }
+      // Solo sumar vacíos si NO es venta al crédito (balón sigue en calle)
+      if (!form.es_credito) {
+        updateData.balones_vacios = (almacenFresco.balones_vacios || 0) + cant
+        updateData[campoVacios] = (almacenFresco[campoVacios] || 0) + cant
+      }
+      await supabase.from('almacenes').update(updateData).eq('id', form.almacen_id)
+    }
+    // Si es venta al crédito → crear deuda automáticamente
+    if (form.es_credito) {
+      const totalDeuda = parseInt(form.cantidad) * parseFloat(form.precio_unitario)
+      await supabase.from('deudas').insert({
+        cliente_id: form.cliente_id || null,
+        nombre_deudor: form.cliente_nombre || 'Cliente Varios',
+        tipo_deuda: 'mixto',
+        monto_original: totalDeuda,
+        monto_pendiente: totalDeuda,
+        cantidad_original: parseInt(form.cantidad),
+        cantidad_pendiente: parseInt(form.cantidad),
+        balones_pendiente: parseInt(form.cantidad),
+        fecha_deuda: form.fecha || hoyPeru(),
+        estado: 'activa',
+        notas: `Venta al crédito${form.notas ? ' — ' + form.notas : ''}`,
+        almacen_id: form.almacen_id,
+        usuario_id: perfil?.id || null,
+        historial: [{ tipo: 'deuda', fecha: form.fecha || hoyPeru(), monto: totalDeuda, balones: parseInt(form.cantidad), tipo_balon: form.tipo_balon, notas: 'Venta al crédito' }]
+      })
     }
     setSaving(false); setModal(false); cargar()
   }
@@ -378,6 +402,25 @@ export default function Ventas() {
             </div>
             <div><label className="label">Fecha</label><input type="date" className="input" value={form.fecha} onChange={e => setForm(f => ({...f, fecha: e.target.value}))} /></div>
             <div><label className="label">Notas</label><input className="input" placeholder="Observaciones..." value={form.notas} onChange={e => setForm(f => ({...f, notas: e.target.value}))} /></div>
+
+            {/* Toggle venta al crédito */}
+            <div className={`rounded-xl border p-3 cursor-pointer transition-all ${form.es_credito ? 'bg-orange-900/20 border-orange-600/50' : 'bg-gray-800/50 border-gray-700'}`}
+              onClick={() => setForm(f => ({...f, es_credito: !f.es_credito}))}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={`text-sm font-medium ${form.es_credito ? 'text-orange-300' : 'text-gray-400'}`}>💳 Venta al crédito</p>
+                  <p className="text-xs text-gray-500 mt-0.5">El cliente se lleva el balón y pagará después</p>
+                </div>
+                <div className={`w-10 h-5 rounded-full transition-all relative ${form.es_credito ? 'bg-orange-500' : 'bg-gray-700'}`}>
+                  <div className={`w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all ${form.es_credito ? 'left-5' : 'left-0.5'}`} />
+                </div>
+              </div>
+              {form.es_credito && (
+                <div className="mt-2 bg-orange-900/30 rounded-lg p-2 text-xs text-orange-300">
+                  ⚠️ Se creará una deuda de S/{((parseInt(form.cantidad)||0) * (parseFloat(form.precio_unitario)||0)).toLocaleString()} · {form.cantidad || 0} balón(es) en Deudas
+                </div>
+              )}
+            </div>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setModal(false)} className="btn-secondary flex-1">Cancelar</button>
               <button onClick={guardar} disabled={saving} className="btn-primary flex-1 justify-center">{saving ? 'Guardando...' : '✓ Registrar venta'}</button>
