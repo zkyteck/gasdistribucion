@@ -32,32 +32,31 @@ export default function Vales() {
   const [filtroFecha, setFiltroFecha] = useState(hoyPeru())
   const [reloadKey, setReloadKey] = useState(0)
 
-  const [form, setForm] = useState({ cantidad_20: '', cantidad_43: '', fecha: hoyPeru(), notas: '' })
+  const [form, setForm] = useState({ cantidad_pequeno: '', cantidad_grande: '', fecha: hoyPeru(), notas: '' })
+  const [valorVales, setValorVales] = useState({ pequeno: 20, grande: 43 })
   const [smsForm, setSmsForm] = useState({ dni: '', cupon: '', tipo: '20' })
   const [smsHistorial, setSmsHistorial] = useState([])
   const [modalSms, setModalSms] = useState(false)
   const [retiroForm, setRetiroForm] = useState({ monto: '', motivo: '', fecha: hoyPeru() })
 
   useEffect(() => {
-    cargar(); cargarPreciosVales()
+    cargar()
+    cargarValorVales()
     const canal = supabase.channel('vales-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vales_fise' }, () => cargar())
       .subscribe()
     return () => supabase.removeChannel(canal)
   }, [filtroFecha])
 
-  const [preciosVales, setPreciosVales] = useState({ '20': 20, '43': 43 })
-
-  async function cargarPreciosVales() {
-    const { data } = await supabase.from('configuracion').select('*').in('clave', ['precio_vale_20','precio_vale_43'])
-    if (data?.length) {
-      const mapa = { '20': 20, '43': 43 }
-      data.forEach(r => {
-        if (r.clave === 'precio_vale_20') mapa['20'] = parseFloat(r.valor) || 20
-        if (r.clave === 'precio_vale_43') mapa['43'] = parseFloat(r.valor) || 43
-      })
-      setPreciosVales(mapa)
-    }
+  async function cargarValorVales() {
+    const { data } = await supabase.from('configuracion').select('*')
+      .in('clave', ['valor_vale_pequeno', 'valor_vale_grande'])
+    const mapa = { pequeno: 20, grande: 43 }
+    data?.forEach(r => {
+      if (r.clave === 'valor_vale_pequeno') mapa.pequeno = parseFloat(r.valor) || 20
+      if (r.clave === 'valor_vale_grande') mapa.grande = parseFloat(r.valor) || 43
+    })
+    setValorVales(mapa)
   }
 
   async function cargar() {
@@ -73,8 +72,9 @@ export default function Vales() {
         .gte('lote_dia', inicioMes).lte('lote_dia', finMes).neq('estado', 'anulado')
     ])
     const valesDelDia = v || []
-    const totalDia = valesDelDia.reduce((s, x) => s + (parseFloat(x.monto) || 0), 0)
-    setLotes(valesDelDia.length > 0 ? [{ fecha: filtroFecha, cant20: valesDelDia.filter(x=>x.tipo_vale==='20').length, cant43: valesDelDia.filter(x=>x.tipo_vale==='43').length, total: totalDia, vales: valesDelDia }] : [])
+    const v20 = valesDelDia.filter(x => x.tipo_vale === '20')
+    const v43 = valesDelDia.filter(x => x.tipo_vale === '43')
+    setLotes(valesDelDia.length > 0 ? [{ fecha: filtroFecha, cant20: v20.length, cant43: v43.length, total: v20.length * 20 + v43.length * 43, vales: valesDelDia }] : [])
     setSaldo(s || { total_vales: 0, total_retiros: 0, saldo_disponible: 0 })
     setValesMes(totalMes || 0)
     setLoading(false)
@@ -82,15 +82,13 @@ export default function Vales() {
   }
 
   async function guardarLote() {
-    const c20 = parseInt(form.cantidad_20) || 0
-    const c43 = parseInt(form.cantidad_43) || 0
-    if (!c20 && !c43) { setError('Ingresa al menos una cantidad'); return }
+    const cp = parseInt(form.cantidad_pequeno) || 0
+    const cg = parseInt(form.cantidad_grande) || 0
+    if (!cp && !cg) { setError('Ingresa al menos una cantidad'); return }
     setSaving(true); setError('')
-
     const inserts = []
-    for (let i = 0; i < c20; i++) inserts.push({ tipo_vale: '20', monto: preciosVales['20'], fecha_recepcion: form.fecha, lote_dia: form.fecha, estado: 'pendiente', notas: form.notas, usuario_id: perfil?.id || null })
-    for (let i = 0; i < c43; i++) inserts.push({ tipo_vale: '43', monto: preciosVales['43'], fecha_recepcion: form.fecha, lote_dia: form.fecha, estado: 'pendiente', notas: form.notas, usuario_id: perfil?.id || null })
-
+    for (let i = 0; i < cp; i++) inserts.push({ tipo_vale: String(valorVales.pequeno), monto: valorVales.pequeno, fecha_recepcion: form.fecha, lote_dia: form.fecha, estado: 'pendiente', notas: form.notas, usuario_id: perfil?.id || null })
+    for (let i = 0; i < cg; i++) inserts.push({ tipo_vale: String(valorVales.grande), monto: valorVales.grande, fecha_recepcion: form.fecha, lote_dia: form.fecha, estado: 'pendiente', notas: form.notas, usuario_id: perfil?.id || null })
     const { error: e } = await supabase.from('vales_fise').insert(inserts)
     setSaving(false)
     if (e) { setError(e.message); return }
@@ -173,7 +171,7 @@ export default function Vales() {
           <button onClick={() => { setRetiroForm({ monto: '', motivo: '', fecha: hoyPeru() }); setError(''); setModal('retiro') }} className="btn-secondary">
             <DollarSign className="w-4 h-4" />Registrar retiro
           </button>
-          <button onClick={() => { setForm({ cantidad_20: '', cantidad_43: '', fecha: filtroFecha, notas: '' }); setError(''); setModal('nuevo') }} className="btn-primary">
+          <button onClick={() => { setForm({ cantidad_pequeno: '', cantidad_grande: '', fecha: filtroFecha, notas: '' }); setError(''); setModal('nuevo') }} className="btn-primary">
             <Plus className="w-4 h-4" />Registrar vales
           </button>
         </div>
@@ -329,33 +327,34 @@ export default function Vales() {
               <label className="label mb-3">Cantidad de vales procesados</label>
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-yellow-900/20 border border-yellow-800/40 rounded-xl p-4 text-center">
-                  <p className="text-yellow-400 font-bold text-lg mb-3">🎫 S/ 20</p>
+                  <p className="text-yellow-400 font-bold text-lg mb-1">🎫 S/ {valorVales.pequeno}</p>
+                  <p className="text-gray-500 text-xs mb-3">Vale pequeño</p>
                   <input type="number" min="0" className="input text-center text-2xl font-bold py-3"
-                    value={form.cantidad_20} placeholder="0"
-                    onChange={e => setForm(f => ({...f, cantidad_20: e.target.value}))} />
-                  <p className="text-gray-500 text-xs mt-2">vales</p>
-                  {parseInt(form.cantidad_20) > 0 && (
-                    <p className="text-yellow-400 font-semibold text-sm mt-1">= S/ {parseInt(form.cantidad_20) * 20}</p>
+                    value={form.cantidad_pequeno} placeholder="0"
+                    onChange={e => setForm(f => ({...f, cantidad_pequeno: e.target.value}))} />
+                  {parseInt(form.cantidad_pequeno) > 0 && (
+                    <p className="text-yellow-400 font-semibold text-sm mt-2">= S/ {parseInt(form.cantidad_pequeno) * valorVales.pequeno}</p>
                   )}
                 </div>
                 <div className="bg-orange-900/20 border border-orange-800/40 rounded-xl p-4 text-center">
-                  <p className="text-orange-400 font-bold text-lg mb-3">🎫 S/ 43</p>
+                  <p className="text-orange-400 font-bold text-lg mb-1">🎫 S/ {valorVales.grande}</p>
+                  <p className="text-gray-500 text-xs mb-3">Vale grande</p>
                   <input type="number" min="0" className="input text-center text-2xl font-bold py-3"
-                    value={form.cantidad_43} placeholder="0"
-                    onChange={e => setForm(f => ({...f, cantidad_43: e.target.value}))} />
-                  <p className="text-gray-500 text-xs mt-2">vales</p>
-                  {parseInt(form.cantidad_43) > 0 && (
-                    <p className="text-orange-400 font-semibold text-sm mt-1">= S/ {parseInt(form.cantidad_43) * 43}</p>
+                    value={form.cantidad_grande} placeholder="0"
+                    onChange={e => setForm(f => ({...f, cantidad_grande: e.target.value}))} />
+                  {parseInt(form.cantidad_grande) > 0 && (
+                    <p className="text-orange-400 font-semibold text-sm mt-2">= S/ {parseInt(form.cantidad_grande) * valorVales.grande}</p>
                   )}
                 </div>
               </div>
+              <p className="text-xs text-gray-600 mt-2">💡 Para cambiar el valor del vale ve a Configuración → Vales FISE</p>
             </div>
 
-            {(parseInt(form.cantidad_20) > 0 || parseInt(form.cantidad_43) > 0) && (
+            {(parseInt(form.cantidad_pequeno) > 0 || parseInt(form.cantidad_grande) > 0) && (
               <div className="bg-emerald-900/20 border border-emerald-700/40 rounded-xl p-3 flex justify-between items-center">
                 <span className="text-gray-400 text-sm">Total a registrar:</span>
                 <span className="text-emerald-400 font-bold text-xl">
-                  S/ {(parseInt(form.cantidad_20)||0)*20 + (parseInt(form.cantidad_43)||0)*43}
+                  S/ {((parseInt(form.cantidad_pequeno)||0) * valorVales.pequeno + (parseInt(form.cantidad_grande)||0) * valorVales.grande).toFixed(0)}
                 </span>
               </div>
             )}
