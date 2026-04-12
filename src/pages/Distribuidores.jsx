@@ -51,6 +51,7 @@ export default function Distribuidores() {
   const [arregloModal, setArregloModal] = useState(false)
   const [arregloForm, setArregloForm] = useState({ vales20: '', vales30: '', vales43: '', efectivo: '', yape: '', notas: '', fecha: hoyPeru() })
   const [cuentaActiva, setCuentaActiva] = useState(null)
+  const [cuentasCerradas, setCuentasCerradas] = useState([])
   const [cargasDist, setCargasDist] = useState([])
   const [abonosParciales, setAbonosParciales] = useState([])
   const [acuentaDist, setAcuentaDist] = useState([]) // registros a cuenta del distribuidor seleccionado
@@ -78,17 +79,29 @@ export default function Distribuidores() {
 
   // ── Funciones cuenta corriente (Cristian) ──────────────────────────────
   async function cargarCuentaCorriente(distId) {
-    const [{ data: cuenta }, { data: cargas }, { data: abonos }] = await Promise.all([
+    const [{ data: cuenta }, { data: cargas }, { data: abonos }, { data: cerradas }] = await Promise.all([
       supabase.from('cuentas_corrientes_distribuidor')
         .select('*').eq('distribuidor_id', distId).eq('estado', 'abierta').single(),
       supabase.from('cargas_distribuidor')
         .select('*').eq('distribuidor_id', distId).order('fecha', { ascending: true }),
       supabase.from('abonos_distribuidor_parcial')
-        .select('*').eq('distribuidor_id', distId).order('fecha', { ascending: true })
+        .select('*').eq('distribuidor_id', distId).order('fecha', { ascending: true }),
+      supabase.from('cuentas_corrientes_distribuidor')
+        .select('*').eq('distribuidor_id', distId).eq('estado', 'cerrada')
+        .order('fecha_cierre', { ascending: false }).limit(20)
     ])
     setCuentaActiva(cuenta || null)
     setCargasDist(cargas || [])
     setAbonosParciales(abonos || [])
+    // Para cada cuenta cerrada, cargar sus cargas y abonos
+    const cerradasConDetalle = await Promise.all((cerradas || []).map(async c => {
+      const [{ data: crgsCuenta }, { data: abonosCuenta }] = await Promise.all([
+        supabase.from('cargas_distribuidor').select('*').eq('cuenta_id', c.id).order('fecha', { ascending: true }),
+        supabase.from('abonos_distribuidor_parcial').select('*').eq('cuenta_id', c.id).order('fecha', { ascending: true })
+      ])
+      return { ...c, cargas: crgsCuenta || [], abonos: abonosCuenta || [] }
+    }))
+    setCuentasCerradas(cerradasConDetalle)
   }
 
   async function guardarCarga() {
@@ -265,6 +278,174 @@ export default function Distribuidores() {
     await cargarCuentaCorriente(selected.id)
     cargar()
   }
+  // ── Funciones de impresión ──────────────────────────────────────────────
+  function imprimirCuenta(cuenta, dist) {
+    const totalV20 = (cuenta.abonos||[]).reduce((s,a)=>s+(a.vales_20||0),0)
+    const totalV30 = (cuenta.abonos||[]).reduce((s,a)=>s+(a.vales_30||0),0)
+    const totalV43 = (cuenta.abonos||[]).reduce((s,a)=>s+(a.vales_43||0),0)
+    const totalEfectivo = (cuenta.abonos||[]).reduce((s,a)=>s+(parseFloat(a.efectivo)||0),0)
+    const totalYape = (cuenta.abonos||[]).reduce((s,a)=>s+(parseFloat(a.yape)||0),0)
+
+    const html = generarHTMLReporte({
+      titulo: `ARREGLO CON ${dist.nombre.toUpperCase()}`,
+      periodo: `${cuenta.fecha_inicio} — ${cuenta.fecha_cierre}`,
+      cargas: cuenta.cargas || [],
+      totalCargado: cuenta.total_cargado,
+      totalDescargado: cuenta.total_descargado,
+      faltantesBal: cuenta.faltantes_bal,
+      montoTotal: cuenta.monto_total,
+      saldoAnterior: cuenta.saldo_anterior,
+      totalV20, totalV30, totalV43,
+      totalEfectivo, totalYape,
+      totalPagado: cuenta.total_pagado,
+      saldoPendiente: cuenta.saldo_pendiente,
+    })
+    abrirVentanaImpresion(html)
+  }
+
+  function imprimirCuentaActiva(dist, cargas, abonos, cuenta) {
+    const totalV20 = abonos.reduce((s,a)=>s+(a.vales_20||0),0)
+    const totalV30 = abonos.reduce((s,a)=>s+(a.vales_30||0),0)
+    const totalV43 = abonos.reduce((s,a)=>s+(a.vales_43||0),0)
+    const totalEfectivo = abonos.reduce((s,a)=>s+(parseFloat(a.efectivo)||0),0)
+    const totalYape = abonos.reduce((s,a)=>s+(parseFloat(a.yape)||0),0)
+    const totalCargado = cargas.reduce((s,c)=>s+(c.cargados||0),0)
+    const totalDescargado = cargas.reduce((s,c)=>s+(c.descargados||0),0)
+    const montoTotal = cargas.reduce((s,c)=>s+(c.monto||0),0) + (cuenta?.saldo_anterior||0)
+    const totalPagado = abonos.reduce((s,a)=>s+(a.total||0),0)
+    const saldoPendiente = Math.max(0, montoTotal - totalPagado)
+    const faltantesBal = Math.max(0, totalCargado - totalDescargado) + (cuenta?.faltantes_anterior||0)
+
+    const html = generarHTMLReporte({
+      titulo: `CUENTA ACTUAL — ${dist.nombre.toUpperCase()}`,
+      periodo: `${cuenta?.fecha_inicio || 'Inicio'} — ${new Date().toLocaleDateString('es-PE')}`,
+      cargas,
+      totalCargado, totalDescargado, faltantesBal,
+      montoTotal,
+      saldoAnterior: cuenta?.saldo_anterior || 0,
+      totalV20, totalV30, totalV43,
+      totalEfectivo, totalYape,
+      totalPagado, saldoPendiente,
+    })
+    abrirVentanaImpresion(html)
+  }
+
+  function generarHTMLReporte({ titulo, periodo, cargas, totalCargado, totalDescargado, faltantesBal, montoTotal, saldoAnterior, totalV20, totalV30, totalV43, totalEfectivo, totalYape, totalPagado, saldoPendiente }) {
+    const filasCargas = cargas.map(c => `
+      <tr>
+        <td>${c.fecha}</td>
+        <td class="center">${c.cargados}</td>
+        <td class="center">${c.descargados}</td>
+        <td class="center">${Math.max(0,c.cargados-c.descargados)}</td>
+        <td class="center">S/${c.precio_unitario}</td>
+        <td class="right">S/${(c.monto||0).toLocaleString('es-PE')}</td>
+      </tr>`).join('')
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${titulo}</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: Arial, sans-serif; font-size: 12px; padding: 20px; color: #000; }
+    h1 { font-size: 16px; text-align: center; margin-bottom: 4px; }
+    .periodo { text-align: center; color: #555; margin-bottom: 16px; font-size: 11px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+    th { background: #333; color: #fff; padding: 6px 8px; text-align: left; font-size: 10px; text-transform: uppercase; }
+    td { padding: 5px 8px; border-bottom: 1px solid #ddd; }
+    .center { text-align: center; }
+    .right { text-align: right; }
+    tr:nth-child(even) { background: #f9f9f9; }
+    .total-row { background: #eee !important; font-weight: bold; }
+    .seccion { margin-bottom: 14px; }
+    .seccion h2 { font-size: 12px; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 3px; margin-bottom: 6px; }
+    .pagos-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 12px; }
+    .pago-item { border: 1px solid #ddd; border-radius: 4px; padding: 8px; text-align: center; }
+    .pago-item .label { font-size: 10px; color: #666; text-transform: uppercase; }
+    .pago-item .valor { font-size: 14px; font-weight: bold; margin-top: 2px; }
+    .resultado { border: 2px solid #333; border-radius: 6px; padding: 12px; margin-top: 12px; }
+    .resultado-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .resultado-total { display: flex; justify-content: space-between; border-top: 1px solid #333; padding-top: 8px; margin-top: 6px; font-size: 15px; font-weight: bold; }
+    .firma-area { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 40px; }
+    .firma { border-top: 1px solid #000; padding-top: 6px; text-align: center; font-size: 10px; color: #555; }
+    @media print { body { padding: 10px; } button { display: none; } }
+  </style>
+</head>
+<body>
+  <button onclick="window.print()" style="position:fixed;top:10px;right:10px;padding:8px 16px;background:#333;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;">🖨️ Imprimir</button>
+
+  <h1>${titulo}</h1>
+  <p class="periodo">${periodo}</p>
+
+  <div class="seccion">
+    <h2>Detalle de cargas y descargas</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th class="center">Cargados</th>
+          <th class="center">Descargados</th>
+          <th class="center">Faltantes</th>
+          <th class="center">Precio</th>
+          <th class="right">Monto</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${filasCargas}
+        <tr class="total-row">
+          <td>TOTAL</td>
+          <td class="center">${totalCargado}</td>
+          <td class="center">${totalDescargado}</td>
+          <td class="center">${faltantesBal}</td>
+          <td></td>
+          <td class="right">S/${montoTotal.toLocaleString('es-PE')}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="seccion">
+    <h2>Pagos recibidos</h2>
+    <div class="pagos-grid">
+      <div class="pago-item"><div class="label">Vales S/20</div><div class="valor">${totalV20} vales</div><div style="font-size:11px;color:#666">=S/${(totalV20*20).toLocaleString('es-PE')}</div></div>
+      <div class="pago-item"><div class="label">Vales S/30</div><div class="valor">${totalV30} vales</div><div style="font-size:11px;color:#666">=S/${(totalV30*30).toLocaleString('es-PE')}</div></div>
+      <div class="pago-item"><div class="label">Vales S/43</div><div class="valor">${totalV43} vales</div><div style="font-size:11px;color:#666">=S/${(totalV43*43).toLocaleString('es-PE')}</div></div>
+      <div class="pago-item"><div class="label">Efectivo</div><div class="valor">S/${totalEfectivo.toLocaleString('es-PE')}</div></div>
+      <div class="pago-item"><div class="label">Yape</div><div class="valor">S/${totalYape.toLocaleString('es-PE')}</div></div>
+      <div class="pago-item" style="background:#f0f0f0"><div class="label">Total pagado</div><div class="valor">S/${totalPagado.toLocaleString('es-PE')}</div></div>
+    </div>
+  </div>
+
+  <div class="resultado">
+    ${saldoAnterior > 0 ? `<div class="resultado-row"><span>Saldo pendiente anterior:</span><span>+ S/${saldoAnterior.toLocaleString('es-PE')}</span></div>` : ''}
+    <div class="resultado-row"><span>Monto total a pagar:</span><span>S/${montoTotal.toLocaleString('es-PE')}</span></div>
+    <div class="resultado-row"><span>Total pagado:</span><span>- S/${totalPagado.toLocaleString('es-PE')}</span></div>
+    <div class="resultado-total">
+      <span>${saldoPendiente > 0 ? '⏳ Saldo pendiente:' : '✅ CANCELADO'}</span>
+      <span>S/${saldoPendiente.toLocaleString('es-PE')}</span>
+    </div>
+    ${faltantesBal > 0 ? `<div class="resultado-row" style="margin-top:6px"><span>⚪ Vacíos pendientes de devolución:</span><span>${faltantesBal} balones</span></div>` : ''}
+  </div>
+
+  <div class="firma-area">
+    <div class="firma">Firma del distribuidor</div>
+    <div class="firma">Firma del administrador</div>
+  </div>
+
+  <p style="text-align:center;margin-top:20px;font-size:10px;color:#999">Centro Gas Paucara — Generado el ${new Date().toLocaleDateString('es-PE')}</p>
+</body>
+</html>`
+  }
+
+  function abrirVentanaImpresion(html) {
+    const ventana = window.open('', '_blank', 'width=800,height=600')
+    ventana.document.write(html)
+    ventana.document.close()
+    ventana.focus()
+  }
+  // ── Fin funciones de impresión ───────────────────────────────────────────
+
   // ── Fin funciones cuenta corriente ─────────────────────────────────────
 
   async function cargar() {
@@ -1261,6 +1442,95 @@ export default function Distribuidores() {
                   </div>
                 </div>
               )}
+
+            {/* Cuentas cerradas anteriores */}
+            {cuentasCerradas.length > 0 && (
+              <div>
+                <h4 style={{fontSize:13,fontWeight:700,color:'var(--app-text)',margin:'0 0 10px'}}>
+                  📁 Arreglos anteriores ({cuentasCerradas.length})
+                </h4>
+                <div style={{display:'flex',flexDirection:'column',gap:12}}>
+                  {cuentasCerradas.map((c, idx) => {
+                    const totalV20 = c.abonos.reduce((s,a)=>s+(a.vales_20||0),0)
+                    const totalV30 = c.abonos.reduce((s,a)=>s+(a.vales_30||0),0)
+                    const totalV43 = c.abonos.reduce((s,a)=>s+(a.vales_43||0),0)
+                    const totalEfectivo = c.abonos.reduce((s,a)=>s+(parseFloat(a.efectivo)||0),0)
+                    const totalYape = c.abonos.reduce((s,a)=>s+(parseFloat(a.yape)||0),0)
+                    const [open, setOpen] = [false, ()=>{}] // simplificado
+                    return (
+                      <div key={c.id} style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden'}}>
+                        {/* Header cuenta cerrada */}
+                        <div style={{background:'var(--app-card-bg-alt)',padding:'10px 14px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                          <div>
+                            <p style={{fontSize:13,fontWeight:700,color:'var(--app-text)',margin:0}}>
+                              📅 {c.fecha_inicio} → {c.fecha_cierre}
+                            </p>
+                            <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>
+                              {c.total_cargado} cargados · {c.total_descargado} descargados · {c.faltantes_bal} faltantes
+                            </p>
+                          </div>
+                          <div style={{textAlign:'right'}}>
+                            <p style={{fontSize:15,fontWeight:700,color:c.saldo_pendiente>0?'#f87171':'#34d399',margin:0}}>
+                              {c.saldo_pendiente>0?`Pendiente S/${c.saldo_pendiente.toLocaleString('es-PE')}`:'✅ Cancelado'}
+                            </p>
+                            <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>
+                              Monto total: S/{(c.monto_total||0).toLocaleString('es-PE')}
+                            </p>
+                          </div>
+                        </div>
+                        {/* Detalle cargas */}
+                        {c.cargas.length > 0 && (
+                          <div style={{padding:'10px 14px',borderTop:'1px solid var(--app-card-border)'}}>
+                            <p style={{fontSize:11,fontWeight:700,color:'var(--app-text-secondary)',margin:'0 0 6px',textTransform:'uppercase'}}>Cargas del período:</p>
+                            <div style={{display:'grid',gridTemplateColumns:'1fr 0.7fr 0.7fr 0.7fr 0.7fr 0.9fr',gap:0,border:'1px solid var(--app-card-border)',borderRadius:6,overflow:'hidden'}}>
+                              {['Fecha','Cargados','Descargados','Faltantes','Precio','Monto'].map(h => (
+                                <div key={h} style={{padding:'5px 6px',fontSize:9,fontWeight:700,color:'var(--app-text-secondary)',background:'var(--app-card-bg-alt)',textTransform:'uppercase',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{h}</div>
+                              ))}
+                              {c.cargas.map((cg,i) => (
+                                <>
+                                  <div key={`f${i}`} style={{padding:'6px',fontSize:11,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',borderTop:'1px solid var(--app-card-border)',textAlign:'center'}}>{cg.fecha}</div>
+                                  <div key={`c${i}`} style={{padding:'6px',fontSize:12,fontWeight:600,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',borderTop:'1px solid var(--app-card-border)',textAlign:'center'}}>{cg.cargados}</div>
+                                  <div key={`d${i}`} style={{padding:'6px',fontSize:11,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)',borderTop:'1px solid var(--app-card-border)',textAlign:'center'}}>{cg.descargados}</div>
+                                  <div key={`fl${i}`} style={{padding:'6px',fontSize:11,color:'#fb923c',borderRight:'1px solid var(--app-card-border)',borderTop:'1px solid var(--app-card-border)',textAlign:'center'}}>{Math.max(0,cg.cargados-cg.descargados)}</div>
+                                  <div key={`p${i}`} style={{padding:'6px',fontSize:11,color:'#fde047',borderRight:'1px solid var(--app-card-border)',borderTop:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{cg.precio_unitario}</div>
+                                  <div key={`m${i}`} style={{padding:'6px',fontSize:12,fontWeight:600,color:'#34d399',borderTop:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{(cg.monto||0).toLocaleString('es-PE')}</div>
+                                </>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {/* Resumen pagos */}
+                        <div style={{padding:'10px 14px',borderTop:'1px solid var(--app-card-border)',display:'flex',flexWrap:'wrap',gap:10}}>
+                          {totalV20>0 && <span style={{fontSize:11,background:'rgba(253,224,71,0.1)',border:'1px solid rgba(253,224,71,0.3)',borderRadius:6,padding:'3px 8px',color:'#fde047'}}>{totalV20}×S/20 = S/{totalV20*20}</span>}
+                          {totalV30>0 && <span style={{fontSize:11,background:'rgba(253,224,71,0.1)',border:'1px solid rgba(253,224,71,0.3)',borderRadius:6,padding:'3px 8px',color:'#fde047'}}>{totalV30}×S/30 = S/{totalV30*30}</span>}
+                          {totalV43>0 && <span style={{fontSize:11,background:'rgba(253,224,71,0.1)',border:'1px solid rgba(253,224,71,0.3)',borderRadius:6,padding:'3px 8px',color:'#fde047'}}>{totalV43}×S/43 = S/{totalV43*43}</span>}
+                          {totalEfectivo>0 && <span style={{fontSize:11,background:'rgba(52,211,153,0.1)',border:'1px solid rgba(52,211,153,0.3)',borderRadius:6,padding:'3px 8px',color:'#34d399'}}>Efectivo S/{totalEfectivo.toLocaleString()}</span>}
+                          {totalYape>0 && <span style={{fontSize:11,background:'rgba(129,140,248,0.1)',border:'1px solid rgba(129,140,248,0.3)',borderRadius:6,padding:'3px 8px',color:'#818cf8'}}>Yape S/{totalYape.toLocaleString()}</span>}
+                          <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
+                            <span style={{fontSize:12,color:'var(--app-text-secondary)'}}>Total pagado:</span>
+                            <span style={{fontSize:13,fontWeight:700,color:'#34d399'}}>S/{(c.total_pagado||0).toLocaleString('es-PE')}</span>
+                            <button
+                              onClick={() => imprimirCuenta(c, selected)}
+                              style={{padding:'4px 10px',borderRadius:6,border:'1px solid var(--app-card-border)',background:'var(--app-card-bg-alt)',color:'var(--app-text-secondary)',fontSize:11,cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
+                              🖨️ Imprimir
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Botón imprimir cuenta activa */}
+            {cargasDist.length > 0 && (
+              <button
+                onClick={() => imprimirCuentaActiva(selected, cargasDist, abonosParciales, cuentaActiva)}
+                style={{width:'100%',padding:'10px',borderRadius:8,border:'1px solid var(--app-card-border)',background:'var(--app-card-bg-alt)',color:'var(--app-text-secondary)',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6,fontWeight:500}}>
+                🖨️ Imprimir cuenta actual
+              </button>
+            )}
 
             </div>
           </Modal>
