@@ -1,49 +1,26 @@
-// Utilidades de fecha para zona horaria Perú (UTC-5)
-// Usar estas funciones en toda la app en lugar de new Date().toISOString()
+// Utilidades de fecha/hora para zona horaria de Perú (America/Lima, UTC-5)
 
-const OFFSET_PERU = -5 * 60 // minutos
-
-/**
- * Retorna la fecha actual en Perú como string 'YYYY-MM-DD'
- * Reemplaza: new Date().toISOString().split('T')[0]
- */
+// Retorna 'YYYY-MM-DD' en hora Perú
 export function hoyPeru() {
-  const ahora = new Date()
-  const peruTime = new Date(ahora.getTime() + OFFSET_PERU * 60 * 1000)
-  return peruTime.toISOString().split('T')[0]
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Lima' })
 }
 
-/**
- * Retorna la fecha y hora actual en Perú como ISO string
- * Reemplaza: new Date().toISOString() cuando necesitas timestamp
- */
-export function ahoraPeru() {
-  return new Date().toISOString() // El timestamp UTC está bien para updated_at
-}
-
-/**
- * Convierte una fecha 'YYYY-MM-DD' a inicio del día en Perú (para queries)
- * Ej: '2026-03-21' → '2026-03-21T05:00:00.000Z' (medianoche Perú en UTC)
- */
-export function inicioDiaPeru(fechaStr) {
-  return fechaStr + 'T05:00:00.000Z'
-}
-
-/**
- * Convierte una fecha 'YYYY-MM-DD' a fin del día en Perú (para queries)
- * Ej: '2026-03-21' → '2026-03-22T04:59:59.999Z' (fin del día Perú en UTC)
- */
-export function finDiaPeru(fechaStr) {
-  const fecha = new Date(fechaStr + 'T05:00:00.000Z')
-  fecha.setDate(fecha.getDate() + 1)
-  fecha.setMilliseconds(fecha.getMilliseconds() - 1)
-  return fecha.toISOString()
-}
-
-/**
- * Retorna objeto Date ajustado a hora Perú
- */
+// Retorna timestamp ISO completo en hora Perú (para guardar en BD)
+// Ej: "2026-04-12T06:30:00-05:00"
 export function nowPeru() {
-  const ahora = new Date()
-  return new Date(ahora.getTime() + OFFSET_PERU * 60 * 1000)
+  const now = new Date()
+  // Formatea con offset de Lima
+  return now.toLocaleString('sv-SE', { timeZone: 'America/Lima' }).replace(' ', 'T') + '-05:00'
+}
+
+// Inicio del día en Perú: 'YYYY-MM-DDT00:00:00-05:00'
+export function inicioDiaPeru(fecha) {
+  const f = fecha || hoyPeru()
+  return `${f}T00:00:00-05:00`
+}
+
+// Fin del día en Perú: 'YYYY-MM-DDT23:59:59-05:00'
+export function finDiaPeru(fecha) {
+  const f = fecha || hoyPeru()
+  return `${f}T23:59:59-05:00`
 }
