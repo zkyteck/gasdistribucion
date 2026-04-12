@@ -503,9 +503,9 @@ function HistorialVales({ filtroFecha, onFechaClick }) {
 
     setHistorial(data.map(d => ({
       fecha: d.lote_dia,
-      cant20: d.cant20,
-      cant43: d.cant43,
-      total: d.cant20 * 20 + d.cant43 * 43
+      cant20: d.cant20 || 0,
+      cant43: d.cant43 || 0,
+      total: parseFloat(d.total_monto) || (d.cant20 * 20 + d.cant43 * 43)
     })))
     setLoading(false)
   }
