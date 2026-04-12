@@ -9,8 +9,8 @@ import { useAuth } from '../context/AuthContext'
 function Modal({ title, onClose, children, wide }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className={`bg-gray-900 border border-gray-700 rounded-2xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} shadow-2xl max-h-[90vh] overflow-y-auto`}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
+      <div className={`rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full ${wide ? 'max-w-2xl' : 'max-w-md'} shadow-2xl max-h-[90vh] overflow-y-auto`}>
+        <div className="flex items-center justify-between px-6 py-4  sticky top-0">
           <h3 className="text-white font-semibold">{title}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
         </div>
@@ -528,7 +528,7 @@ export default function ACuenta() {
         <div className="flex gap-2">
           {[['pendiente','⏳ Pendientes'],['entregado','✅ Entregados'],['todos','Todos']].map(([val, label]) => (
             <button key={val} onClick={() => setFiltro(val)}
-              className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all ${filtro === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+              className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all ${filtro === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
               {label}
             </button>
           ))}
@@ -553,7 +553,7 @@ export default function ACuenta() {
         {(filtroFechaDesde || filtroFechaHasta) && (
           <button
             onClick={() => { setFiltroFechaDesde(''); setFiltroFechaHasta('') }}
-            className="text-xs text-gray-500 hover:text-red-400 border border-gray-700 hover:border-red-600/40 px-2 py-1 rounded-lg transition-all"
+            className="text-xs text-gray-500 hover:text-red-400 border border-[var(--app-card-border)] hover:border-red-600/40 px-2 py-1 rounded-lg transition-all"
           >
             ✕ Limpiar
           </button>
@@ -562,7 +562,7 @@ export default function ACuenta() {
 
       {/* Lista */}
       <div className="card p-0 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+        <div className="px-6 py-4  flex items-center justify-between">
           <h3 className="text-sm font-semibold text-white">Registros</h3>
           <span className="badge-blue">{filtrados.length} registros</span>
         </div>
@@ -574,13 +574,13 @@ export default function ACuenta() {
               <p className="text-sm">Sin registros</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-800/50">
+            <div className="divide-y divide-[var(--app-card-border)]">
               {filtrados.map(r => (
-                <div key={r.id} className="px-6 py-4 hover:bg-gray-800/30 transition-colors">
+                <div key={r.id} className="px-6 py-4 hover:bg-transparent/30 transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       {/* Número */}
-                      <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <div className="w-10 h-10  rounded-lg flex items-center justify-center flex-shrink-0">
                         <span className="text-gray-400 font-mono text-xs font-bold">#{String(r.numero).padStart(3,'0')}</span>
                       </div>
                       <div>
@@ -651,16 +651,16 @@ export default function ACuenta() {
                 </div>
               )}
               {form.nombre_cliente.length >= 2 && !clientes.find(c => c.nombre.toLowerCase() === form.nombre_cliente.toLowerCase()) && (
-                <div className="mt-1 bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
+                <div className="mt-1  border border-[var(--app-card-border)] rounded-lg overflow-hidden">
                   {clientes.filter(c => c.nombre.toLowerCase().includes(form.nombre_cliente.toLowerCase())).map(c => (
                     <button key={c.id} type="button"
                       onMouseDown={() => setForm(f => ({...f, nombre_cliente: c.nombre}))}
                       onTouchEnd={e => { e.preventDefault(); setForm(f => ({...f, nombre_cliente: c.nombre})) }}
-                      className="w-full text-left px-3 py-2 text-sm text-white hover:bg-gray-700 transition-colors flex items-center gap-2 border-b border-gray-700/50 last:border-0">
+                      className="w-full text-left px-3 py-2 text-sm text-white hover:bg-gray-700 transition-colors flex items-center gap-2 border-b border-[var(--app-card-border)] last:border-0">
                       <span className="text-blue-400">👤</span> {c.nombre}
                     </button>
                   ))}
-                  <div className="px-3 py-2 flex items-center justify-between border-t border-gray-700/50">
+                  <div className="px-3 py-2 flex items-center justify-between border-t border-[var(--app-card-border)]">
                     <span className="text-xs text-gray-500">
                       {clientes.filter(c => c.nombre.toLowerCase().includes(form.nombre_cliente.toLowerCase())).length === 0 ? 'No encontrado' : 'o crear nuevo'}
                     </span>
@@ -682,7 +682,7 @@ export default function ACuenta() {
 
             <div>
               <label className="label">¿Qué dejó el cliente?</label>
-              <div className="space-y-3 bg-gray-800/40 rounded-xl p-4">
+              <div className="space-y-3 /40 rounded-xl p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-300">🎫 Vales de S/ 20</span>
                   <div className="flex items-center gap-2">
@@ -813,7 +813,7 @@ export default function ACuenta() {
             </div>
             {/* Historial de entregas anteriores */}
             {(selected.historial_cambios || []).filter(h => h.tipo === 'entrega').length > 0 && (
-              <div className="bg-gray-800/50 rounded-lg p-3">
+              <div className="bg-transparent rounded-lg p-3">
                 <p className="text-xs text-gray-500 mb-2 font-medium">📋 Entregas anteriores:</p>
                 <div className="space-y-1">
                   {(selected.historial_cambios || []).filter(h => h.tipo === 'entrega').map((h, i) => {
@@ -846,7 +846,7 @@ export default function ACuenta() {
       {/* Modal: cliente ya tiene registro pendiente */}
       {registroPendiente && modal === 'nuevo' && (
         <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-yellow-700 rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4">
+          <div className="border border-yellow-700 rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4">
             <div className="flex items-start gap-3">
               <span className="text-2xl">⚠️</span>
               <div>
@@ -1007,8 +1007,8 @@ export default function ACuenta() {
       {/* Modal editar registro */}
       {modal === 'editAC' && selected && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+          <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 ">
               <div>
                 <h3 className="text-white font-semibold">✏️ Editar registro</h3>
                 <p className="text-gray-500 text-xs mt-0.5">{selected.nombre_cliente} — #{String(selected.numero).padStart(3,'0')}</p>
@@ -1060,7 +1060,7 @@ export default function ACuenta() {
                   <p className="text-xs font-semibold text-gray-400 uppercase mb-2">📋 Historial de cambios</p>
                   <div className="space-y-2 max-h-40 overflow-y-auto">
                     {selected.historial_cambios.map((h, i) => (
-                      <div key={i} className="bg-gray-800/50 rounded-lg px-3 py-2 text-xs">
+                      <div key={i} className="bg-transparent rounded-lg px-3 py-2 text-xs">
                         <div className="flex justify-between mb-1">
                           <span className="text-blue-400 font-medium">📅 {h.fecha_cambio}</span>
                           <span className="text-gray-500">orig: {h.fecha_original}</span>

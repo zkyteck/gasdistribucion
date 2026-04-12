@@ -7,8 +7,8 @@ const TIPOS_BALON = ['5kg', '10kg', '45kg']
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
+      <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4  sticky top-0">
           <h3 className="text-white font-semibold">{title}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
         </div>
@@ -321,7 +321,7 @@ export default function Configuracion() {
         <p className="text-gray-500 text-sm">Precios, proveedores y usuarios del sistema</p>
       </div>
 
-      <div className="flex gap-2 border-b border-gray-800 overflow-x-auto">
+      <div className="flex gap-2  overflow-x-auto">
         {[
           ['precios','💰 Precios tienda'],
           ['distribuidores_precios','🚛 Precios distribuidores'],
@@ -348,11 +348,11 @@ export default function Configuracion() {
           </div>
           <div className="card p-0 overflow-hidden">
             <table className="w-full">
-              <thead><tr className="border-b border-gray-800">
+              <thead><tr className="">
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase px-6 py-3">Tipo de cliente</th>
                 {TIPOS_BALON.map(t => <th key={t} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">🔵 {t}</th>)}
               </tr></thead>
-              <tbody className="divide-y divide-gray-800/50">
+              <tbody className="divide-y divide-[var(--app-card-border)]">
                 {precios.map(p => (
                   <tr key={p.id} className="table-row-hover">
                     <td className="px-6 py-4">
@@ -381,7 +381,7 @@ export default function Configuracion() {
 
           {/* Precio venta balón vacío */}
           <div className="card p-0 overflow-hidden">
-            <div className="px-6 py-3 border-b border-gray-800">
+            <div className="px-6 py-3 ">
               <p className="text-white font-semibold text-sm">🔵 Precio venta balón vacío</p>
               <p className="text-gray-500 text-xs">Precio al que vendes el envase solo (sin gas)</p>
             </div>
@@ -414,11 +414,11 @@ export default function Configuracion() {
           </div>
           <div className="card p-0 overflow-hidden">
             <table className="w-full">
-              <thead><tr className="border-b border-gray-800">
+              <thead><tr className="">
                 <th className="text-left text-xs font-semibold text-gray-500 uppercase px-6 py-3">Distribuidor</th>
                 {TIPOS_BALON.map(t => <th key={t} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">🔵 {t}</th>)}
               </tr></thead>
-              <tbody className="divide-y divide-gray-800/50">
+              <tbody className="divide-y divide-[var(--app-card-border)]">
                 {distribuidores.map(d => (
                   <tr key={d.id} className="table-row-hover">
                     <td className="px-6 py-4 text-white font-semibold text-sm">{d.nombre}</td>
@@ -481,7 +481,7 @@ export default function Configuracion() {
                   </div>
                 </div>
                 {parseFloat(costosCompra[tipo]) > 0 && (
-                  <div className="mt-3 bg-gray-800/50 rounded-lg p-3 text-xs space-y-1">
+                  <div className="mt-3 bg-transparent rounded-lg p-3 text-xs space-y-1">
                     <p className="text-gray-400 font-medium mb-2">🏪 Ganancia venta gas:</p>
                     {precios.map(p => {
                       const found = preciosPorTipo.find(x => x.precio_tipo_id === p.id && x.tipo_balon === tipo)
@@ -498,7 +498,7 @@ export default function Configuracion() {
                       )
                     })}
                     {parseFloat(costoBalon[tipo]) > 0 && (
-                      <div className="pt-2 mt-1 border-t border-gray-700 space-y-2">
+                      <div className="pt-2 mt-1 border-t border-[var(--app-card-border)] space-y-2">
                         <p className="text-gray-400 font-medium">🔵 Ganancia venta balón vacío:</p>
                         <div className="flex justify-between items-center">
                           <span className="text-gray-500">Precio venta - costo envase</span>
@@ -526,7 +526,7 @@ export default function Configuracion() {
                     )}
                     {distribuidores.length > 0 && (
                       <>
-                        <p className="text-gray-400 font-medium mt-3 mb-1 pt-2 border-t border-gray-700">🚛 Distribuidores:</p>
+                        <p className="text-gray-400 font-medium mt-3 mb-1 pt-2 border-t border-[var(--app-card-border)]">🚛 Distribuidores:</p>
                         {distribuidores.map(d => {
                           const precioDistTipo = preciosDistTipo?.find(x => x.distribuidor_id === d.id && x.tipo_balon === tipo)?.precio || 0
                           if (!precioDistTipo || precioDistTipo === 0) return null
@@ -623,12 +623,12 @@ export default function Configuracion() {
           </div>
           <div className="card p-0 overflow-hidden">
             <table className="w-full">
-              <thead><tr className="border-b border-gray-800">
+              <thead><tr className="">
                 {['Proveedor','Teléfono','RUC','Dirección',''].map(h => (
                   <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-6 py-3">{h}</th>
                 ))}
               </tr></thead>
-              <tbody className="divide-y divide-gray-800/50">
+              <tbody className="divide-y divide-[var(--app-card-border)]">
                 {proveedores.map(p => (
                   <tr key={p.id} className="table-row-hover">
                     <td className="px-6 py-4 text-white font-medium text-sm">{p.nombre}</td>
@@ -658,7 +658,7 @@ export default function Configuracion() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {usuarios.map(u => (
-              <div key={u.id} className="card border border-gray-700/50">
+              <div key={u.id} className="card border border-[var(--app-card-border)]">
                 <div className="flex items-center gap-3 mb-3">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 ${u.rol === 'admin' ? 'bg-gradient-to-br from-blue-500 to-indigo-600' : 'bg-gradient-to-br from-emerald-500 to-teal-600'}`}>
                     {u.nombre?.charAt(0)?.toUpperCase()}
@@ -689,7 +689,7 @@ export default function Configuracion() {
                 {u.rol !== 'admin' && (
                   <div className="flex flex-wrap gap-1">
                     {MODULOS_LABELS.map(([key, label]) => (
-                      <span key={key} className={`text-xs px-2 py-0.5 rounded-full border ${u.permisos?.[key] ? 'bg-emerald-900/30 border-emerald-700/50 text-emerald-400' : 'bg-gray-800/50 border-gray-700/50 text-gray-600 line-through'}`}>
+                      <span key={key} className={`text-xs px-2 py-0.5 rounded-full border ${u.permisos?.[key] ? 'bg-emerald-900/30 border-emerald-700/50 text-emerald-400' : 'bg-transparent border-[var(--app-card-border)] text-gray-600 line-through'}`}>
                         {label}
                       </span>
                     ))}
@@ -722,12 +722,12 @@ export default function Configuracion() {
               <label className="label">Rol</label>
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => setUsuarioForm(f => ({...f, rol: 'trabajador'}))}
-                  className={`py-3 px-4 rounded-xl border text-sm font-medium transition-all text-left ${usuarioForm.rol === 'trabajador' ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                  className={`py-3 px-4 rounded-xl border text-sm font-medium transition-all text-left ${usuarioForm.rol === 'trabajador' ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
                   <p className="font-bold">👷 Trabajador</p>
                   <p className="text-xs mt-1 opacity-70">Registra ventas, vales y operaciones diarias</p>
                 </button>
                 <button onClick={() => setUsuarioForm(f => ({...f, rol: 'admin'}))}
-                  className={`py-3 px-4 rounded-xl border text-sm font-medium transition-all text-left ${usuarioForm.rol === 'admin' ? 'bg-blue-600/20 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                  className={`py-3 px-4 rounded-xl border text-sm font-medium transition-all text-left ${usuarioForm.rol === 'admin' ? 'bg-blue-600/20 border-blue-500 text-blue-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
                   <p className="font-bold">👑 Admin</p>
                   <p className="text-xs mt-1 opacity-70">Acceso completo: precios, reportes y configuración</p>
                 </button>
@@ -758,7 +758,7 @@ export default function Configuracion() {
                 <div className="grid grid-cols-2 gap-2">
                   {MODULOS_LABELS.map(([key, label]) => (
                     <button key={key} onClick={() => setPermisos(p => ({...p, [key]: !p[key]}))}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all text-left ${permisos[key] ? 'bg-emerald-900/30 border-emerald-600/50 text-emerald-300' : 'bg-gray-800/50 border-gray-700 text-gray-500'}`}>
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all text-left ${permisos[key] ? 'bg-emerald-900/30 border-emerald-600/50 text-emerald-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-500'}`}>
                       <span className={`w-3 h-3 rounded-sm border flex-shrink-0 flex items-center justify-center text-xs ${permisos[key] ? 'bg-emerald-500 border-emerald-500' : 'border-gray-600'}`}>
                         {permisos[key] ? '✓' : ''}
                       </span>
@@ -813,12 +813,12 @@ export default function Configuracion() {
               <label className="label">Rol</label>
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => setEditUsuarioSelected(u => ({...u, rol: 'trabajador'}))}
-                  className={`py-3 px-4 rounded-xl border text-sm font-medium transition-all text-left ${editUsuarioSelected.rol === 'trabajador' ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                  className={`py-3 px-4 rounded-xl border text-sm font-medium transition-all text-left ${editUsuarioSelected.rol === 'trabajador' ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
                   <p className="font-bold">👷 Trabajador</p>
                   <p className="text-xs mt-1 opacity-70">Solo módulos asignados</p>
                 </button>
                 <button onClick={() => setEditUsuarioSelected(u => ({...u, rol: 'admin'}))}
-                  className={`py-3 px-4 rounded-xl border text-sm font-medium transition-all text-left ${editUsuarioSelected.rol === 'admin' ? 'bg-blue-600/20 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                  className={`py-3 px-4 rounded-xl border text-sm font-medium transition-all text-left ${editUsuarioSelected.rol === 'admin' ? 'bg-blue-600/20 border-blue-500 text-blue-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
                   <p className="font-bold">👑 Admin</p>
                   <p className="text-xs mt-1 opacity-70">Acceso completo</p>
                 </button>
@@ -853,7 +853,7 @@ export default function Configuracion() {
                 <div className="grid grid-cols-2 gap-2">
                   {MODULOS_LABELS.map(([key, label]) => (
                     <button key={key} onClick={() => setEditPermisos(p => ({...p, [key]: !p[key]}))}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all text-left ${editPermisos[key] ? 'bg-emerald-900/30 border-emerald-600/50 text-emerald-300' : 'bg-gray-800/50 border-gray-700 text-gray-500'}`}>
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all text-left ${editPermisos[key] ? 'bg-emerald-900/30 border-emerald-600/50 text-emerald-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-500'}`}>
                       <span className={`w-3 h-3 rounded-sm border flex-shrink-0 flex items-center justify-center text-xs ${editPermisos[key] ? 'bg-emerald-500 border-emerald-500' : 'border-gray-600'}`}>
                         {editPermisos[key] ? '✓' : ''}
                       </span>

@@ -10,8 +10,8 @@ import { useAuth } from '../context/AuthContext'
 function Modal({ title, onClose, children, wide }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className={`bg-gray-900 border border-gray-700 rounded-2xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} shadow-2xl max-h-[90vh] overflow-y-auto`}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
+      <div className={`rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full ${wide ? 'max-w-2xl' : 'max-w-md'} shadow-2xl max-h-[90vh] overflow-y-auto`}>
+        <div className="flex items-center justify-between px-6 py-4  sticky top-0">
           <h3 className="text-white font-semibold">{title}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
         </div>
@@ -541,7 +541,7 @@ export default function Distribuidores() {
       {loading ? <div className="text-center text-gray-500 py-10">Cargando...</div> : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {distribuidores.map(d => (
-            <div key={d.id} className="card border border-gray-700/50">
+            <div key={d.id} className="card border border-[var(--app-card-border)]">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-indigo-500/10 rounded-xl flex items-center justify-center">
@@ -574,11 +574,11 @@ export default function Distribuidores() {
                 </div>
               )}
               <div className="grid grid-cols-2 gap-2 mb-4">
-                <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+                <div className="bg-transparent rounded-lg p-3 text-center">
                   <p className="text-xl font-bold text-blue-400">S/{d.precio_base}</p>
                   <p className="text-xs text-gray-500">Precio/bal.</p>
                 </div>
-                <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+                <div className="bg-transparent rounded-lg p-3 text-center">
                   <p className="text-xl font-bold text-yellow-400">S/{(d.stock_actual * d.precio_base).toLocaleString()}</p>
                   <p className="text-xs text-gray-500">Total campo</p>
                 </div>
@@ -669,7 +669,7 @@ export default function Distribuidores() {
         <Modal title={`Rendición de cuentas — ${selected.nombre}`} onClose={() => setModal(null)}>
           <div className="space-y-4">
             {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
-            <div className="bg-gray-800/50 rounded-lg p-4">
+            <div className="bg-transparent rounded-lg p-4">
               <p className="text-xs text-gray-500 mb-1">Precio por balón · Balones en campo: {selected.stock_actual}</p>
               <p className="text-lg font-bold text-white">S/{selected.precio_base}/bal. · <span className="text-blue-400">Ingresa los balones vendidos abajo ↓</span></p>
             </div>
@@ -726,7 +726,7 @@ export default function Distribuidores() {
                       </span>
                     </div>
                   )}
-                  <div className="border-t border-gray-700 pt-2 flex justify-between items-center">
+                  <div className="border-t border-[var(--app-card-border)] pt-2 flex justify-between items-center">
                     <span className="text-white font-semibold">💰 Saldo en efectivo</span>
                     <div className="flex items-center gap-2">
                       <span className={`font-bold text-lg ${saldo >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>S/ {saldo.toFixed(2)}</span>
@@ -775,7 +775,7 @@ export default function Distribuidores() {
             </div>
 
             {/* Formulario nuevo vale */}
-            <div className="bg-gray-800/40 rounded-xl p-4 space-y-3 border border-gray-700/50">
+            <div style={{background:"var(--app-card-bg)"}} className="rounded-xl p-4 space-y-3" style2={{border:"1px solid var(--app-card-border)"}}>
               <p className="text-sm font-semibold text-white">Registrar nuevo vale</p>
               <div className="relative">
                 <label className="label">Cliente *</label>
@@ -786,7 +786,7 @@ export default function Distribuidores() {
                   const exacto = clientes.find(c => c.nombre.toLowerCase() === valeForm.nombre_cliente.toLowerCase())
                   if (exacto) return <div className="mt-1 text-xs text-emerald-400 px-1">✅ Cliente registrado</div>
                   return (
-                    <div className="mt-1 bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
+                    <div className="mt-1  border border-[var(--app-card-border)] rounded-lg overflow-hidden">
                       {coincidencias.map(c => (
                         <button key={c.id} type="button" onClick={() => setValeForm(f => ({...f, nombre_cliente: c.nombre, cliente_id: c.id}))}
                           className="w-full text-left px-3 py-2 text-sm text-white hover:bg-gray-700 flex items-center gap-2">
@@ -809,11 +809,11 @@ export default function Distribuidores() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => setValeForm(f => ({...f, tipo_vale: '20'}))}
-                  className={`py-2.5 rounded-lg border text-sm font-medium transition-all ${valeForm.tipo_vale === '20' ? 'bg-yellow-900/30 border-yellow-500 text-yellow-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                  className={`py-2.5 rounded-lg border text-sm font-medium transition-all ${valeForm.tipo_vale === '20' ? 'bg-yellow-900/30 border-yellow-500 text-yellow-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
                   🎫 Vale S/ 20
                 </button>
                 <button onClick={() => setValeForm(f => ({...f, tipo_vale: '43'}))}
-                  className={`py-2.5 rounded-lg border text-sm font-medium transition-all ${valeForm.tipo_vale === '43' ? 'bg-orange-900/30 border-orange-500 text-orange-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                  className={`py-2.5 rounded-lg border text-sm font-medium transition-all ${valeForm.tipo_vale === '43' ? 'bg-orange-900/30 border-orange-500 text-orange-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
                   🎫 Vale S/ 43
                 </button>
               </div>
@@ -837,7 +837,7 @@ export default function Distribuidores() {
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {valesDist.map(v => (
-                    <div key={v.id} className="flex items-center justify-between bg-gray-800/40 rounded-lg px-4 py-3">
+                    <div key={v.id} className="flex items-center justify-between /40 rounded-lg px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 font-bold text-xs ${v.tipo_vale === '20' ? 'bg-yellow-900/40 text-yellow-400' : 'bg-orange-900/40 text-orange-400'}`}>
                           S/{v.tipo_vale}
@@ -856,7 +856,7 @@ export default function Distribuidores() {
                         </span>
                         {v.estado === 'pendiente' && (
                           <div className="flex gap-1.5">
-                            <button onClick={() => anularVale(v)} className="text-xs text-gray-600 hover:text-red-400 px-2 py-0.5 rounded border border-gray-700">Anular</button>
+                            <button onClick={() => anularVale(v)} className="text-xs text-gray-600 hover:text-red-400 px-2 py-0.5 rounded border border-[var(--app-card-border)]">Anular</button>
                             <button onClick={() => marcarValeCobrado(v)} className="text-xs bg-emerald-600/20 border border-emerald-600/30 text-emerald-400 px-2 py-0.5 rounded">✓ Cobrado</button>
                           </div>
                         )}
@@ -871,8 +871,8 @@ export default function Distribuidores() {
           {/* Sub-modal cliente rápido */}
           {subModal === 'clienteRapido' && (
             <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-              <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+              <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-sm shadow-2xl">
+                <div className="flex items-center justify-between px-6 py-4 ">
                   <h3 className="text-white font-semibold text-sm">Registrar cliente</h3>
                   <button onClick={() => setSubModal(null)} className="text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
                 </div>
@@ -909,7 +909,7 @@ export default function Distribuidores() {
               return (
                 <div className="space-y-2">
                   {/* Stock inicial vs actual */}
-                  <div className="bg-gray-800/40 border border-gray-700/40 rounded-xl p-3 flex items-center justify-between">
+                  <div style={{background:"var(--app-card-bg)",border:"1px solid var(--app-card-border)"}} className="rounded-xl p-3 flex items-center justify-between">
                     <div className="text-center px-4">
                       <p className="text-xs text-gray-500 mb-1">📦 Stock inicial</p>
                       <p className="text-2xl font-bold text-gray-300">{stockInicial} bal.</p>
@@ -976,7 +976,7 @@ export default function Distribuidores() {
                     const v20count = r.total_vales > 0 ? Math.round((r.total_vales * 20/63) / 20) : 0
                     const saldo = (r.total_esperado||0) - (r.total_vales||0) - (r.total_adelantos||0)
                     return (
-                      <div key={r.id} className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-4">
+                      <div key={r.id} style={{background:"var(--app-card-bg)",border:"1px solid var(--app-card-border)"}} className="rounded-xl p-4">
                         <div className="flex items-center justify-between mb-3">
                           <div>
                             <p className="text-white font-semibold text-sm">📅 {format(new Date(r.periodo_fin + 'T12:00:00'), 'dd/MM/yyyy', { locale: es })}</p>
@@ -988,7 +988,7 @@ export default function Distribuidores() {
                         </div>
                         {/* Balones */}
                         <div className="grid grid-cols-3 gap-2 text-center mb-2">
-                          <div className="bg-gray-800/50 rounded-lg p-2">
+                          <div className="bg-transparent rounded-lg p-2">
                             <p className="text-white font-bold text-sm">{r.balones_vendidos || 0}</p>
                             <p className="text-xs text-gray-500">🔵 Vendidos</p>
                           </div>
@@ -1017,14 +1017,14 @@ export default function Distribuidores() {
                             <p className="text-orange-400 font-bold text-sm">S/ {(r.total_adelantos||0).toLocaleString()}</p>
                             <p className="text-xs text-gray-500">Adelantos</p>
                           </div>
-                          <div className={`rounded-lg p-2 ${saldo > 0 ? 'bg-emerald-900/20' : 'bg-gray-800/50'}`}>
+                          <div className={`rounded-lg p-2 ${saldo > 0 ? 'bg-emerald-900/20' : 'bg-transparent'}`}>
                             <p className={`font-bold text-sm ${saldo > 0 ? 'text-emerald-400' : 'text-gray-400'}`}>S/ {saldo.toLocaleString()}</p>
                             <p className="text-xs text-gray-500">💰 Saldo efectivo</p>
                           </div>
                         </div>
                         {r.notas && <p className="text-xs text-gray-500 mt-2">📝 {r.notas}</p>}
                         {/* Botones abono/borrar */}
-                        <div className="flex gap-2 mt-3 pt-3 border-t border-gray-700/50">
+                        <div className="flex gap-2 mt-3 pt-3 border-t border-[var(--app-card-border)]">
                           {r.estado !== 'cancelado' && (
                             <button onClick={() => { setAbonoModal(r); setAbonoForm({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', notas: '' }) }}
                               className="text-xs bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 px-3 py-1.5 rounded-lg transition-all flex-1 text-center">
@@ -1120,8 +1120,8 @@ export default function Distribuidores() {
       {/* Modal arreglar cuentas */}
       {abonoModal !== null && selected && (
         <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
+          <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4  sticky top-0">
               <div>
                 <h3 className="text-white font-semibold">💰 {selected.nombre}</h3>
                 <p className="text-gray-500 text-xs mt-0.5">{selected.almacenes?.nombre} · S/{selected.precio_base}/bal. · {selected.stock_actual || 0} llenos en campo</p>
@@ -1133,12 +1133,12 @@ export default function Distribuidores() {
               {/* Toggle modo */}
               <div className="grid grid-cols-2 gap-2">
                 <button onClick={() => setAbonoForm(f => ({...f, modo: 'abono'}))}
-                  className={`py-3 px-3 rounded-xl border text-xs font-medium transition-all text-center ${(!abonoForm.modo || abonoForm.modo === 'abono') ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                  className={`py-3 px-3 rounded-xl border text-xs font-medium transition-all text-center ${(!abonoForm.modo || abonoForm.modo === 'abono') ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
                   💵 Abono parcial
                   <p className="text-gray-500 font-normal mt-0.5">Solo lo que trae ahora</p>
                 </button>
                 <button onClick={() => setAbonoForm(f => ({...f, modo: 'totalizar'}))}
-                  className={`py-3 px-3 rounded-xl border text-xs font-medium transition-all text-center ${abonoForm.modo === 'totalizar' ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                  className={`py-3 px-3 rounded-xl border text-xs font-medium transition-all text-center ${abonoForm.modo === 'totalizar' ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
                   📊 Totalizar cuentas
                   <p className="text-gray-500 font-normal mt-0.5">Cuántos vendió + lo que paga</p>
                 </button>
@@ -1147,7 +1147,7 @@ export default function Distribuidores() {
               {/* MODO ABONO PARCIAL */}
               {(!abonoForm.modo || abonoForm.modo === 'abono') && (
                 <div className="space-y-3">
-                  <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-3 grid grid-cols-3 gap-3 text-center">
+                  <div className="bg-transparent border border-[var(--app-card-border)] rounded-xl p-3 grid grid-cols-3 gap-3 text-center">
                     <div><p className="text-lg font-bold text-emerald-400">{selected.stock_actual || 0}</p><p className="text-xs text-gray-500">🟢 Llenos</p></div>
                     <div><p className="text-lg font-bold text-gray-300">{selected.balones_vacios || 0}</p><p className="text-xs text-gray-500">⚪ Vacíos</p></div>
                     <div><p className="text-lg font-bold text-yellow-400">S/{((selected.stock_actual||0)*(selected.precio_base||0)).toLocaleString()}</p><p className="text-xs text-gray-500">💰 Debe</p></div>
@@ -1187,7 +1187,7 @@ export default function Distribuidores() {
                       {(parseInt(abonoForm.vales20)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">🎫 {abonoForm.vales20}×S/20:</span><span className="text-yellow-400">S/ {((parseInt(abonoForm.vales20)||0)*20).toLocaleString()}</span></div>}
                       {(parseInt(abonoForm.vales43)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">🎫 {abonoForm.vales43}×S/43:</span><span className="text-yellow-400">S/ {((parseInt(abonoForm.vales43)||0)*43).toLocaleString()}</span></div>}
                       {(parseFloat(abonoForm.efectivo)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">💵 Efectivo:</span><span className="text-emerald-400">S/ {(parseFloat(abonoForm.efectivo)||0).toLocaleString()}</span></div>}
-                      <div className="border-t border-gray-700 pt-1 flex justify-between font-semibold">
+                      <div className="border-t border-[var(--app-card-border)] pt-1 flex justify-between font-semibold">
                         <span className="text-gray-300">Total abono:</span>
                         <span className="text-blue-300">S/ {((parseFloat(abonoForm.efectivo)||0)+(parseInt(abonoForm.vales20)||0)*20+(parseInt(abonoForm.vales43)||0)*43).toLocaleString()}</span>
                       </div>
@@ -1223,7 +1223,7 @@ export default function Distribuidores() {
                       </div>
                     )
                   })()}
-                  <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3">
+                  <div className="bg-transparent border border-[var(--app-card-border)] rounded-xl p-4 space-y-3">
                     <p className="text-xs text-gray-400 font-semibold uppercase">1. Balones</p>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
@@ -1242,13 +1242,13 @@ export default function Distribuidores() {
                       </div>
                     </div>
                     {(parseInt(abonoForm.balones_devueltos)||0) > 0 && (
-                      <div className="bg-gray-900 rounded-lg p-2 flex justify-between">
+                      <div className="rounded-lg p-2 flex justify-between">
                         <span className="text-gray-400 text-sm">{abonoForm.balones_devueltos} bal. × S/{selected.precio_base}</span>
                         <span className="text-white font-bold">S/ {((parseInt(abonoForm.balones_devueltos)||0)*(selected.precio_base||0)).toLocaleString('es-PE')}</span>
                       </div>
                     )}
                   </div>
-                  <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3">
+                  <div className="bg-transparent border border-[var(--app-card-border)] rounded-xl p-4 space-y-3">
                     <p className="text-xs text-gray-400 font-semibold uppercase">2. Lo que entrega</p>
                     <div className="grid grid-cols-3 gap-3">
                       <div>
@@ -1287,7 +1287,7 @@ export default function Distribuidores() {
                     const cancelado = saldo <= 0
                     return (
                       <div className="border border-gray-600 rounded-xl overflow-hidden">
-                        <div className="bg-gray-800 px-4 py-2"><p className="text-xs text-gray-400 font-semibold uppercase">3. Resultado</p></div>
+                        <div style={{background:"var(--app-card-bg)"}} className="px-4 py-2"><p className="text-xs text-gray-400 font-semibold uppercase">3. Resultado</p></div>
                         <div className="px-4 py-3 space-y-2 text-sm">
                           <div className="flex justify-between"><span className="text-gray-400">{vendidos} bal. × S/{precio}</span><span className="text-white font-semibold">S/ {totalBruto.toLocaleString('es-PE')}</span></div>
                           {abonadoPrev > 0 && <div className="flex justify-between"><span className="text-yellow-300">📋 Abonos previos</span><span className="text-yellow-400">− S/ {abonadoPrev.toLocaleString()}</span></div>}
@@ -1352,8 +1352,8 @@ export default function Distribuidores() {
       {/* Modal A Cuenta del distribuidor */}
       {acuentaModal && selected && (
         <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
+          <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4  sticky top-0">
               <div>
                 <h3 className="text-white font-semibold">📋 A Cuenta — {selected.nombre}</h3>
                 <p className="text-gray-500 text-xs mt-0.5">Clientes que dejaron vales o balones</p>
@@ -1363,7 +1363,7 @@ export default function Distribuidores() {
             <div className="px-6 py-5 space-y-4">
 
               {/* Formulario nuevo registro */}
-              <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3">
+              <div className="bg-transparent border border-[var(--app-card-border)] rounded-xl p-4 space-y-3">
                 <p className="text-xs text-gray-400 font-semibold uppercase">Nuevo registro</p>
                 <div>
                   <label className="label">Nombre del cliente *</label>
@@ -1415,7 +1415,7 @@ export default function Distribuidores() {
                 ) : (
                   <div className="space-y-2">
                     {acuentaDist.map(r => (
-                      <div key={r.id} className="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
+                      <div key={r.id} className="bg-transparent border border-[var(--app-card-border)] rounded-xl p-3">
                         <div className="flex items-start justify-between">
                           <div>
                             <p className="text-white font-semibold text-sm">{r.nombre_cliente}</p>

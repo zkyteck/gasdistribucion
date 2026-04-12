@@ -47,7 +47,7 @@ function StatCard({ icon: Icon, label, value, sub, color = 'blue', trend }) {
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 text-xs shadow-xl">
+      <div className="border border-[var(--app-card-border)] rounded-lg p-3 text-xs shadow-xl">
         <p className="text-gray-400 mb-1">{label}</p>
         {payload.map((p, i) => (
           <p key={i} style={{ color: p.color }} className="font-semibold">
@@ -237,7 +237,7 @@ export default function Dashboard() {
                   <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--app-card-border)" />
               <XAxis dataKey="dia" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} width={50}
                 tickFormatter={v => `S/${v}`} />
@@ -261,12 +261,12 @@ export default function Dashboard() {
           ) : (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={stockAlmacenes} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--app-card-border)" horizontal={false} />
                 <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis type="category" dataKey="nombre" tick={{ fill: '#9ca3af', fontSize: 10 }}
                   axisLine={false} tickLine={false} width={100} />
                 <Tooltip
-                  contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: '8px' }}
+                  contentStyle={{ background: "var(--app-card-bg)", border: "1px solid var(--app-card-border)", borderRadius: "8px" }}
                   labelStyle={{ color: '#9ca3af' }}
                   formatter={v => [`${v} balones`, 'Stock']}
                 />
@@ -290,7 +290,7 @@ export default function Dashboard() {
             <a
               key={label}
               href={href}
-              className="flex flex-col items-center gap-2 p-4 rounded-xl bg-gray-800/50 hover:bg-gray-800 border border-gray-700/50 hover:border-gray-600 transition-all group"
+              style={{background:"var(--app-card-bg)",border:"1px solid var(--app-card-border)"}} className="flex flex-col items-center gap-2 p-4 rounded-xl transition-all group"
             >
               <div className={`w-10 h-10 ${bg} rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform`}>
                 <Icon className={`w-5 h-5 ${color}`} />

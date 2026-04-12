@@ -11,8 +11,8 @@ const TIPOS_BALON = ['5kg', '10kg', '45kg']
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
+      <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4  sticky top-0">
           <h3 className="text-white font-semibold">{title}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
         </div>
@@ -318,7 +318,7 @@ export default function Ventas() {
       </div>
 
       <div className="card p-0 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+        <div className="px-6 py-4  flex items-center justify-between">
           <h3 className="text-sm font-semibold text-white">Ventas del {format(new Date(filtroFecha + 'T12:00:00'), 'dd/MM/yyyy', { locale: es })}</h3>
           <span className="badge-blue">{ventasFiltradas.length} ventas</span>
         </div>
@@ -330,12 +330,12 @@ export default function Ventas() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead><tr className="border-b border-gray-800">
+                <thead><tr className="">
                   {['Hora','Cliente','Almacén','Tipo cliente','Balón','Cant.','Precio','Total','Pago','Notas',''].map(h => (
                     <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">{h}</th>
                   ))}
                 </tr></thead>
-                <tbody className="divide-y divide-gray-800/50">
+                <tbody className="divide-y divide-[var(--app-card-border)]">
                   {ventasFiltradas.map(v => (
                     <tr key={v.id} className="table-row-hover">
                       <td className="px-4 py-3 text-gray-500 text-xs">{format(new Date(v.fecha), 'HH:mm')}</td>
@@ -380,7 +380,7 @@ export default function Ventas() {
                   <div className="mt-1 flex items-center gap-2 text-xs text-emerald-400 px-1">✅ {exacto.nombre}</div>
                 )
                 return (
-                  <div className="mt-1 bg-gray-800 border border-gray-700 rounded-lg overflow-hidden z-10">
+                  <div className="mt-1  border border-[var(--app-card-border)] rounded-lg overflow-hidden z-10">
                     {coincidencias.slice(0,6).map(c => (
                       <button key={c.id} type="button"
                         onClick={() => { seleccionarCliente(c.id); setBusquedaCliente(c.nombre) }}
@@ -389,7 +389,7 @@ export default function Ventas() {
                         <span className="ml-auto text-xs text-gray-500 capitalize">{c.tipo}</span>
                       </button>
                     ))}
-                    <div className="px-3 py-2 flex items-center justify-between border-t border-gray-700">
+                    <div className="px-3 py-2 flex items-center justify-between border-t border-[var(--app-card-border)]">
                       <span className="text-xs text-gray-500">
                         {coincidencias.length === 0 ? 'No encontrado' : `${coincidencias.length} resultado(s)`}
                       </span>
@@ -419,7 +419,7 @@ export default function Ventas() {
                   const stock = getStock(form.almacen_id, tipo)
                   return (
                     <button key={tipo} onClick={() => seleccionarTipoBalon(tipo)}
-                      className={`py-3 px-3 rounded-lg border text-xs font-medium transition-all text-center ${form.tipo_balon === tipo ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                      className={`py-3 px-3 rounded-lg border text-xs font-medium transition-all text-center ${form.tipo_balon === tipo ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
                       🔵 {tipo}<br/>
                       <span className={`text-xs ${stock === 0 ? 'text-red-400' : stock < 5 ? 'text-yellow-400' : 'text-emerald-400'}`}>{stock} bal.</span>
                     </button>
@@ -434,7 +434,7 @@ export default function Ventas() {
                   const precio = getPrecio(t.id, form.tipo_balon) || t.precio
                   return (
                     <button key={t.id} onClick={() => seleccionarTipoPrecio(t.id)}
-                      className={`py-2 px-3 rounded-lg border text-xs font-medium transition-all ${form.precio_tipo_id === t.id ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                      className={`py-2 px-3 rounded-lg border text-xs font-medium transition-all ${form.precio_tipo_id === t.id ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
                       {t.nombre}<br/><span className="font-bold">S/{precio}</span>
                     </button>
                   )
@@ -442,7 +442,7 @@ export default function Ventas() {
               </div>
             </div>
             {/* Tipo de venta — toggle */}
-            <div className={`rounded-xl border p-3 cursor-pointer transition-all ${form.tipo_venta !== 'gas' ? 'bg-blue-900/20 border-blue-600/50' : 'bg-gray-800/50 border-gray-700'}`}
+            <div className={`rounded-xl border p-3 cursor-pointer transition-all ${form.tipo_venta !== 'gas' ? 'bg-blue-900/20 border-blue-600/50' : 'bg-transparent border-[var(--app-card-border)]'}`}
               onClick={() => setForm(f => ({...f, tipo_venta: f.tipo_venta === 'gas' ? 'gas_balon' : 'gas', precio_balon: '100'}))}>
               <div className="flex items-center justify-between">
                 <div>
@@ -466,7 +466,7 @@ export default function Ventas() {
                   ].map(([val, label, desc]) => (
                     <button key={val} type="button"
                       onClick={e => { e.stopPropagation(); setForm(f => ({...f, tipo_venta: val})) }}
-                      className={`p-2 rounded-lg border text-xs font-medium transition-all text-center ${form.tipo_venta === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-gray-800 border-gray-700 text-gray-400'}`}>
+                      className={`p-2 rounded-lg border text-xs font-medium transition-all text-center ${form.tipo_venta === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'border-[var(--app-card-border)] text-[var(--app-text-secondary)]'}`}>
                       <p>{label}</p>
                       <p className="text-gray-500 font-normal mt-0.5">{desc}</p>
                     </button>
@@ -530,7 +530,7 @@ export default function Ventas() {
               <div className="grid grid-cols-4 gap-2">
                 {[['efectivo','💵 Efectivo'],['yape','📱 Yape'],['vale','🎫 Vale'],['mixto','🔀 Mixto']].map(([val, label]) => (
                   <button key={val} onClick={() => setForm(f => ({...f, metodo_pago: val}))}
-                    className={`py-2 px-2 rounded-lg border text-xs font-medium transition-all ${form.metodo_pago === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                    className={`py-2 px-2 rounded-lg border text-xs font-medium transition-all ${form.metodo_pago === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
                     {label}
                   </button>
                 ))}
@@ -540,7 +540,7 @@ export default function Ventas() {
             <div><label className="label">Notas</label><input className="input" placeholder="Observaciones..." value={form.notas} onChange={e => setForm(f => ({...f, notas: e.target.value}))} /></div>
 
             {/* Toggle venta al crédito */}
-            <div className={`rounded-xl border p-3 cursor-pointer transition-all ${form.es_credito ? 'bg-orange-900/20 border-orange-600/50' : 'bg-gray-800/50 border-gray-700'}`}
+            <div className={`rounded-xl border p-3 cursor-pointer transition-all ${form.es_credito ? 'bg-orange-900/20 border-orange-600/50' : 'bg-transparent border-[var(--app-card-border)]'}`}
               onClick={() => setForm(f => ({...f, es_credito: !f.es_credito, credito_tipo: 'dinero'}))}>
               <div className="flex items-center justify-between">
                 <div>
@@ -555,7 +555,7 @@ export default function Ventas() {
 
             {/* Selector de qué debe */}
             {form.es_credito && (
-              <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3">
+              <div className="bg-transparent border border-[var(--app-card-border)] rounded-xl p-4 space-y-3">
                 <p className="text-xs text-gray-400 font-semibold uppercase">¿Qué debe el cliente?</p>
                 <div className="grid grid-cols-3 gap-2">
                   {[
@@ -565,7 +565,7 @@ export default function Ventas() {
                   ].map(([val, label, desc]) => (
                     <button key={val} type="button"
                       onClick={e => { e.stopPropagation(); setForm(f => ({...f, credito_tipo: val})) }}
-                      className={`p-2 rounded-lg border text-xs font-medium transition-all text-center ${form.credito_tipo === val ? 'bg-orange-600/30 border-orange-500 text-orange-300' : 'bg-gray-800 border-gray-700 text-gray-400'}`}>
+                      className={`p-2 rounded-lg border text-xs font-medium transition-all text-center ${form.credito_tipo === val ? 'bg-orange-600/30 border-orange-500 text-orange-300' : 'border-[var(--app-card-border)] text-[var(--app-text-secondary)]'}`}>
                       <p>{label}</p>
                       <p className="text-gray-500 font-normal mt-0.5">{desc}</p>
                     </button>
@@ -586,8 +586,8 @@ export default function Ventas() {
 
           {subModal === 'clienteRapido' && (
             <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-              <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+              <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-sm shadow-2xl">
+                <div className="flex items-center justify-between px-6 py-4 ">
                   <h3 className="text-white font-semibold text-sm">👤 Registrar cliente</h3>
                   <button onClick={() => setSubModal(null)} className="text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
                 </div>

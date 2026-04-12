@@ -5,8 +5,8 @@ import { Warehouse, Plus, Edit2, Trash2, Package, X, AlertCircle, TestTube } fro
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+      <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-md shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 ">
           <h3 className="text-white font-semibold">{title}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
         </div>
@@ -129,16 +129,16 @@ export default function Almacenes() {
       )}
 
       <div className="card p-0 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-800"><h3 className="text-sm font-semibold text-white">Lista de almacenes</h3></div>
+        <div className="px-6 py-4 "><h3 className="text-sm font-semibold text-white">Lista de almacenes</h3></div>
         {loading ? <div className="flex items-center justify-center h-32 text-gray-500 text-sm">Cargando...</div> : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead><tr className="border-b border-gray-800">
+              <thead><tr className="">
                 {['Nombre','Responsable','Ubicacion','Stock','Acciones'].map(h => (
                   <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-3 last:text-right">{h}</th>
                 ))}
               </tr></thead>
-              <tbody className="divide-y divide-gray-800/50">
+              <tbody className="divide-y divide-[var(--app-card-border)]">
                 {almacenes.map(a => (
                   <tr key={a.id} className={`table-row-hover ${a.es_prueba ? 'bg-purple-900/5' : ''}`}>
                     <td className="px-6 py-4">
@@ -191,7 +191,7 @@ export default function Almacenes() {
             ))}
             <div
               onClick={() => setForm(f => ({...f, es_prueba: !f.es_prueba}))}
-              className={`flex items-center justify-between rounded-xl border p-3 cursor-pointer transition-all ${form.es_prueba ? 'bg-purple-900/30 border-purple-600/50' : 'bg-gray-800/50 border-gray-700'}`}>
+              className={`flex items-center justify-between rounded-xl border p-3 cursor-pointer transition-all ${form.es_prueba ? 'bg-purple-900/30 border-purple-600/50' : 'bg-transparent border-[var(--app-card-border)]'}`}>
               <div>
                 <p className={`text-sm font-semibold ${form.es_prueba ? 'text-purple-300' : 'text-gray-300'}`}>Almacen de prueba</p>
                 <p className="text-xs text-gray-500 mt-0.5">Permite limpiar todos sus datos con un solo boton</p>

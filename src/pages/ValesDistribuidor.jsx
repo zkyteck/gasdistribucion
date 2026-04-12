@@ -8,8 +8,8 @@ import { useAuth } from '../context/AuthContext'
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
+      <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4  sticky top-0">
           <h3 className="text-white font-semibold">{title}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
         </div>
@@ -176,7 +176,7 @@ export default function ValesDistribuidor() {
         <div className="flex gap-2">
           {[['pendiente','⏳ Pendientes'],['cobrado','✅ Cobrados'],['todos','Todos']].map(([val, label]) => (
             <button key={val} onClick={() => setFiltroEstado(val)}
-              className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all ${filtroEstado === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+              className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all ${filtroEstado === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
               {label}
             </button>
           ))}
@@ -185,7 +185,7 @@ export default function ValesDistribuidor() {
 
       {/* Lista */}
       <div className="card p-0 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+        <div className="px-6 py-4  flex items-center justify-between">
           <h3 className="text-sm font-semibold text-white">Vales registrados</h3>
           <span className="badge-blue">{vales.filter(v => !busqueda || v.nombre_cliente?.toLowerCase().includes(busqueda.toLowerCase())).length} registros</span>
         </div>
@@ -195,9 +195,9 @@ export default function ValesDistribuidor() {
               <Truck className="w-8 h-8 opacity-30" /><p className="text-sm">Sin vales registrados</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-800/50">
+            <div className="divide-y divide-[var(--app-card-border)]">
               {vales.filter(v => !busqueda || v.nombre_cliente?.toLowerCase().includes(busqueda.toLowerCase())).map(v => (
-                <div key={v.id} className="px-6 py-4 hover:bg-gray-800/30 transition-colors">
+                <div key={v.id} className="px-6 py-4 hover:bg-transparent/30 transition-colors">
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-start gap-3">
                       <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 font-bold text-sm ${v.tipo_vale === '20' ? 'bg-yellow-900/40 text-yellow-400' : 'bg-orange-900/40 text-orange-400'}`}>
@@ -218,7 +218,7 @@ export default function ValesDistribuidor() {
                       </span>
                       {v.estado === 'pendiente' && (
                         <div className="flex gap-2">
-                          <button onClick={() => anular(v)} className="text-xs text-gray-600 hover:text-red-400 px-2 py-1 rounded-lg border border-gray-700 transition-all">Anular</button>
+                          <button onClick={() => anular(v)} className="text-xs text-gray-600 hover:text-red-400 px-2 py-1 rounded-lg border border-[var(--app-card-border)] transition-all">Anular</button>
                           <button onClick={() => marcarCobrado(v)} className="text-xs bg-emerald-600/20 border border-emerald-600/30 text-emerald-400 px-2 py-1 rounded-lg">✓ Cobrado</button>
                         </div>
                       )}
@@ -254,7 +254,7 @@ export default function ValesDistribuidor() {
                 if (exacto) return <div className="mt-1 text-xs text-emerald-400 px-1">✅ Cliente registrado</div>
                 if (coincidencias.length === 0) return null
                 return (
-                  <div className="mt-1 bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
+                  <div className="mt-1  border border-[var(--app-card-border)] rounded-lg overflow-hidden">
                     {coincidencias.map(c => (
                       <button key={c.id} type="button" onClick={() => setForm(f => ({...f, nombre_cliente: c.nombre, cliente_id: c.id}))}
                         className="w-full text-left px-3 py-2 text-sm text-white hover:bg-gray-700 flex items-center gap-2">
@@ -270,11 +270,11 @@ export default function ValesDistribuidor() {
               <label className="label">Tipo de vale</label>
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => setForm(f => ({...f, tipo_vale: '20'}))}
-                  className={`py-3 rounded-xl border text-sm font-medium transition-all ${form.tipo_vale === '20' ? 'bg-yellow-900/30 border-yellow-500 text-yellow-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                  className={`py-3 rounded-xl border text-sm font-medium transition-all ${form.tipo_vale === '20' ? 'bg-yellow-900/30 border-yellow-500 text-yellow-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
                   🎫 Vale S/ 20
                 </button>
                 <button onClick={() => setForm(f => ({...f, tipo_vale: '43'}))}
-                  className={`py-3 rounded-xl border text-sm font-medium transition-all ${form.tipo_vale === '43' ? 'bg-orange-900/30 border-orange-500 text-orange-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                  className={`py-3 rounded-xl border text-sm font-medium transition-all ${form.tipo_vale === '43' ? 'bg-orange-900/30 border-orange-500 text-orange-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
                   🎫 Vale S/ 43
                 </button>
               </div>

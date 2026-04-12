@@ -9,8 +9,8 @@ import { useAuth } from '../context/AuthContext'
 function Modal({ title, onClose, children, wide }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className={`bg-gray-900 border border-gray-700 rounded-2xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} shadow-2xl max-h-[90vh] overflow-y-auto`}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
+      <div className={`rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full ${wide ? 'max-w-2xl' : 'max-w-md'} shadow-2xl max-h-[90vh] overflow-y-auto`}>
+        <div className="flex items-center justify-between px-6 py-4  sticky top-0">
           <h3 className="text-white font-semibold">{title}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
         </div>
@@ -350,30 +350,30 @@ export default function Deudas() {
       {/* Totales */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {totalDinero > 0 && (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div className="border border-[var(--app-card-border)] rounded-xl p-4">
             <p className="text-red-400 text-xl font-bold">S/ {totalDinero.toLocaleString('es-PE')}</p>
             <p className="text-gray-500 text-xs mt-1">Deudas en dinero</p>
           </div>
         )}
         {totalBalones > 0 && (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div className="border border-[var(--app-card-border)] rounded-xl p-4">
             <p className="text-orange-400 text-xl font-bold">{totalBalones} bal.</p>
             <p className="text-gray-500 text-xs mt-1">Balones prestados</p>
           </div>
         )}
         {totalVales20 > 0 && (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div className="border border-[var(--app-card-border)] rounded-xl p-4">
             <p className="text-yellow-400 text-xl font-bold">{totalVales20} vales</p>
             <p className="text-gray-500 text-xs mt-1">Vales S/20</p>
           </div>
         )}
         {totalVales43 > 0 && (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <div className="border border-[var(--app-card-border)] rounded-xl p-4">
             <p className="text-yellow-400 text-xl font-bold">{totalVales43} vales</p>
             <p className="text-gray-500 text-xs mt-1">Vales S/43</p>
           </div>
         )}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+        <div className="border border-[var(--app-card-border)] rounded-xl p-4">
           <p className="text-white text-xl font-bold">{totalDeudores}</p>
           <p className="text-gray-500 text-xs mt-1">Deudores activos</p>
         </div>
@@ -383,7 +383,7 @@ export default function Deudas() {
       <div className="flex flex-wrap gap-2 items-center">
         {[['activas','🔴 Con deuda'],['liquidadas','✅ Sin deuda'],['todas','Todas']].map(([val, label]) => (
           <button key={val} onClick={() => setFiltroEstado(val)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${filtroEstado === val ? 'bg-blue-600/20 border-blue-500 text-blue-300' : 'border-gray-700 text-gray-400 hover:border-gray-600'}`}>
+            className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${filtroEstado === val ? 'bg-blue-600/20 border-blue-500 text-blue-300' : 'border-[var(--app-card-border)] text-gray-400 hover:border-[var(--app-text-secondary)]'}`}>
             {label}
           </button>
         ))}
@@ -405,7 +405,7 @@ export default function Deudas() {
           {(filtroFechaDesde || filtroFechaHasta) && (
             <button
               onClick={() => { setFiltroFechaDesde(''); setFiltroFechaHasta('') }}
-              className="text-xs text-gray-500 hover:text-red-400 border border-gray-700 hover:border-red-600/40 px-2 py-1 rounded-lg transition-all"
+              className="text-xs text-gray-500 hover:text-red-400 border border-[var(--app-card-border)] hover:border-red-600/40 px-2 py-1 rounded-lg transition-all"
             >
               ✕ Limpiar
             </button>
@@ -414,8 +414,8 @@ export default function Deudas() {
       </div>
 
       {/* Lista */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-        <div className="px-6 py-3 border-b border-gray-800 flex justify-between items-center">
+      <div className="border border-[var(--app-card-border)] rounded-2xl overflow-hidden">
+        <div className="px-6 py-3  flex justify-between items-center">
           <h3 className="text-white font-semibold text-sm">
             {filtroEstado === 'activas' ? 'Deudas activas' : filtroEstado === 'liquidadas' ? 'Liquidadas' : 'Todas'}
           </h3>
@@ -429,11 +429,11 @@ export default function Deudas() {
             <p className="text-sm">Sin deudas registradas</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-800/50">
+          <div className="divide-y divide-[var(--app-card-border)]">
             {deudasFiltradas.map(d => {
               const dias = differenceInDays(new Date(), new Date(d.fecha_deuda))
               return (
-                <div key={d.id} className="px-4 py-4 hover:bg-gray-800/30 transition-colors">
+                <div key={d.id} className="px-4 py-4 hover:bg-transparent/30 transition-colors">
                   <div className="flex items-start gap-3">
                     <div className="w-9 h-9 rounded-lg bg-red-500/10 flex items-center justify-center flex-shrink-0 mt-0.5 text-sm">👤</div>
                     <div className="flex-1 min-w-0">
@@ -477,7 +477,7 @@ export default function Deudas() {
       {/* Aviso cliente con deuda activa */}
       {deudaPendiente && modal === 'deuda' && (
         <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-yellow-700 rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4">
+          <div className="border border-yellow-700 rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4">
             <div className="flex items-start gap-3">
               <span className="text-2xl">⚠️</span>
               <div>
@@ -530,16 +530,16 @@ export default function Deudas() {
                     <p className="text-xs text-emerald-400 mt-1 px-1">✅ Cliente registrado</p>
                   )}
                   {deudaForm.nombre_deudor.length >= 2 && !clientes.find(c => c.nombre.toLowerCase() === deudaForm.nombre_deudor.toLowerCase()) && (
-                    <div className="absolute z-10 w-full mt-1 bg-gray-800 border border-gray-700 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                    <div className="absolute z-10 w-full mt-1  border border-[var(--app-card-border)] rounded-xl shadow-xl max-h-48 overflow-y-auto">
                       {clientes.filter(c => c.nombre.toLowerCase().includes(deudaForm.nombre_deudor.toLowerCase())).map(c => (
                         <button key={c.id} type="button"
                           onMouseDown={() => { setDeudaForm(f => ({...f, nombre_deudor: c.nombre, cliente_id: c.id})); setMostrarSugerencias(false) }}
                           onTouchEnd={e => { e.preventDefault(); setDeudaForm(f => ({...f, nombre_deudor: c.nombre, cliente_id: c.id})); setMostrarSugerencias(false) }}
-                          className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-gray-700 transition-colors border-b border-gray-700/50 last:border-0">
+                          className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-gray-700 transition-colors border-b border-[var(--app-card-border)] last:border-0">
                           👤 {c.nombre}
                         </button>
                       ))}
-                      <div className="px-3 py-2 flex items-center justify-between border-t border-gray-700/50">
+                      <div className="px-3 py-2 flex items-center justify-between border-t border-[var(--app-card-border)]">
                         <span className="text-xs text-gray-500">
                           {clientes.filter(c => c.nombre.toLowerCase().includes(deudaForm.nombre_deudor.toLowerCase())).length === 0 ? 'No encontrado' : 'o crear nuevo'}
                         </span>
@@ -567,7 +567,7 @@ export default function Deudas() {
                   <div className="flex gap-1 mt-1">
                     {['5kg','10kg','45kg'].map(t => (
                       <button key={t} type="button" onClick={() => setDeudaForm(f => ({...f, tipo_balon: t}))}
-                        className={`flex-1 py-1 rounded-lg text-xs font-medium border transition-all ${deudaForm.tipo_balon === t ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'border-gray-700 text-gray-500'}`}>
+                        className={`flex-1 py-1 rounded-lg text-xs font-medium border transition-all ${deudaForm.tipo_balon === t ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'border-[var(--app-card-border)] text-gray-500'}`}>
                         {t}
                       </button>
                     ))}
@@ -602,7 +602,7 @@ export default function Deudas() {
                       }} />
                   </div>
                   {parseFloat(deudaForm.precio_balon) > 0 && parseInt(deudaForm.balones) > 0 && (
-                    <div className="flex-1 bg-gray-800 rounded-xl p-3 text-center mt-5">
+                    <div className="flex-1  rounded-xl p-3 text-center mt-5">
                       <p className="text-xs text-gray-500">Total balones</p>
                       <p className="text-emerald-400 font-bold text-lg">
                         S/ {(parseFloat(deudaForm.precio_balon) * parseInt(deudaForm.balones)).toFixed(2)}
@@ -686,19 +686,19 @@ export default function Deudas() {
                 )}
                 {(parseInt(pagoForm.balones)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">🔵 Balones:</span><span className="text-white">{pagoForm.balones}</span></div>}
                 {parseFloat(selected.monto_pendiente) > 0 && (
-                  <div className="flex justify-between border-t border-gray-700 pt-1">
+                  <div className="flex justify-between border-t border-[var(--app-card-border)] pt-1">
                     <span className="text-gray-400">Saldo dinero restante:</span>
                     <span className="text-yellow-400 font-bold">S/ {Math.max(0, (parseFloat(selected.monto_pendiente)||0) - (parseFloat(pagoForm.monto)||0) - (parseInt(pagoForm.vales_20)||0)*20 - (parseInt(pagoForm.vales_43)||0)*43).toLocaleString()}</span>
                   </div>
                 )}
                 {parseInt(selected.vales_20_pendiente) > 0 && (
-                  <div className="flex justify-between border-t border-gray-700 pt-1">
+                  <div className="flex justify-between border-t border-[var(--app-card-border)] pt-1">
                     <span className="text-gray-400">Vales S/20 restantes:</span>
                     <span className="text-yellow-400 font-bold">{Math.max(0, (parseInt(selected.vales_20_pendiente)||0) - (parseInt(pagoForm.vales_20)||0))} vales</span>
                   </div>
                 )}
                 {parseInt(selected.vales_43_pendiente) > 0 && (
-                  <div className="flex justify-between border-t border-gray-700 pt-1">
+                  <div className="flex justify-between border-t border-[var(--app-card-border)] pt-1">
                     <span className="text-gray-400">Vales S/43 restantes:</span>
                     <span className="text-yellow-400 font-bold">{Math.max(0, (parseInt(selected.vales_43_pendiente)||0) - (parseInt(pagoForm.vales_43)||0))} vales</span>
                   </div>
@@ -711,7 +711,7 @@ export default function Deudas() {
                 <div className="grid grid-cols-3 gap-2">
                   {['efectivo','yape','mixto'].map(m => (
                     <button key={m} onClick={() => setPagoForm(f => ({...f, metodo_pago: m}))}
-                      className={`py-2 rounded-lg border text-xs font-medium capitalize transition-all ${pagoForm.metodo_pago === m ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                      className={`py-2 rounded-lg border text-xs font-medium capitalize transition-all ${pagoForm.metodo_pago === m ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
                       {m === 'mixto' ? 'Mixto' : m}
                     </button>
                   ))}
@@ -796,7 +796,7 @@ export default function Deudas() {
             {/* Resumen estadístico */}
             {historialCompleto?.deudas && (
               <div className="grid grid-cols-3 gap-3">
-                <div className="bg-gray-800/50 rounded-xl p-3 text-center">
+                <div className="bg-transparent rounded-xl p-3 text-center">
                   <p className="text-2xl font-bold text-white">{historialCompleto.deudas.length}</p>
                   <p className="text-xs text-gray-500 mt-1">Deudas totales</p>
                 </div>
@@ -829,7 +829,7 @@ export default function Deudas() {
                           Deuda del {deuda.fecha_deuda ? format(new Date(deuda.fecha_deuda + 'T12:00:00'), 'dd/MM/yyyy', { locale: es }) : '—'}
                         </span>
                       </div>
-                      <div className="space-y-1.5 ml-2 border-l-2 border-gray-700 pl-3">
+                      <div className="space-y-1.5 ml-2 border-l-2 border-[var(--app-card-border)] pl-3">
                         {(deuda.historial || []).length === 0 ? (
                           <p className="text-xs text-gray-600 py-2">Sin movimientos</p>
                         ) : (
