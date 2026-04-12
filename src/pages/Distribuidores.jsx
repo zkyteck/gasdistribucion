@@ -10,7 +10,7 @@ import { useAuth } from '../context/AuthContext'
 function Modal({ title, onClose, children, wide }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className={`rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full ${wide ? 'max-w-2xl' : 'max-w-md'} shadow-2xl max-h-[90vh] overflow-y-auto`}>
+      <div className={`w-full ${wide ? 'max-w-2xl' : 'max-w-md'} rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto`} style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
         <div className="flex items-center justify-between px-6 py-4  sticky top-0">
           <h3 className="text-white font-semibold">{title}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
@@ -601,10 +601,7 @@ export default function Distribuidores() {
                   className="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/30 text-blue-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
                   <History className="w-3 h-3" />Historial
                 </button>
-                <button onClick={() => { setSelected(d); setAbonoModal(true); setAbonoForm({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', vacios_extra: '', notas: '', modo: 'abono', fecha: hoyPeru() }); cargarHistorial(d.id) }}
-                  className="bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
-                  <DollarSign className="w-3 h-3" />💰 Arreglar cuentas
-                </button>
+
                 <button onClick={() => { setSelected(d); setAcuentaModal(true); setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() }); cargarAcuentaDist(d.id) }}
                   className="col-span-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/30 text-yellow-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
                   <ClipboardList className="w-3 h-3" />📋 A Cuenta ({d.vales_pendientes || 0} pendientes)
@@ -882,7 +879,7 @@ export default function Distribuidores() {
           {/* Sub-modal cliente rápido */}
           {subModal === 'clienteRapido' && (
             <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-              <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-sm shadow-2xl">
+              <div className="w-full max-w-sm rounded-2xl shadow-2xl" style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
                 <div className="flex items-center justify-between px-6 py-4 ">
                   <h3 className="text-white font-semibold text-sm">Registrar cliente</h3>
                   <button onClick={() => setSubModal(null)} className="text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
@@ -1140,7 +1137,7 @@ export default function Distribuidores() {
       {/* Modal arreglar cuentas */}
       {abonoModal !== null && selected && (
         <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
-          <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-lg rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto" style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
             <div className="flex items-center justify-between px-6 py-4  sticky top-0">
               <div>
                 <h3 className="text-white font-semibold">💰 {selected.nombre}</h3>
@@ -1372,7 +1369,7 @@ export default function Distribuidores() {
       {/* Modal A Cuenta del distribuidor */}
       {acuentaModal && selected && (
         <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
-          <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-lg rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto" style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
             <div className="flex items-center justify-between px-6 py-4  sticky top-0">
               <div>
                 <h3 className="text-white font-semibold">📋 A Cuenta — {selected.nombre}</h3>
