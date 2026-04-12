@@ -24,6 +24,7 @@ export default function Inventario() {
   const [proveedores, setProveedores] = useState([])
   const [marcas, setMarcas] = useState([])
   const [distribuidoresList, setDistribuidoresList] = useState([])
+  const [preciosDistTipo, setPreciosDistTipo] = useState([])
   const [compras, setCompras] = useState([])
   const [movimientos, setMovimientos] = useState([])
   const [ventas, setVentas] = useState([])
@@ -67,13 +68,14 @@ export default function Inventario() {
 
   async function cargar() {
     setLoading(true)
-    const [{ data: a }, { data: p }, { data: m }, { data: c }, { data: mv }, { data: dl }, { data: deudasBal }, { data: spt }] = await Promise.all([
+    const [{ data: a }, { data: p }, { data: m }, { data: c }, { data: mv }, { data: dl }, { data: deudasBal }, { data: spt }, { data: pdt }] = await Promise.all([
       supabase.from('almacenes').select('*').eq('activo', true).order('nombre'),
       supabase.from('proveedores').select('*').eq('activo', true),
       supabase.from('marcas_gas').select('*').eq('activo', true).order('nombre'),
       supabase.from('compras').select('*, proveedores(nombre), marcas_gas(nombre)').order('fecha', { ascending: false }).limit(30),
       supabase.from('movimientos_stock').select('*, almacenes(nombre)').not('almacen_id', 'is', null).order('created_at', { ascending: false }).limit(50),
       supabase.from('distribuidores').select('id, nombre, almacen_id, precio_base').eq('activo', true).order('nombre'),
+      supabase.from('precio_distribuidor_tipo').select('*'),
       supabase.from('deudas').select('balones_pendiente').neq('estado', 'liquidada'),
       supabase.from('stock_por_tipo').select('*')
     ])
@@ -94,6 +96,7 @@ export default function Inventario() {
     setProveedores(p || [])
     setMarcas(m || [])
     setDistribuidoresList(dl || [])
+    setPreciosDistTipo(pdt || [])
     setCompras(c || [])
     setMovimientos(mv || [])
     setLoading(false)
@@ -378,7 +381,23 @@ export default function Inventario() {
     if (idx < 0) return
     const dist = [...compraForm.distribucion]
     dist[idx] = { ...dist[idx], cantidad: parseInt(val) || 0 }
-    setCompraForm(f => ({ ...f, distribucion: dist }))
+    setCompraForm(f => {
+      const newForm = { ...f, distribucion: dist }
+      // Si el almacén pertenece a un distribuidor y el precio está vacío → pre-rellenar
+      const almacenId = dist[idx].almacen_id
+      const tipoBalon = dist[idx].tipo_balon
+      const distrib = distribuidoresList.find(d => d.almacen_id === almacenId)
+      if (distrib && parseInt(val) > 0) {
+        // Buscar precio en precio_distribuidor_tipo
+        const pdt = preciosDistTipo.find(p => p.distribuidor_id === distrib.id && p.tipo_balon === tipoBalon)
+        const precioSugerido = pdt?.precio || distrib.precio_base || ''
+        // Solo pre-rellenar si el precio actual está vacío
+        if (!newForm.precios[tipoBalon]) {
+          newForm.precios = { ...newForm.precios, [tipoBalon]: precioSugerido.toString() }
+        }
+      }
+      return newForm
+    })
   }
 
   const distribOk = totalCompra === 0 || ['5kg','10kg','45kg'].every(t => {
@@ -1222,7 +1241,21 @@ export default function Inventario() {
                 <div className="space-y-3">
                   {distPorAlmacen.map(a => (
                     <div key={a.id} className="bg-gray-800/40 rounded-xl px-4 py-3">
-                      <div className="flex items-center gap-2 mb-2"><p className="text-gray-300 text-sm font-medium">📦 {a.nombre}</p>{a.responsable && <span className="text-xs text-gray-500">({a.responsable})</span>}</div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="text-gray-300 text-sm font-medium">
+                          {distribuidoresList.find(d => d.almacen_id === a.id) ? '🚛' : '📦'} {a.nombre}
+                        </p>
+                        {a.responsable && <span className="text-xs text-gray-500">({a.responsable})</span>}
+                        {(() => {
+                          const distrib = distribuidoresList.find(d => d.almacen_id === a.id)
+                          if (!distrib) return null
+                          return (
+                            <span style={{fontSize:10, padding:'2px 6px', borderRadius:4, background:'rgba(251,146,60,0.15)', color:'#fb923c', fontWeight:600}}>
+                              Dist. · precio config: S/{preciosDistTipo.find(p => p.distribuidor_id === distrib.id && p.tipo_balon === '10kg')?.precio || distrib.precio_base}
+                            </span>
+                          )
+                        })()}
+                      </div>
                       <div className="grid grid-cols-3 gap-2">
                         {a.tipos.map(({ tipo, idx, cantidad }) => (
                           <div key={tipo} className="flex flex-col gap-1">
