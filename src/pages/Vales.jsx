@@ -543,9 +543,13 @@ function HistorialVales({ filtroFecha, onFechaClick }) {
                 <p style={{color:'var(--app-text)', fontWeight:600, fontSize:14, margin:0}}>
                   {format(new Date(d.fecha + 'T12:00:00'), 'dd/MM/yyyy', {locale: es})}
                 </p>
-                <p style={{color:'var(--app-text-secondary)', fontSize:11, margin:0}}>{d.totalVales} vales</p>
+                <p style={{color:'var(--app-text-secondary)', fontSize:11, margin:0}}>
+                  {d.porTipo ? Object.values(d.porTipo).reduce((s,x) => s+x.cant, 0) : d.cant20+d.cant43} vales
+                </p>
               </div>
-              <p style={{color:'#34d399', fontWeight:700, fontSize:16, margin:0}}>S/ {d.totalMonto?.toLocaleString('es-PE')}</p>
+              <p style={{color:'#34d399', fontWeight:700, fontSize:16, margin:0}}>
+                S/ {typeof d.total === 'number' ? d.total.toFixed(0) : d.total}
+              </p>
             </div>
             <div style={{display:'flex', gap:6, flexWrap:'wrap', alignItems:'center'}}>
               {d.porTipo ? Object.entries(d.porTipo).map(([tipo, data]) => (
@@ -555,7 +559,7 @@ function HistorialVales({ filtroFecha, onFechaClick }) {
               )) : null}
               <div style={{marginLeft:'auto', display:'flex', gap:4}}>
                 <button onClick={() => abrirEditDia(d)} style={{fontSize:11, background:'rgba(59,130,246,0.15)', color:'#93c5fd', border:'1px solid rgba(59,130,246,0.3)', borderRadius:6, padding:'4px 8px', cursor:'pointer'}}>✏️ Editar</button>
-                <button onClick={() => borrarDia(d.fecha)} style={{fontSize:11, background:'rgba(239,68,68,0.1)', color:'#f87171', border:'1px solid rgba(239,68,68,0.3)', borderRadius:6, padding:'4px 8px', cursor:'pointer'}}>🗑️</button>
+                <button onClick={() => eliminarDia(d.fecha)} style={{fontSize:11, background:'rgba(239,68,68,0.1)', color:'#f87171', border:'1px solid rgba(239,68,68,0.3)', borderRadius:6, padding:'4px 8px', cursor:'pointer'}}>🗑️</button>
               </div>
             </div>
           </div>
@@ -611,3 +615,39 @@ function HistorialVales({ filtroFecha, onFechaClick }) {
           </tbody>
         </table>
       </div>
+
+      {editDia && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
+              <h3 className="text-white font-semibold text-sm">✏️ Editar vales — {format(new Date(editDia.fecha + 'T12:00:00'), 'dd/MM/yyyy', { locale: es })}</h3>
+              <button onClick={() => setEditDia(null)} className="text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-yellow-900/20 border border-yellow-800/40 rounded-xl p-4 text-center">
+                  <p className="text-yellow-400 font-bold mb-2">S/ 20</p>
+                  <input type="number" min="0" className="input text-center text-2xl font-bold py-2"
+                    value={editForm.cant20} onChange={e => setEditForm(f => ({...f, cant20: e.target.value}))} />
+                  <p className="text-gray-500 text-xs mt-1">vales</p>
+                </div>
+                <div className="bg-orange-900/20 border border-orange-800/40 rounded-xl p-4 text-center">
+                  <p className="text-orange-400 font-bold mb-2">S/ 43</p>
+                  <input type="number" min="0" className="input text-center text-2xl font-bold py-2"
+                    value={editForm.cant43} onChange={e => setEditForm(f => ({...f, cant43: e.target.value}))} />
+                  <p className="text-gray-500 text-xs mt-1">vales</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setEditDia(null)} className="btn-secondary flex-1">Cancelar</button>
+                <button onClick={guardarEdicion} disabled={saving} className="btn-primary flex-1 justify-center">
+                  {saving ? 'Guardando...' : '✓ Guardar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
