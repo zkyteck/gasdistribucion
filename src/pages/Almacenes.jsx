@@ -131,7 +131,8 @@ export default function Almacenes() {
       <div className="card p-0 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-800"><h3 className="text-sm font-semibold text-white">Lista de almacenes</h3></div>
         {loading ? <div className="flex items-center justify-center h-32 text-gray-500 text-sm">Cargando...</div> : (
-          {/* Móvil — cards */}
+          <>
+        {/* Móvil — cards */}
         <div className="lg:hidden divide-y" style={{borderColor:'var(--app-card-border)'}}>
           {almacenes.map(a => (
             <div key={a.id} style={{padding:'12px 16px', display:'flex', flexDirection:'column', gap:8}}>
@@ -211,6 +212,69 @@ export default function Almacenes() {
               </tbody>
             </table>
           </div>
-        )}
         </div>
+        </>
         )}
+      </div>
+
+      {modal && (
+        <Modal title={editId ? 'Editar almacen' : 'Nuevo almacen'} onClose={() => setModal(false)}>
+          <div className="space-y-4">
+            {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
+            {[['nombre','Nombre del almacen','text','Ej: Almacen PRUEBA'],['responsable','Responsable','text','Nombre del encargado'],['ubicacion','Ubicacion','text','Direccion o zona']].map(([key,label,type,ph]) => (
+              <div key={key}>
+                <label className="label">{label}</label>
+                <input type={type} className="input" placeholder={ph} value={form[key]} onChange={e => setForm({...form,[key]:e.target.value})} />
+              </div>
+            ))}
+            <div
+              onClick={() => setForm(f => ({...f, es_prueba: !f.es_prueba}))}
+              className={`flex items-center justify-between rounded-xl border p-3 cursor-pointer transition-all ${form.es_prueba ? 'bg-purple-900/30 border-purple-600/50' : 'bg-gray-800/50 border-gray-700'}`}>
+              <div>
+                <p className={`text-sm font-semibold ${form.es_prueba ? 'text-purple-300' : 'text-gray-300'}`}>Almacen de prueba</p>
+                <p className="text-xs text-gray-500 mt-0.5">Permite limpiar todos sus datos con un solo boton</p>
+              </div>
+              <div className={`w-10 h-6 rounded-full transition-all relative ${form.es_prueba ? 'bg-purple-500' : 'bg-gray-600'}`}>
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${form.es_prueba ? 'left-5' : 'left-1'}`} />
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setModal(false)} className="btn-secondary flex-1">Cancelar</button>
+              <button onClick={guardar} disabled={saving} className="btn-primary flex-1 justify-center">{saving ? 'Guardando...' : 'Guardar'}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {deleteConfirm && (
+        <Modal title={deleteConfirm.modo === 'limpiar' ? 'Limpiar datos de prueba' : 'Eliminar almacen'} onClose={() => setDeleteConfirm(null)}>
+          {deleteConfirm.modo === 'limpiar' ? (
+            <div className="space-y-4">
+              <div className="bg-purple-900/20 border border-purple-700/40 rounded-xl p-4">
+                <p className="text-white font-semibold mb-2">{deleteConfirm.nombre}</p>
+                <p className="text-xs text-gray-400 mb-3">Se eliminaran todos los registros generados con este almacen.</p>
+                <p className="text-xs text-emerald-400 mt-3">El almacen seguira activo con stock en 0.</p>
+              </div>
+              <p className="text-xs text-red-400">Esta accion no se puede deshacer.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setDeleteConfirm(null)} className="btn-secondary flex-1">Cancelar</button>
+                <button onClick={() => limpiarPrueba(deleteConfirm)} disabled={limpiandoPrueba}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold px-4 py-2 rounded-lg transition-all">
+                  {limpiandoPrueba ? 'Limpiando...' : 'Confirmar limpieza'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p className="text-gray-400 text-sm mb-4">Eliminar <span className="text-white font-semibold">{deleteConfirm.nombre}</span>?</p>
+              <div className="flex gap-3">
+                <button onClick={() => setDeleteConfirm(null)} className="btn-secondary flex-1">Cancelar</button>
+                <button onClick={() => eliminar(deleteConfirm.id)} className="btn-danger flex-1 justify-center">Eliminar</button>
+              </div>
+            </div>
+          )}
+        </Modal>
+      )}
+    </div>
+  )
+}
