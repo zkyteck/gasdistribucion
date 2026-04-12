@@ -282,9 +282,9 @@ export default function Layout() {
           padding: '1rem',
           overflowY: 'auto',
           background: 'var(--app-main-bg)',
+          paddingBottom: 'calc(80px + env(safe-area-inset-bottom))',
         }}
-          // En móvil dejamos espacio para la barra inferior
-          className="pb-20 lg:pb-6 lg:p-6"
+          className="lg:pb-6 lg:p-6"
         >
           <Outlet />
         </main>
