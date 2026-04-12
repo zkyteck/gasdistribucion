@@ -32,56 +32,130 @@ export default function Sidebar({ onClose }) {
   }
 
   return (
-    <aside className="w-48 bg-gray-900 border-r border-gray-800 flex flex-col h-screen">
+    <aside style={{
+      width: 192,
+      background: 'var(--app-sidebar-bg)',
+      borderRight: '1px solid var(--app-sidebar-border)',
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100vh',
+    }}>
       {/* Logo */}
-      <div className="px-4 py-4 border-b border-gray-800 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
-            <Flame className="w-4 h-4 text-white" />
+      <div style={{
+        padding: '16px',
+        borderBottom: '1px solid var(--app-sidebar-border)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{
+            width: 32, height: 32,
+            background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
+            borderRadius: 8,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Flame style={{ width: 16, height: 16, color: '#fff' }} />
           </div>
           <div>
-            <p className="text-white font-bold text-sm leading-none">Centro Gas</p>
-            <p className="text-gray-500 text-xs">Paucara</p>
+            <p style={{ color: 'var(--app-logo-text)', fontWeight: 700, fontSize: 14, lineHeight: 1 }}>
+              Centro Gas
+            </p>
+            <p style={{ color: 'var(--app-logo-sub)', fontSize: 11, marginTop: 2 }}>
+              Paucara
+            </p>
           </div>
         </div>
-        {/* Botón cerrar — solo en móvil */}
         {onClose && (
-          <button onClick={onClose} className="lg:hidden text-gray-500 hover:text-white p-1 rounded transition-colors">
-            <X className="w-4 h-4" />
+          <button
+            onClick={onClose}
+            className="lg:hidden"
+            style={{ color: 'var(--app-sidebar-text)', padding: 4, borderRadius: 6, background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            <X style={{ width: 16, height: 16 }} />
           </button>
         )}
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
+      <nav style={{ flex: 1, padding: '12px 8px', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
         {navItems.filter(item => !item.adminOnly || isAdmin).map(({ to, icon: Icon, label }) => (
-          <NavLink key={to} to={to}
+          <NavLink
+            key={to}
+            to={to}
             onClick={onClose}
-            className={({ isActive }) =>
-              `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                isActive ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-gray-400 hover:text-white hover:bg-gray-800'
-              }`
-            }>
-            <Icon className="w-4 h-4 flex-shrink-0" />
+            style={({ isActive }) => ({
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '8px 12px',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 500,
+              textDecoration: 'none',
+              transition: 'all 0.15s',
+              background: isActive ? 'var(--app-sidebar-active-bg)' : 'transparent',
+              color: isActive ? 'var(--app-sidebar-active-text)' : 'var(--app-sidebar-text)',
+              border: isActive ? '1px solid var(--app-sidebar-active-border)' : '1px solid transparent',
+            })}
+            onMouseEnter={e => {
+              if (!e.currentTarget.classList.contains('active')) {
+                e.currentTarget.style.background = 'var(--app-sidebar-hover-bg)'
+                e.currentTarget.style.color = 'var(--app-sidebar-hover-text)'
+              }
+            }}
+            onMouseLeave={e => {
+              // Reaplica estilo base si no está activo
+              // NavLink maneja el activo, solo limpiamos hover
+              const isActive = window.location.pathname === to
+              if (!isActive) {
+                e.currentTarget.style.background = 'transparent'
+                e.currentTarget.style.color = 'var(--app-sidebar-text)'
+              }
+            }}
+          >
+            <Icon style={{ width: 16, height: 16, flexShrink: 0 }} />
             {label}
           </NavLink>
         ))}
       </nav>
 
       {/* User */}
-      <div className="px-3 py-4 border-t border-gray-800">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-xs">
+      <div style={{ padding: '12px', borderTop: '1px solid var(--app-sidebar-border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <div style={{
+            width: 32, height: 32,
+            background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
+            borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', fontWeight: 700, fontSize: 12,
+          }}>
             {perfil?.nombre?.charAt(0)?.toUpperCase() || 'U'}
           </div>
-          <div className="min-w-0">
-            <p className="text-white text-xs font-medium truncate">{perfil?.nombre || 'Usuario'}</p>
-            <p className="text-gray-500 text-xs capitalize">{perfil?.rol || 'trabajador'}</p>
+          <div style={{ minWidth: 0 }}>
+            <p style={{ color: 'var(--app-text)', fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {perfil?.nombre || 'Usuario'}
+            </p>
+            <p style={{ color: 'var(--app-text-secondary)', fontSize: 11, textTransform: 'capitalize' }}>
+              {perfil?.rol || 'trabajador'}
+            </p>
           </div>
         </div>
-        <button onClick={handleSignOut}
-          className="flex items-center gap-2 text-gray-500 hover:text-red-400 text-xs w-full transition-colors">
-          <LogOut className="w-3.5 h-3.5" />Cerrar sesión
+        <button
+          onClick={handleSignOut}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            color: 'var(--app-text-secondary)',
+            fontSize: 12, width: '100%',
+            background: 'none', border: 'none', cursor: 'pointer',
+            transition: 'color 0.15s',
+            padding: '4px 0',
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--app-text-secondary)'}
+        >
+          <LogOut style={{ width: 14, height: 14 }} />
+          Cerrar sesión
         </button>
       </div>
     </aside>

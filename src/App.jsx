@@ -15,7 +15,27 @@ import Almacenes from './pages/Almacenes'
 import ACuenta from './pages/ACuenta'
 import Reportes from './pages/Reportes'
 import Configuracion from './pages/Configuracion'
-import Apariencia from './pages/Apariencia'
+import Apariencia, { aplicarTemaAlDOM, TEMAS } from './pages/Apariencia'
+
+// ── Aplicar tema guardado ANTES de renderizar (evita flash) ──────────────────
+;(function initTema() {
+  // Busca la clave de tema: primero intenta con IDs de usuarios conocidos,
+  // luego busca cualquier clave que empiece con "tema_"
+  let temaId = null
+
+  // Busca en localStorage cualquier clave tema_<uuid>
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key && key.startsWith('tema_')) {
+      temaId = localStorage.getItem(key)
+      break
+    }
+  }
+
+  // Fallback a 'neon' si no hay nada guardado
+  if (!temaId || !TEMAS[temaId]) temaId = 'neon'
+  aplicarTemaAlDOM(temaId)
+})()
 
 export default function App() {
   return (

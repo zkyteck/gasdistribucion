@@ -23,27 +23,66 @@ export default function Topbar({ onMenuClick }) {
   const title = titles[pathname] || 'Sistema'
 
   return (
-    <header className="h-14 bg-gray-900/80 backdrop-blur border-b border-gray-800 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-10">
-      <div className="flex items-center gap-3">
-        {/* Botón hamburguesa — solo en móvil */}
+    <header style={{
+      height: 56,
+      background: 'var(--app-topbar-bg)',
+      borderBottom: '1px solid var(--app-topbar-border)',
+      backdropFilter: 'blur(8px)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '0 24px',
+      position: 'sticky',
+      top: 0,
+      zIndex: 10,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {/* Hamburguesa — solo móvil */}
         <button
           onClick={onMenuClick}
-          className="lg:hidden text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800 transition-colors"
+          className="lg:hidden"
+          style={{
+            color: 'var(--app-text-secondary)',
+            padding: 6, borderRadius: 8,
+            background: 'none', border: 'none', cursor: 'pointer',
+          }}
         >
-          <Menu className="w-5 h-5" />
+          <Menu style={{ width: 20, height: 20 }} />
         </button>
-        <h1 className="text-white font-semibold text-sm">{title}</h1>
+        <h1 style={{ color: 'var(--app-text)', fontWeight: 600, fontSize: 14 }}>{title}</h1>
       </div>
-      <div className="flex items-center gap-3">
-        <div className="relative hidden sm:block">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
-          <input className="bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-4 py-1.5 text-xs text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-500 w-48"
-            placeholder="Buscar..." />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {/* Búsqueda */}
+        <div style={{ position: 'relative' }} className="hidden sm:block">
+          <Search style={{
+            position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+            width: 14, height: 14, color: 'var(--app-text-secondary)',
+          }} />
+          <input
+            style={{
+              background: 'var(--app-input-bg)',
+              border: '1px solid var(--app-input-border)',
+              borderRadius: 8,
+              paddingLeft: 32, paddingRight: 16, paddingTop: 6, paddingBottom: 6,
+              fontSize: 12,
+              color: 'var(--app-input-text)',
+              width: 192,
+              outline: 'none',
+            }}
+            placeholder="Buscar..."
+            onFocus={e => e.target.style.borderColor = 'var(--app-accent)'}
+            onBlur={e => e.target.style.borderColor = 'var(--app-input-border)'}
+          />
         </div>
-        <button className="relative text-gray-500 hover:text-gray-300 transition-colors">
-          <Bell className="w-4 h-4" />
+
+        {/* Bell */}
+        <button style={{ color: 'var(--app-text-secondary)', background: 'none', border: 'none', cursor: 'pointer', position: 'relative' }}>
+          <Bell style={{ width: 16, height: 16 }} />
         </button>
-        <span className="text-gray-600 text-xs hidden sm:block">
+
+        {/* Fecha */}
+        <span style={{ color: 'var(--app-text-secondary)', fontSize: 12 }} className="hidden sm:block">
           {format(new Date(), "EEE, d MMM.", { locale: es })}
         </span>
       </div>
