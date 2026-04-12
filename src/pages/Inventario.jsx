@@ -73,7 +73,7 @@ export default function Inventario() {
       supabase.from('marcas_gas').select('*').eq('activo', true).order('nombre'),
       supabase.from('compras').select('*, proveedores(nombre), marcas_gas(nombre)').order('fecha', { ascending: false }).limit(30),
       supabase.from('movimientos_stock').select('*, almacenes(nombre)').not('almacen_id', 'is', null).order('created_at', { ascending: false }).limit(50),
-      supabase.from('distribuidores').select('id, nombre').eq('activo', true).order('nombre'),
+      supabase.from('distribuidores').select('id, nombre, almacen_id, precio_base').eq('activo', true).order('nombre'),
       supabase.from('deudas').select('balones_pendiente').neq('estado', 'liquidada'),
       supabase.from('stock_por_tipo').select('*')
     ])
@@ -226,6 +226,37 @@ export default function Inventario() {
         await supabase.from('stock_por_tipo').insert({ almacen_id: d.almacen_id, tipo_balon: d.tipo_balon, stock_actual: d.cantidad })
       }
     }
+    // Actualizar stock_actual de almacenes y crear lotes FIFO para distribuidores
+    for (const d of detalles) {
+      if (d.cantidad <= 0) continue
+      // Actualizar stock_actual del almacén
+      const { data: almFresco } = await supabase.from('almacenes').select('stock_actual').eq('id', d.almacen_id).single()
+      if (almFresco) {
+        await supabase.from('almacenes').update({
+          stock_actual: (almFresco.stock_actual || 0) + d.cantidad,
+          updated_at: new Date().toISOString()
+        }).eq('id', d.almacen_id)
+      }
+      // Si el almacén pertenece a un distribuidor → crear lote FIFO
+      const distrib = distribuidoresList.find(dist => dist.almacen_id === d.almacen_id)
+      if (distrib) {
+        const precioLote = parseFloat(compraForm.precios[d.tipo_balon]) || distrib.precio_base || 0
+        if (precioLote > 0) {
+          await supabase.from('lotes_distribuidor').insert({
+            distribuidor_id: distrib.id,
+            reposicion_id: null,
+            fecha: compraForm.fecha,
+            cantidad_inicial: d.cantidad,
+            cantidad_vendida: 0,
+            cantidad_restante: d.cantidad,
+            precio_unitario: precioLote,
+            tipo_balon: d.tipo_balon,
+            notas: `Compra ${compraForm.fecha}${compraForm.notas ? ' — ' + compraForm.notas : ''}`
+          })
+        }
+      }
+    }
+
     setSaving(false)
     setModal(null)
     setCompraForm({ proveedor_id: '', marca_id: '', fecha: hoyPeru(), cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, precios: { '5kg': '', '10kg': '', '45kg': '' }, notas: '', distribucion: [], monto_amortizado: '', estado_pago: 'cancelado' })

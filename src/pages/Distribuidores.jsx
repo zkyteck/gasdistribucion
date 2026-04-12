@@ -10,12 +10,10 @@ import { useAuth } from '../context/AuthContext'
 function Modal({ title, onClose, children, wide }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className={`w-full ${wide ? 'max-w-2xl' : 'max-w-md'} shadow-2xl max-h-[90vh] overflow-y-auto rounded-2xl`}
-        style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
-        <div style={{borderBottom:'1px solid var(--app-modal-header-border)',position:'sticky',top:0,background:'var(--app-modal-bg)'}}
-          className="flex items-center justify-between px-6 py-4">
-          <h3 style={{color:'var(--app-text)'}} className="font-semibold">{title}</h3>
-          <button onClick={onClose} style={{color:'var(--app-text-secondary)',background:'none',border:'none',cursor:'pointer'}}><X className="w-5 h-5" /></button>
+      <div className={`rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full ${wide ? 'max-w-2xl' : 'max-w-md'} shadow-2xl max-h-[90vh] overflow-y-auto`}>
+        <div className="flex items-center justify-between px-6 py-4  sticky top-0">
+          <h3 className="text-white font-semibold">{title}</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
         </div>
         <div className="px-6 py-5">{children}</div>
       </div>
@@ -31,10 +29,11 @@ export default function Distribuidores() {
   const [modal, setModal] = useState(null) // 'nuevo'|'editar'|'reponer'|'historial'|'cuenta'
   const [selected, setSelected] = useState(null)
   const [form, setForm] = useState({ nombre: '', telefono: '', almacen_id: '', precio_base: '' })
-  const [repoForm, setRepoForm] = useState({ cantidad: '', precio: '', notas: '' })
+  const [repoForm, setRepoForm] = useState({ cantidad: '', notas: '' })
   const [cuentaForm, setCuentaForm] = useState({ vales20: '', vales43: '', adelantos: '', balones_devueltos: '', balones_vendidos: '', notas: '', fecha: hoyPeru() })
   const [historial, setHistorial] = useState([])
   const [lotesDistribuidor, setLotesDistribuidor] = useState([])
+  const [ventasDistribuidor, setVentasDistribuidor] = useState([])
   const [movimientos, setMovimientos] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -100,7 +99,7 @@ export default function Distribuidores() {
     const dist = distribuidores.find(d => d.id === distId)
     const almacenId = dist?.almacen_id
 
-    const [{ data: repos }, { data: rends }, { data: movs }, { data: lotes }] = await Promise.all([
+    const [{ data: repos }, { data: rends }, { data: movs }, { data: lotes }, { data: ventas }] = await Promise.all([
       supabase.from('reposiciones_distribuidor')
         .select('*, almacenes(nombre)').eq('distribuidor_id', distId).order('fecha', { ascending: false }).limit(20),
       supabase.from('cuentas_distribuidor')
@@ -110,12 +109,18 @@ export default function Distribuidores() {
         .in('tipo', ['traslado', 'entrada', 'compra', 'ajuste_manual'])
         .order('created_at', { ascending: false }).limit(20) : { data: [] },
       supabase.from('lotes_distribuidor')
-        .select('*').eq('distribuidor_id', distId).order('fecha', { ascending: false }).limit(30)
+        .select('*').eq('distribuidor_id', distId).order('fecha', { ascending: false }).limit(30),
+      almacenId ? supabase.from('ventas')
+        .select('*')
+        .eq('almacen_id', almacenId)
+        .not('metodo_pago', 'eq', 'credito_distribuidor')
+        .order('fecha', { ascending: false }).limit(200) : { data: [] }
     ])
     setHistorial(repos || [])
     setRendiciones(rends || [])
     setMovimientos(movs || [])
     setLotesDistribuidor(lotes || [])
+    setVentasDistribuidor(ventas || [])
   }
 
   async function cargarMovimientos(distId) {
@@ -367,22 +372,8 @@ export default function Distribuidores() {
       notas: `Reposición a ${selected.nombre}${repoForm.notas ? ' — ' + repoForm.notas : ''}`,
       usuario_id: perfil?.id || null
     })
-    // Crear lote FIFO
-    const precioLote = parseFloat(repoForm.precio) || selected.precio_base || 0
-    if (precioLote > 0) {
-      await supabase.from('lotes_distribuidor').insert({
-        distribuidor_id: selected.id,
-        fecha: new Date().toISOString().split('T')[0],
-        cantidad_inicial: cant,
-        cantidad_vendida: 0,
-        cantidad_restante: cant,
-        precio_unitario: precioLote,
-        tipo_balon: selected.tipo_balon || '10kg',
-        notas: repoForm.notas || null
-      })
-    }
     setSaving(false)
-    setModal(null); setRepoForm({ cantidad: '', precio: '', notas: '' }); cargar()
+    setModal(null); setRepoForm({ cantidad: '', notas: '' }); cargar()
   }
 
   async function abrirHistorial(d) {
@@ -610,9 +601,9 @@ export default function Distribuidores() {
                   className="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/30 text-blue-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
                   <History className="w-3 h-3" />Historial
                 </button>
-                <button onClick={() => { setSelected(d); setModal('reponer'); setRepoForm({ cantidad: '', precio: '', notas: '' }); cargarHistorial(d.id) }}
+                <button onClick={() => { setSelected(d); setAbonoModal(true); setAbonoForm({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', vacios_extra: '', notas: '', modo: 'abono', fecha: hoyPeru() }); cargarHistorial(d.id) }}
                   className="bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
-                  📦 Reponer balones
+                  <DollarSign className="w-3 h-3" />💰 Arreglar cuentas
                 </button>
                 <button onClick={() => { setSelected(d); setAcuentaModal(true); setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() }); cargarAcuentaDist(d.id) }}
                   className="col-span-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/30 text-yellow-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
@@ -669,35 +660,13 @@ export default function Distribuidores() {
               <p className="text-xs text-blue-400 mb-1">📦 Stock llenos en almacén disponible</p>
               <p className="text-2xl font-bold text-blue-400">{almacenes.find(a => a.id === selected.almacen_id)?.stock_actual || 0} bal.</p>
             </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <div>
-                <label className="label">Cantidad a entregar (llenos)</label>
-                <input type="number" className="input" placeholder="60"
-                  value={repoForm.cantidad}
-                  onChange={e => setRepoForm({...repoForm, cantidad: e.target.value})} />
-              </div>
-              <div>
-                <label className="label">💰 Precio que le cobras S/</label>
-                <input type="number" step="0.50" className="input"
-                  placeholder={selected?.precio_base || '42.50'}
-                  value={repoForm.precio}
-                  onChange={e => setRepoForm({...repoForm, precio: e.target.value})} />
-                <p style={{fontSize:10,color:'var(--app-text-secondary)',marginTop:3}}>
-                  Default precio base: S/{selected?.precio_base}
-                </p>
-              </div>
-            </div>
+            <div><label className="label">Cantidad a entregar (llenos)</label><input type="number" className="input" placeholder="50" value={repoForm.cantidad} onChange={e => setRepoForm({...repoForm, cantidad: e.target.value})} /></div>
             {repoForm.cantidad && (
-              <div style={{background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.25)',borderRadius:10,padding:'10px 14px'}}>
-                <p style={{fontSize:12,color:'#34d399',margin:0,fontWeight:600}}>
-                  🟢 Nuevo total: {selected.stock_actual + (parseInt(repoForm.cantidad)||0)} balones
-                </p>
-                <p style={{fontSize:11,color:'#fb923c',margin:'4px 0 0'}}>
-                  🔖 Lote: {parseInt(repoForm.cantidad)||0} bal. × S/{repoForm.precio || selected?.precio_base} = S/{((parseInt(repoForm.cantidad)||0) * (parseFloat(repoForm.precio)||selected?.precio_base||0)).toLocaleString('es-PE')}
-                </p>
+              <div className="bg-emerald-900/20 border border-emerald-800/50 rounded-lg p-3 text-sm">
+                <p className="text-emerald-400">🟢 Llenos nuevos del distribuidor: <span className="font-bold">{selected.stock_actual + (parseInt(repoForm.cantidad) || 0)} balones</span></p>
               </div>
             )}
-            <div><label className="label">Notas (opcional)</label><textarea className="input" rows={2} placeholder="Ej: Subió precio — nuevo lote S/43..." value={repoForm.notas} onChange={e => setRepoForm({...repoForm, notas: e.target.value})} /></div>
+            <div><label className="label">Notas (opcional)</label><textarea className="input" rows={2} placeholder="Observaciones..." value={repoForm.notas} onChange={e => setRepoForm({...repoForm, notas: e.target.value})} /></div>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setModal(null)} className="btn-secondary flex-1">Cancelar</button>
               <button onClick={guardarReposicion} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg transition-all flex-1 justify-center flex items-center gap-2">{saving ? 'Guardando...' : '✓ Confirmar reposición'}</button>
@@ -940,18 +909,34 @@ export default function Distribuidores() {
         </Modal>
       )}
 
-      {/* Modal historial — tabla estilo rendición */}
-      {modal === 'historial' && selected && (
+      {/* Modal historial — Rendición tipo Excel */}
+      {modal === 'historial' && selected && (() => {
+        // Agrupar ventas por día
+        const ventasPorDia = {}
+        ventasDistribuidor.forEach(v => {
+          const dia = new Date(v.fecha).toLocaleDateString('en-CA', {timeZone:'America/Lima'})
+          if (!ventasPorDia[dia]) ventasPorDia[dia] = { cantidad: 0, monto: 0, ventas: [] }
+          ventasPorDia[dia].cantidad += v.cantidad || 0
+          ventasPorDia[dia].monto += (v.cantidad || 0) * (v.precio_unitario || 0)
+          ventasPorDia[dia].ventas.push(v)
+        })
+        const diasOrdenados = Object.keys(ventasPorDia).sort((a,b) => b.localeCompare(a))
+
+        // Lotes activos para valor en campo
+        const lotesActivos = lotesDistribuidor.filter(l => !l.cerrado && l.cantidad_restante > 0)
+        const valorCampo = lotesActivos.reduce((s,l) => s + l.cantidad_restante * l.precio_unitario, 0)
+
+        return (
         <Modal title={`📊 ${selected.nombre}`} onClose={() => setModal(null)} wide>
           <div className="space-y-5">
 
-            {/* ── Resumen actual ── */}
+            {/* Resumen */}
             <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10}}>
               {[
-                { label:'🟢 Llenos en campo', value: `${selected.stock_actual} bal.`, color:'#34d399' },
-                { label:'⚪ Vacíos devueltos', value: `${selected.balones_vacios||0} bal.`, color:'var(--app-text)' },
-                { label:'💰 Precio/bal.', value: `S/${selected.precio_base}`, color:'#60a5fa' },
-                { label:'📦 Valor en campo', value: `S/${(selected.stock_actual*(selected.precio_base||0)).toLocaleString('es-PE')}`, color:'#fb923c' },
+                {label:'🟢 Llenos en campo', value:`${selected.stock_actual} bal.`, color:'#34d399'},
+                {label:'⚪ Vacíos devueltos', value:`${selected.balones_vacios||0} bal.`, color:'var(--app-text)'},
+                {label:'💰 Precio actual', value:`S/${selected.precio_base}`, color:'#60a5fa'},
+                {label:'📦 Valor en campo', value:`S/${valorCampo.toLocaleString('es-PE')}`, color:'#fb923c'},
               ].map(({label,value,color}) => (
                 <div key={label} style={{background:'var(--app-card-bg-alt)',border:'1px solid var(--app-card-border)',borderRadius:10,padding:'12px',textAlign:'center'}}>
                   <p style={{fontSize:10,color:'var(--app-text-secondary)',margin:'0 0 4px',textTransform:'uppercase'}}>{label}</p>
@@ -960,22 +945,140 @@ export default function Distribuidores() {
               ))}
             </div>
 
-            {/* ── Lotes FIFO activos ── */}
+            {/* ── Tabla rendición estilo Excel ── */}
             <div>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-                <h4 style={{fontSize:13,fontWeight:700,color:'var(--app-text)',margin:0}}>🔖 Lotes de precio (FIFO)</h4>
-                <button onClick={() => { setModal('reponer'); setRepoForm({ cantidad:'', precio:'', notas:'' }) }}
-                  style={{fontSize:11,padding:'5px 12px',borderRadius:7,border:'1px solid rgba(52,211,153,0.4)',background:'rgba(52,211,153,0.1)',color:'#34d399',cursor:'pointer',fontWeight:600}}>
-                  + Nueva reposición
-                </button>
-              </div>
-              {lotesDistribuidor.length === 0 ? (
-                <div style={{textAlign:'center',padding:'20px',color:'var(--app-text-secondary)',fontSize:13}}>
-                  Sin lotes registrados — registra una reposición para activar el sistema FIFO
+              <h4 style={{fontSize:13,fontWeight:700,color:'var(--app-text)',margin:'0 0 10px'}}>
+                🧾 Rendición de ventas
+              </h4>
+              {diasOrdenados.length === 0 ? (
+                <div style={{textAlign:'center',padding:'24px',color:'var(--app-text-secondary)',fontSize:13,border:'1px solid var(--app-card-border)',borderRadius:10}}>
+                  Sin ventas registradas aún — registra ventas desde el módulo Ventas seleccionando el almacén de {selected.nombre}
                 </div>
               ) : (
                 <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden'}}>
-                  {/* Cabecera */}
+                  {/* Cabeceras */}
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 0.8fr 0.8fr 0.9fr 0.7fr 0.7fr 0.7fr 1fr 0.8fr',background:'var(--app-accent)',padding:'0'}}>
+                    {['Fecha','Cant. vendidos','Precio venta','Monto total','Vales S/20','Vales S/30','Vales S/43','Monto a pagar','Estado'].map(h => (
+                      <div key={h} style={{padding:'8px 8px',fontSize:9,fontWeight:700,color:'#fff',textTransform:'uppercase',borderRight:'1px solid rgba(255,255,255,0.2)',textAlign:'center'}}>
+                        {h}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Filas por día */}
+                  {diasOrdenados.map((dia, i) => {
+                    const datos = ventasPorDia[dia]
+                    const precioPromedio = datos.cantidad > 0 ? datos.monto / datos.cantidad : selected.precio_base
+                    // Vales del día desde cuentas_distribuidor
+                    const rendDia = rendiciones.find(r => r.periodo_fin === dia)
+                    const v20 = rendDia?.vales_20_count || 0
+                    const v30 = rendDia?.vales_30_count || 0
+                    const v43 = rendDia?.vales_43_count || 0
+                    const totalVales = v20*20 + v30*30 + v43*43
+                    const totalEfectivo = rendDia?.total_adelantos || 0
+                    const saldo = datos.monto - totalVales - totalEfectivo
+                    const cancelado = saldo <= 0
+
+                    return (
+                      <div key={dia} style={{
+                        display:'grid',gridTemplateColumns:'1fr 0.8fr 0.8fr 0.9fr 0.7fr 0.7fr 0.7fr 1fr 0.8fr',
+                        borderBottom: i < diasOrdenados.length-1 ? '1px solid var(--app-card-border)' : 'none',
+                        background: i%2===0 ? 'transparent' : 'var(--app-row-alt)'
+                      }}>
+                        <div style={{padding:'10px 8px',fontSize:12,fontWeight:600,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
+                          {format(new Date(dia+'T12:00:00'),'dd/MM/yyyy',{locale:es})}
+                        </div>
+                        <div style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
+                          {datos.cantidad}
+                        </div>
+                        <div style={{padding:'10px 8px',fontSize:12,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
+                          S/{precioPromedio.toFixed(2)}
+                        </div>
+                        <div style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
+                          S/{datos.monto.toLocaleString('es-PE')}
+                        </div>
+                        {/* Vales editables */}
+                        <div style={{padding:'6px 4px',borderRight:'1px solid var(--app-card-border)'}}>
+                          <input type="number" min="0" style={{width:'100%',background:'var(--app-input-bg)',border:'1px solid var(--app-input-border)',borderRadius:4,padding:'3px 4px',fontSize:11,color:'var(--app-input-text)',textAlign:'center',outline:'none'}}
+                            placeholder="0"
+                            defaultValue={v20||''}
+                            onBlur={async e => {
+                              const val = parseInt(e.target.value)||0
+                              if (rendDia) {
+                                await supabase.from('cuentas_distribuidor').update({vales_20_count: val, total_vales: val*20+(rendDia.vales_30_count||0)*30+(rendDia.vales_43_count||0)*43}).eq('id',rendDia.id)
+                              } else if (val > 0) {
+                                await supabase.from('cuentas_distribuidor').insert({distribuidor_id:selected.id,periodo_inicio:dia,periodo_fin:dia,balones_vendidos:datos.cantidad,precio_por_balon:precioPromedio,total_esperado:datos.monto,vales_20_count:val,vales_30_count:0,vales_43_count:0,total_vales:val*20,total_adelantos:0,estado:val*20>=datos.monto?'cancelado':'por_cobrar'})
+                              }
+                              await cargarHistorial(selected.id)
+                            }} />
+                        </div>
+                        <div style={{padding:'6px 4px',borderRight:'1px solid var(--app-card-border)'}}>
+                          <input type="number" min="0" style={{width:'100%',background:'var(--app-input-bg)',border:'1px solid var(--app-input-border)',borderRadius:4,padding:'3px 4px',fontSize:11,color:'var(--app-input-text)',textAlign:'center',outline:'none'}}
+                            placeholder="0"
+                            defaultValue={v30||''}
+                            onBlur={async e => {
+                              const val = parseInt(e.target.value)||0
+                              if (rendDia) {
+                                await supabase.from('cuentas_distribuidor').update({vales_30_count: val, total_vales: (rendDia.vales_20_count||0)*20+val*30+(rendDia.vales_43_count||0)*43}).eq('id',rendDia.id)
+                                await cargarHistorial(selected.id)
+                              }
+                            }} />
+                        </div>
+                        <div style={{padding:'6px 4px',borderRight:'1px solid var(--app-card-border)'}}>
+                          <input type="number" min="0" style={{width:'100%',background:'var(--app-input-bg)',border:'1px solid var(--app-input-border)',borderRadius:4,padding:'3px 4px',fontSize:11,color:'var(--app-input-text)',textAlign:'center',outline:'none'}}
+                            placeholder="0"
+                            defaultValue={v43||''}
+                            onBlur={async e => {
+                              const val = parseInt(e.target.value)||0
+                              if (rendDia) {
+                                await supabase.from('cuentas_distribuidor').update({vales_43_count: val, total_vales: (rendDia.vales_20_count||0)*20+(rendDia.vales_30_count||0)*30+val*43}).eq('id',rendDia.id)
+                                await cargarHistorial(selected.id)
+                              }
+                            }} />
+                        </div>
+                        <div style={{padding:'10px 8px',fontSize:13,fontWeight:700,
+                          color: cancelado ? '#34d399' : '#f87171',
+                          borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
+                          S/{Math.max(0,saldo).toLocaleString('es-PE')}
+                        </div>
+                        <div style={{padding:'10px 8px',textAlign:'center',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                          <span style={{fontSize:10,fontWeight:700,padding:'3px 6px',borderRadius:4,
+                            background: cancelado ? 'rgba(52,211,153,0.15)' : 'rgba(251,146,60,0.15)',
+                            color: cancelado ? '#34d399' : '#fb923c'}}>
+                            {cancelado ? 'Cancelado' : 'Por cobrar'}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+
+                  {/* Totales */}
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 0.8fr 0.8fr 0.9fr 0.7fr 0.7fr 0.7fr 1fr 0.8fr',background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)'}}>
+                    <div style={{padding:'10px 8px',fontSize:11,fontWeight:700,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>TOTAL</div>
+                    <div style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
+                      {ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0),0)}
+                    </div>
+                    <div style={{padding:'10px 8px',borderRight:'1px solid var(--app-card-border)'}}/>
+                    <div style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
+                      S/{ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0).toLocaleString('es-PE')}
+                    </div>
+                    <div style={{padding:'10px 8px',borderRight:'1px solid var(--app-card-border)'}}/>
+                    <div style={{padding:'10px 8px',borderRight:'1px solid var(--app-card-border)'}}/>
+                    <div style={{padding:'10px 8px',borderRight:'1px solid var(--app-card-border)'}}/>
+                    <div style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'var(--app-accent)',textAlign:'center'}}>
+                      S/{Math.max(0, ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0) - rendiciones.reduce((s,r)=>s+(r.total_vales||0)+(r.total_adelantos||0),0)).toLocaleString('es-PE')}
+                    </div>
+                    <div style={{padding:'10px 8px'}}/>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ── Lotes FIFO ── */}
+            {lotesDistribuidor.length > 0 && (
+              <div>
+                <h4 style={{fontSize:13,fontWeight:700,color:'var(--app-text)',margin:'0 0 10px'}}>🔖 Lotes de precio (FIFO)</h4>
+                <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden'}}>
                   <div style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',background:'var(--app-card-bg-alt)',borderBottom:'1px solid var(--app-card-border)'}}>
                     {['Fecha','Precio/bal.','Inicial','Vendidos','Restantes','Estado'].map(h => (
                       <div key={h} style={{padding:'8px 10px',fontSize:10,fontWeight:700,color:'var(--app-text-secondary)',textTransform:'uppercase',borderRight:'1px solid var(--app-card-border)'}}>
@@ -983,68 +1086,32 @@ export default function Distribuidores() {
                       </div>
                     ))}
                   </div>
-                  {/* Filas */}
                   {lotesDistribuidor.map((lote, i) => {
                     const agotado = lote.cerrado || lote.cantidad_restante <= 0
                     const nuevo = lote.cantidad_vendida === 0
                     return (
-                      <div key={lote.id} style={{
-                        display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',
-                        borderBottom: i < lotesDistribuidor.length-1 ? '1px solid var(--app-card-border)' : 'none',
-                        background: agotado ? 'transparent' : nuevo ? 'rgba(52,211,153,0.03)' : 'rgba(251,146,60,0.04)'
-                      }}>
+                      <div key={lote.id} style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',borderBottom:i<lotesDistribuidor.length-1?'1px solid var(--app-card-border)':'none'}}>
                         <div style={{padding:'10px',fontSize:12,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',fontWeight:500}}>
                           {lote.fecha}
                           {lote.notas && <p style={{fontSize:10,color:'var(--app-text-secondary)',margin:'2px 0 0',fontStyle:'italic'}}>{lote.notas}</p>}
                         </div>
-                        <div style={{padding:'10px',fontSize:13,fontWeight:700,color:'#fb923c',borderRight:'1px solid var(--app-card-border)'}}>
-                          S/ {lote.precio_unitario}
-                        </div>
-                        <div style={{padding:'10px',fontSize:12,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>
-                          {lote.cantidad_inicial}
-                        </div>
-                        <div style={{padding:'10px',fontSize:12,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)'}}>
-                          {lote.cantidad_vendida}
-                        </div>
-                        <div style={{padding:'10px',fontSize:13,fontWeight:700,
-                          color: agotado ? 'var(--app-text-secondary)' : lote.cantidad_restante < 10 ? '#f87171' : '#34d399',
-                          borderRight:'1px solid var(--app-card-border)'}}>
-                          {lote.cantidad_restante}
-                        </div>
+                        <div style={{padding:'10px',fontSize:13,fontWeight:700,color:'#fb923c',borderRight:'1px solid var(--app-card-border)'}}> S/ {lote.precio_unitario}</div>
+                        <div style={{padding:'10px',fontSize:12,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>{lote.cantidad_inicial}</div>
+                        <div style={{padding:'10px',fontSize:12,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)'}}>{lote.cantidad_vendida}</div>
+                        <div style={{padding:'10px',fontSize:13,fontWeight:700,color:agotado?'var(--app-text-secondary)':lote.cantidad_restante<10?'#f87171':'#34d399',borderRight:'1px solid var(--app-card-border)'}}>{lote.cantidad_restante}</div>
                         <div style={{padding:'10px',display:'flex',alignItems:'center'}}>
-                          <span style={{
-                            fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:5,
-                            background: agotado ? 'rgba(107,114,128,0.15)' : nuevo ? 'rgba(52,211,153,0.15)' : 'rgba(251,146,60,0.15)',
-                            color: agotado ? '#9ca3af' : nuevo ? '#34d399' : '#fb923c',
-                          }}>
-                            {agotado ? 'Agotado' : nuevo ? 'Sin ventas' : 'Activo'}
+                          <span style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:5,background:agotado?'rgba(107,114,128,0.15)':nuevo?'rgba(52,211,153,0.15)':'rgba(251,146,60,0.15)',color:agotado?'#9ca3af':nuevo?'#34d399':'#fb923c'}}>
+                            {agotado?'Agotado':nuevo?'Sin ventas':'Activo'}
                           </span>
                         </div>
                       </div>
                     )
                   })}
-                  {/* Totales */}
-                  <div style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',background:'var(--app-card-bg-alt)',borderTop:'1px solid var(--app-card-border)'}}>
-                    <div style={{padding:'10px',fontSize:11,fontWeight:700,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>TOTAL ACTIVOS</div>
-                    <div style={{padding:'10px',borderRight:'1px solid var(--app-card-border)'}}/>
-                    <div style={{padding:'10px',fontSize:12,fontWeight:700,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)'}}>
-                      {lotesDistribuidor.filter(l=>!l.cerrado).reduce((s,l)=>s+l.cantidad_inicial,0)}
-                    </div>
-                    <div style={{padding:'10px',fontSize:12,fontWeight:700,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)'}}>
-                      {lotesDistribuidor.filter(l=>!l.cerrado).reduce((s,l)=>s+l.cantidad_vendida,0)}
-                    </div>
-                    <div style={{padding:'10px',fontSize:13,fontWeight:700,color:'#34d399',borderRight:'1px solid var(--app-card-border)'}}>
-                      {lotesDistribuidor.filter(l=>!l.cerrado).reduce((s,l)=>s+l.cantidad_restante,0)}
-                    </div>
-                    <div style={{padding:'10px',fontSize:12,fontWeight:700,color:'#fb923c'}}>
-                      S/{lotesDistribuidor.filter(l=>!l.cerrado).reduce((s,l)=>s+(l.cantidad_restante*l.precio_unitario),0).toLocaleString('es-PE')}
-                    </div>
-                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
-            {/* ── Historial de reposiciones ── */}
+            {/* ── Reposiciones ── */}
             {historial.length > 0 && (
               <div>
                 <h4 style={{fontSize:13,fontWeight:700,color:'var(--app-text)',margin:'0 0 10px'}}>📥 Reposiciones</h4>
@@ -1055,15 +1122,10 @@ export default function Distribuidores() {
                         <span style={{fontSize:16}}>📥</span>
                         <div>
                           <p style={{color:'var(--app-text)',fontSize:13,fontWeight:600,margin:0}}>+{r.cantidad} balones</p>
-                          <p style={{color:'var(--app-text-secondary)',fontSize:11,margin:'2px 0 0'}}>
-                            {format(new Date(r.fecha), 'dd/MM/yyyy HH:mm', {locale:es})}
-                            {r.notas ? ` · ${r.notas}` : ''}
-                          </p>
+                          <p style={{color:'var(--app-text-secondary)',fontSize:11,margin:'2px 0 0'}}>{format(new Date(r.fecha),'dd/MM/yyyy HH:mm',{locale:es})}{r.notas?` · ${r.notas}`:''}</p>
                         </div>
                       </div>
-                      <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>
-                        {r.stock_antes_dist} → <span style={{color:'#34d399',fontWeight:700}}>{r.stock_despues_dist}</span> bal.
-                      </p>
+                      <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>{r.stock_antes_dist} → <span style={{color:'#34d399',fontWeight:700}}>{r.stock_despues_dist}</span> bal.</p>
                     </div>
                   ))}
                 </div>
@@ -1072,7 +1134,8 @@ export default function Distribuidores() {
 
           </div>
         </Modal>
-      )}
+        )
+      })()}
 
       {/* Modal arreglar cuentas */}
       {abonoModal !== null && selected && (
