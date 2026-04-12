@@ -72,9 +72,17 @@ export default function Vales() {
         .gte('lote_dia', inicioMes).lte('lote_dia', finMes).neq('estado', 'anulado')
     ])
     const valesDelDia = v || []
-    const v20 = valesDelDia.filter(x => x.tipo_vale === '20')
-    const v43 = valesDelDia.filter(x => x.tipo_vale === '43')
-    setLotes(valesDelDia.length > 0 ? [{ fecha: filtroFecha, cant20: v20.length, cant43: v43.length, total: v20.length * 20 + v43.length * 43, vales: valesDelDia }] : [])
+    // Agrupar por tipo_vale dinámicamente
+    const porTipo = {}
+    valesDelDia.forEach(x => {
+      if (!porTipo[x.tipo_vale]) porTipo[x.tipo_vale] = { cant: 0, monto: 0 }
+      porTipo[x.tipo_vale].cant++
+      porTipo[x.tipo_vale].monto += parseFloat(x.monto) || 0
+    })
+    const totalDia = valesDelDia.reduce((s, x) => s + (parseFloat(x.monto) || 0), 0)
+    const cant20 = porTipo['20']?.cant || 0
+    const cant43 = porTipo['43']?.cant || 0
+    setLotes(valesDelDia.length > 0 ? [{ fecha: filtroFecha, cant20, cant43, porTipo, total: totalDia, vales: valesDelDia }] : [])
     setSaldo(s || { total_vales: 0, total_retiros: 0, saldo_disponible: 0 })
     setValesMes(totalMes || 0)
     setLoading(false)
@@ -224,43 +232,40 @@ export default function Vales() {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Tarjetas por tipo */}
+              {/* Tarjetas por tipo — dinámicas */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-yellow-900/20 border border-yellow-800/40 rounded-xl p-5 text-center relative">
-                  {cant20 > 0 && (
-                    <button onClick={() => eliminarValesPorTipo('20')}
-                      className="absolute top-2 right-2 text-gray-600 hover:text-red-400 transition-colors p-1 rounded hover:bg-red-900/20"
-                      title="Eliminar vales S/20 de este día">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                    </button>
-                  )}
-                  <p className="text-yellow-400 font-bold text-lg mb-1">S/ 20</p>
-                  <p className="text-5xl font-bold text-yellow-400">{cant20}</p>
-                  <p className="text-gray-500 text-xs mt-2">vales procesados</p>
-                  <p className="text-yellow-300 font-bold text-sm mt-1">= S/ {cant20 * 20}</p>
-                </div>
-                <div className="bg-orange-900/20 border border-orange-800/40 rounded-xl p-5 text-center relative">
-                  {cant43 > 0 && (
-                    <button onClick={() => eliminarValesPorTipo('43')}
-                      className="absolute top-2 right-2 text-gray-600 hover:text-red-400 transition-colors p-1 rounded hover:bg-red-900/20"
-                      title="Eliminar vales S/43 de este día">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                    </button>
-                  )}
-                  <p className="text-orange-400 font-bold text-lg mb-1">S/ 43</p>
-                  <p className="text-5xl font-bold text-orange-400">{cant43}</p>
-                  <p className="text-gray-500 text-xs mt-2">vales procesados</p>
-                  <p className="text-orange-300 font-bold text-sm mt-1">= S/ {cant43 * 43}</p>
-                </div>
+                {Object.entries(lote.porTipo || {}).map(([tipo, data]) => {
+                  const colors = tipo === '20' ? 'yellow' : tipo === '43' ? 'orange' : 'blue'
+                  const colorMap = {
+                    yellow: { bg: 'bg-yellow-900/20', border: 'border-yellow-800/40', text: 'text-yellow-400', sub: 'text-yellow-300' },
+                    orange: { bg: 'bg-orange-900/20', border: 'border-orange-800/40', text: 'text-orange-400', sub: 'text-orange-300' },
+                    blue: { bg: 'bg-blue-900/20', border: 'border-blue-800/40', text: 'text-blue-400', sub: 'text-blue-300' },
+                  }
+                  const c = colorMap[colors]
+                  return (
+                    <div key={tipo} className={`${c.bg} border ${c.border} rounded-xl p-5 text-center relative`}>
+                      <button onClick={() => eliminarValesPorTipo(tipo)}
+                        className="absolute top-2 right-2 text-gray-600 hover:text-red-400 transition-colors p-1 rounded hover:bg-red-900/20">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                      </button>
+                      <p className={`${c.text} font-bold text-lg mb-1`}>S/ {tipo}</p>
+                      <p className={`text-5xl font-bold ${c.text}`}>{data.cant}</p>
+                      <p className="text-gray-500 text-xs mt-2">vales procesados</p>
+                      <p className={`${c.sub} font-bold text-sm mt-1`}>= S/ {data.monto.toFixed(0)}</p>
+                    </div>
+                  )
+                })}
               </div>
 
               {/* Total del día */}
               <div className="bg-emerald-900/20 border border-emerald-700/40 rounded-xl p-4 flex items-center justify-between">
                 <div>
                   <p className="text-gray-400 text-sm">Total del día</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{cant20 + cant43} vales · {cant20} de S/20 + {cant43} de S/43</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {lote.vales?.length || 0} vales · {Object.entries(lote.porTipo || {}).map(([t, d]) => `${d.cant} de S/${t}`).join(' + ')}
+                  </p>
                 </div>
-                <p className="text-3xl font-bold text-emerald-400">S/ {totalDia}</p>
+                <p className="text-3xl font-bold text-emerald-400">S/ {totalDia.toFixed(0)}</p>
               </div>
             </div>
           )}
@@ -476,21 +481,20 @@ function HistorialVales({ filtroFecha, onFechaClick }) {
       .limit(14)
 
     if (error || !data) {
-      // Fallback: si la vista no existe aún, traer sin límite y agrupar en JS
       const { data: raw } = await supabase
         .from('vales_fise')
-        .select('lote_dia, tipo_vale')
+        .select('lote_dia, tipo_vale, monto')
         .order('lote_dia', { ascending: false })
       if (raw) {
         const porDia = {}
         raw.forEach(v => {
-          if (!porDia[v.lote_dia]) porDia[v.lote_dia] = { cant20: 0, cant43: 0 }
+          if (!porDia[v.lote_dia]) porDia[v.lote_dia] = { cant20: 0, cant43: 0, total: 0 }
           if (v.tipo_vale === '20') porDia[v.lote_dia].cant20++
-          else porDia[v.lote_dia].cant43++
+          else if (v.tipo_vale === '43') porDia[v.lote_dia].cant43++
+          porDia[v.lote_dia].total += parseFloat(v.monto) || 0
         })
         setHistorial(Object.entries(porDia).slice(0, 14).map(([fecha, d]) => ({
-          fecha, cant20: d.cant20, cant43: d.cant43,
-          total: d.cant20 * 20 + d.cant43 * 43
+          fecha, cant20: d.cant20, cant43: d.cant43, total: d.total
         })))
       }
       setLoading(false)
