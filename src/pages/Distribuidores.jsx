@@ -29,9 +29,10 @@ export default function Distribuidores() {
   const [modal, setModal] = useState(null) // 'nuevo'|'editar'|'reponer'|'historial'|'cuenta'
   const [selected, setSelected] = useState(null)
   const [form, setForm] = useState({ nombre: '', telefono: '', almacen_id: '', precio_base: '' })
-  const [repoForm, setRepoForm] = useState({ cantidad: '', notas: '' })
+  const [repoForm, setRepoForm] = useState({ cantidad: '', precio: '', notas: '' })
   const [cuentaForm, setCuentaForm] = useState({ vales20: '', vales43: '', adelantos: '', balones_devueltos: '', balones_vendidos: '', notas: '', fecha: hoyPeru() })
   const [historial, setHistorial] = useState([])
+  const [lotesDistribuidor, setLotesDistribuidor] = useState([])
   const [movimientos, setMovimientos] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -97,7 +98,7 @@ export default function Distribuidores() {
     const dist = distribuidores.find(d => d.id === distId)
     const almacenId = dist?.almacen_id
 
-    const [{ data: repos }, { data: rends }, { data: movs }] = await Promise.all([
+    const [{ data: repos }, { data: rends }, { data: movs }, { data: lotes }] = await Promise.all([
       supabase.from('reposiciones_distribuidor')
         .select('*, almacenes(nombre)').eq('distribuidor_id', distId).order('fecha', { ascending: false }).limit(20),
       supabase.from('cuentas_distribuidor')
@@ -105,11 +106,14 @@ export default function Distribuidores() {
       almacenId ? supabase.from('movimientos_stock')
         .select('*').eq('almacen_id', almacenId)
         .in('tipo', ['traslado', 'entrada', 'compra', 'ajuste_manual'])
-        .order('created_at', { ascending: false }).limit(20) : { data: [] }
+        .order('created_at', { ascending: false }).limit(20) : { data: [] },
+      supabase.from('lotes_distribuidor')
+        .select('*').eq('distribuidor_id', distId).order('fecha', { ascending: false }).limit(20)
     ])
     setHistorial(repos || [])
     setRendiciones(rends || [])
     setMovimientos(movs || [])
+    setLotesDistribuidor(lotes || [])
   }
 
   async function cargarMovimientos(distId) {
@@ -361,8 +365,23 @@ export default function Distribuidores() {
       notas: `Reposición a ${selected.nombre}${repoForm.notas ? ' — ' + repoForm.notas : ''}`,
       usuario_id: perfil?.id || null
     })
+    // Crear lote FIFO para esta reposición
+    const preciLote = parseFloat(repoForm.precio) || selected.precio_base || 0
+    if (preciLote > 0) {
+      await supabase.from('lotes_distribuidor').insert({
+        distribuidor_id: selected.id,
+        fecha: new Date().toISOString().split('T')[0],
+        cantidad_inicial: cant,
+        cantidad_vendida: 0,
+        cantidad_restante: cant,
+        precio_unitario: preciLote,
+        tipo_balon: selected.tipo_balon || '10kg',
+        notas: repoForm.notas || null
+      })
+    }
+
     setSaving(false)
-    setModal(null); setRepoForm({ cantidad: '', notas: '' }); cargar()
+    setModal(null); setRepoForm({ cantidad: '', precio: '', notas: '' }); cargar()
   }
 
   async function abrirHistorial(d) {
@@ -649,10 +668,27 @@ export default function Distribuidores() {
               <p className="text-xs text-blue-400 mb-1">📦 Stock llenos en almacén disponible</p>
               <p className="text-2xl font-bold text-blue-400">{almacenes.find(a => a.id === selected.almacen_id)?.stock_actual || 0} bal.</p>
             </div>
-            <div><label className="label">Cantidad a entregar (llenos)</label><input type="number" className="input" placeholder="50" value={repoForm.cantidad} onChange={e => setRepoForm({...repoForm, cantidad: e.target.value})} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Cantidad a entregar (llenos)</label>
+                <input type="number" className="input" placeholder="50" value={repoForm.cantidad} onChange={e => setRepoForm({...repoForm, cantidad: e.target.value})} />
+              </div>
+              <div>
+                <label className="label">💰 Precio que le cobras S/</label>
+                <input type="number" step="0.50" className="input" placeholder={selected.precio_base || '42.50'}
+                  value={repoForm.precio}
+                  onChange={e => setRepoForm({...repoForm, precio: e.target.value})} />
+                <p style={{fontSize:10,color:'var(--app-text-secondary)',marginTop:3}}>
+                  Default: S/{selected.precio_base} (precio base)
+                </p>
+              </div>
+            </div>
             {repoForm.cantidad && (
-              <div className="bg-emerald-900/20 border border-emerald-800/50 rounded-lg p-3 text-sm">
-                <p className="text-emerald-400">🟢 Llenos nuevos del distribuidor: <span className="font-bold">{selected.stock_actual + (parseInt(repoForm.cantidad) || 0)} balones</span></p>
+              <div className="bg-emerald-900/20 border border-emerald-800/50 rounded-lg p-3 text-sm space-y-1">
+                <p className="text-emerald-400">🟢 Llenos nuevos: <span className="font-bold">{selected.stock_actual + (parseInt(repoForm.cantidad) || 0)} balones</span></p>
+                <p style={{fontSize:11,color:'#fb923c'}}>
+                  🔖 Lote: {parseInt(repoForm.cantidad)||0} bal. × S/{repoForm.precio || selected.precio_base} = S/{((parseInt(repoForm.cantidad)||0) * (parseFloat(repoForm.precio)||selected.precio_base||0)).toLocaleString('es-PE')}
+                </p>
               </div>
             )}
             <div><label className="label">Notas (opcional)</label><textarea className="input" rows={2} placeholder="Observaciones..." value={repoForm.notas} onChange={e => setRepoForm({...repoForm, notas: e.target.value})} /></div>
@@ -967,7 +1003,74 @@ export default function Distribuidores() {
 
             {/* Rendiciones */}
             <div>
-              <h4 className="text-sm font-semibold text-white mb-3">📋 Historial de rendiciones</h4>
+              {/* ── Lotes FIFO activos ── */}
+            {lotesDistribuidor.length > 0 && (
+              <div>
+                <h4 className="text-sm font-semibold text-white mb-3">🔖 Lotes de precio (FIFO)</h4>
+                <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden'}}>
+                  {/* Header tabla */}
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr 1fr 1fr',background:'var(--app-card-bg-alt)',borderBottom:'1px solid var(--app-card-border)'}}>
+                    {['Fecha','Precio','Inicial','Vendidos','Restantes','Estado'].map(h => (
+                      <div key={h} style={{padding:'8px 10px',fontSize:10,fontWeight:700,color:'var(--app-text-secondary)',textTransform:'uppercase',borderRight:'1px solid var(--app-card-border)'}}>
+                        {h}
+                      </div>
+                    ))}
+                  </div>
+                  {/* Filas */}
+                  {lotesDistribuidor.map((lote, i) => (
+                    <div key={lote.id} style={{
+                      display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr 1fr 1fr',
+                      borderBottom: i < lotesDistribuidor.length-1 ? '1px solid var(--app-card-border)' : 'none',
+                      background: !lote.cerrado && lote.cantidad_restante > 0 ? 'rgba(251,146,60,0.05)' : 'transparent'
+                    }}>
+                      <div style={{padding:'8px 10px',fontSize:12,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)'}}>
+                        {lote.fecha}
+                      </div>
+                      <div style={{padding:'8px 10px',fontSize:12,fontWeight:700,color:'#fb923c',borderRight:'1px solid var(--app-card-border)'}}>
+                        S/ {lote.precio_unitario}
+                      </div>
+                      <div style={{padding:'8px 10px',fontSize:12,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>
+                        {lote.cantidad_inicial} bal.
+                      </div>
+                      <div style={{padding:'8px 10px',fontSize:12,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)'}}>
+                        {lote.cantidad_vendida} bal.
+                      </div>
+                      <div style={{padding:'8px 10px',fontSize:12,fontWeight:700,
+                        color: lote.cantidad_restante > 0 ? '#34d399' : 'var(--app-text-secondary)',
+                        borderRight:'1px solid var(--app-card-border)'}}>
+                        {lote.cantidad_restante} bal.
+                      </div>
+                      <div style={{padding:'8px 10px',display:'flex',alignItems:'center'}}>
+                        {lote.cerrado ? (
+                          <span style={{fontSize:10,fontWeight:700,padding:'2px 6px',borderRadius:4,background:'rgba(107,114,128,0.2)',color:'#9ca3af'}}>
+                            Agotado
+                          </span>
+                        ) : lote.cantidad_restante === lote.cantidad_inicial ? (
+                          <span style={{fontSize:10,fontWeight:700,padding:'2px 6px',borderRadius:4,background:'rgba(59,130,246,0.15)',color:'#60a5fa'}}>
+                            Nuevo
+                          </span>
+                        ) : (
+                          <span style={{fontSize:10,fontWeight:700,padding:'2px 6px',borderRadius:4,background:'rgba(251,146,60,0.15)',color:'#fb923c'}}>
+                            Activo
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {/* Total valor en campo */}
+                  <div style={{padding:'10px 12px',background:'var(--app-card-bg-alt)',borderTop:'1px solid var(--app-card-border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <span style={{fontSize:12,color:'var(--app-text-secondary)'}}>
+                      Total en campo: {lotesDistribuidor.filter(l=>!l.cerrado).reduce((s,l)=>s+l.cantidad_restante,0)} bal.
+                    </span>
+                    <span style={{fontSize:13,fontWeight:700,color:'#fb923c'}}>
+                      Valor: S/ {lotesDistribuidor.filter(l=>!l.cerrado).reduce((s,l)=>s+(l.cantidad_restante*l.precio_unitario),0).toLocaleString('es-PE')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <h4 className="text-sm font-semibold text-white mb-3">📋 Historial de rendiciones</h4>
               {rendiciones.length === 0 ? (
                 <p className="text-gray-600 text-sm text-center py-4">Sin rendiciones registradas</p>
               ) : (

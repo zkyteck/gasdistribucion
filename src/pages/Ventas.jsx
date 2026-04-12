@@ -35,6 +35,8 @@ export default function Ventas() {
   const [subModal, setSubModal] = useState(null)
   const [ventaAEliminar, setVentaAEliminar] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [distribuidores, setDistribuidores] = useState([])
+  const [lotesDistribuidor, setLotesDistribuidor] = useState([])
   const [modal, setModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -53,14 +55,16 @@ export default function Ventas() {
 
   async function cargar() {
     setLoading(true)
-    const [{ data: v }, { data: a }, { data: pt }, { data: c }, { data: ptb }, { data: spt }] = await Promise.all([
+    const [{ data: v }, { data: a }, { data: pt }, { data: c }, { data: ptb }, { data: spt }, { data: dist }, { data: lotes }] = await Promise.all([
       supabase.from('ventas').select('*, clientes(nombre), almacenes(nombre), precio_tipos(nombre)')
         .gte('fecha', filtroFecha + 'T00:00:00-05:00').lte('fecha', filtroFecha + 'T23:59:59-05:00').order('fecha', { ascending: false }),
       supabase.from('almacenes').select('id, nombre, stock_actual').eq('activo', true).order('nombre'),
       supabase.from('precio_tipos').select('*').eq('activo', true),
       supabase.from('clientes').select('id, nombre, tipo, es_varios').order('nombre').limit(100),
       supabase.from('precio_tipo_balon').select('*'),
-      supabase.from('stock_por_tipo').select('*')
+      supabase.from('stock_por_tipo').select('*'),
+      supabase.from('distribuidores').select('id, nombre, almacen_id, precio_base').eq('activo', true),
+      supabase.from('lotes_distribuidor').select('*').eq('cerrado', false).order('fecha', { ascending: true })
     ])
     setVentas(v || [])
     setAlmacenes(a || [])
@@ -68,12 +72,30 @@ export default function Ventas() {
     setClientes(c || [])
     setPreciosPorTipo(ptb || [])
     setStockPorTipo(spt || [])
+    setDistribuidores(dist || [])
+    setLotesDistribuidor(lotes || [])
     setLoading(false)
   }
 
   function getPrecio(precioTipoId, tipoBalon) {
     const p = preciosPorTipo.find(p => p.precio_tipo_id === precioTipoId && p.tipo_balon === tipoBalon)
     return p?.precio || ''
+  }
+
+  // Detecta si un almacén pertenece a un distribuidor
+  function getDistribuidor(almacenId) {
+    return distribuidores.find(d => d.almacen_id === almacenId) || null
+  }
+
+  // Obtiene el precio FIFO del lote más antiguo activo del distribuidor
+  function getPrecioFIFO(distribuidorId, tipoBalon = '10kg') {
+    const lote = lotesDistribuidor.find(l =>
+      l.distribuidor_id === distribuidorId &&
+      l.tipo_balon === tipoBalon &&
+      !l.cerrado &&
+      l.cantidad_restante > 0
+    )
+    return lote ? { precio: lote.precio_unitario, lote } : null
   }
 
   function getStock(almacenId, tipoBalon) {
@@ -157,6 +179,40 @@ export default function Ventas() {
     setSubModal(null)
   }
 
+  // Descuenta ventas de lotes FIFO (más antiguo primero)
+  async function aplicarFIFO(distribuidorId, tipoBalon, cantidadVendida) {
+    // Obtener lotes abiertos ordenados por fecha ASC (más antiguo primero)
+    const { data: lotesAbiertos } = await supabase
+      .from('lotes_distribuidor')
+      .select('*')
+      .eq('distribuidor_id', distribuidorId)
+      .eq('tipo_balon', tipoBalon)
+      .eq('cerrado', false)
+      .gt('cantidad_restante', 0)
+      .order('fecha', { ascending: true })
+
+    if (!lotesAbiertos || lotesAbiertos.length === 0) return
+
+    let restante = cantidadVendida
+
+    for (const lote of lotesAbiertos) {
+      if (restante <= 0) break
+
+      const descontar = Math.min(restante, lote.cantidad_restante)
+      const nuevaVendida = lote.cantidad_vendida + descontar
+      const nuevaRestante = lote.cantidad_restante - descontar
+      const cerrar = nuevaRestante <= 0
+
+      await supabase.from('lotes_distribuidor').update({
+        cantidad_vendida: nuevaVendida,
+        cantidad_restante: nuevaRestante,
+        cerrado: cerrar
+      }).eq('id', lote.id)
+
+      restante -= descontar
+    }
+  }
+
   async function guardar() {
     const cant = parseInt(form.cantidad)
     const precioBajon = parseFloat(form.precio_balon) || 0
@@ -199,6 +255,10 @@ export default function Ventas() {
           updateData[campoVacios] = (almFresco[campoVacios] || 0) + cant
         }
         await supabase.from('almacenes').update(updateData).eq('id', form.almacen_id)
+      }
+      // Si es almacén de distribuidor → descontar lotes FIFO
+      if (form.es_distribuidor && form.distribuidor_id) {
+        await aplicarFIFO(form.distribuidor_id, form.tipo_balon, cant)
       }
 
     } else if (form.tipo_venta === 'gas_balon') {
@@ -435,9 +495,47 @@ export default function Ventas() {
             </div>
             <div>
               <label className="label">Almacén</label>
-              <select className="input" value={form.almacen_id} onChange={e => setForm(f => ({...f, almacen_id: e.target.value}))}>
-                {almacenes.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+              <select className="input" value={form.almacen_id} onChange={e => {
+                const almId = e.target.value
+                const dist = getDistribuidor(almId)
+                if (dist) {
+                  // Almacén de distribuidor → precio FIFO automático
+                  const fifo = getPrecioFIFO(dist.id, form.tipo_balon)
+                  setForm(f => ({
+                    ...f,
+                    almacen_id: almId,
+                    es_distribuidor: true,
+                    distribuidor_id: dist.id,
+                    precio_unitario: fifo ? fifo.precio : dist.precio_base,
+                    precio_tipo_id: '' // no aplica tipo de cliente
+                  }))
+                } else {
+                  setForm(f => ({ ...f, almacen_id: almId, es_distribuidor: false, distribuidor_id: null }))
+                }
+              }}>
+                {almacenes.map(a => {
+                  const dist = getDistribuidor(a.id)
+                  return <option key={a.id} value={a.id}>{dist ? `🚛 ${a.nombre}` : a.nombre}</option>
+                })}
               </select>
+              {form.es_distribuidor && (() => {
+                const fifo = getPrecioFIFO(form.distribuidor_id, form.tipo_balon)
+                const lote = fifo?.lote
+                return (
+                  <div style={{marginTop:6, padding:'8px 12px', borderRadius:8, background:'rgba(251,146,60,0.1)', border:'1px solid rgba(251,146,60,0.3)'}}>
+                    <p style={{fontSize:11, color:'#fb923c', margin:0, fontWeight:600}}>
+                      🚛 Almacén distribuidor — Precio FIFO automático
+                    </p>
+                    {lote ? (
+                      <p style={{fontSize:11, color:'var(--app-text-secondary)', margin:'2px 0 0'}}>
+                        Lote {lote.fecha} · S/{lote.precio_unitario}/bal. · {lote.cantidad_restante} restantes
+                      </p>
+                    ) : (
+                      <p style={{fontSize:11, color:'#f87171', margin:'2px 0 0'}}>⚠️ Sin lotes activos — registra una reposición primero</p>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
             <div>
               <label className="label">Tipo de balón</label>
