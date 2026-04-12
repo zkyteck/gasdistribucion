@@ -108,7 +108,7 @@ export default function Distribuidores() {
         .in('tipo', ['traslado', 'entrada', 'compra', 'ajuste_manual'])
         .order('created_at', { ascending: false }).limit(20) : { data: [] },
       supabase.from('lotes_distribuidor')
-        .select('*').eq('distribuidor_id', distId).order('fecha', { ascending: false }).limit(20)
+        .select('*').eq('distribuidor_id', distId).order('fecha', { ascending: false }).limit(30)
     ])
     setHistorial(repos || [])
     setRendiciones(rends || [])
@@ -365,21 +365,20 @@ export default function Distribuidores() {
       notas: `Reposición a ${selected.nombre}${repoForm.notas ? ' — ' + repoForm.notas : ''}`,
       usuario_id: perfil?.id || null
     })
-    // Crear lote FIFO para esta reposición
-    const preciLote = parseFloat(repoForm.precio) || selected.precio_base || 0
-    if (preciLote > 0) {
+    // Crear lote FIFO
+    const precioLote = parseFloat(repoForm.precio) || selected.precio_base || 0
+    if (precioLote > 0) {
       await supabase.from('lotes_distribuidor').insert({
         distribuidor_id: selected.id,
         fecha: new Date().toISOString().split('T')[0],
         cantidad_inicial: cant,
         cantidad_vendida: 0,
         cantidad_restante: cant,
-        precio_unitario: preciLote,
+        precio_unitario: precioLote,
         tipo_balon: selected.tipo_balon || '10kg',
         notas: repoForm.notas || null
       })
     }
-
     setSaving(false)
     setModal(null); setRepoForm({ cantidad: '', precio: '', notas: '' }); cargar()
   }
@@ -609,9 +608,9 @@ export default function Distribuidores() {
                   className="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/30 text-blue-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
                   <History className="w-3 h-3" />Historial
                 </button>
-                <button onClick={() => { setSelected(d); setAbonoModal(true); setAbonoForm({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', vacios_extra: '', notas: '', modo: 'abono', fecha: hoyPeru() }); cargarHistorial(d.id) }}
+                <button onClick={() => { setSelected(d); setModal('reponer'); setRepoForm({ cantidad: '', precio: '', notas: '' }); cargarHistorial(d.id) }}
                   className="bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
-                  <DollarSign className="w-3 h-3" />💰 Arreglar cuentas
+                  📦 Reponer balones
                 </button>
                 <button onClick={() => { setSelected(d); setAcuentaModal(true); setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() }); cargarAcuentaDist(d.id) }}
                   className="col-span-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/30 text-yellow-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
@@ -668,30 +667,35 @@ export default function Distribuidores() {
               <p className="text-xs text-blue-400 mb-1">📦 Stock llenos en almacén disponible</p>
               <p className="text-2xl font-bold text-blue-400">{almacenes.find(a => a.id === selected.almacen_id)?.stock_actual || 0} bal.</p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
               <div>
                 <label className="label">Cantidad a entregar (llenos)</label>
-                <input type="number" className="input" placeholder="50" value={repoForm.cantidad} onChange={e => setRepoForm({...repoForm, cantidad: e.target.value})} />
+                <input type="number" className="input" placeholder="60"
+                  value={repoForm.cantidad}
+                  onChange={e => setRepoForm({...repoForm, cantidad: e.target.value})} />
               </div>
               <div>
                 <label className="label">💰 Precio que le cobras S/</label>
-                <input type="number" step="0.50" className="input" placeholder={selected.precio_base || '42.50'}
+                <input type="number" step="0.50" className="input"
+                  placeholder={selected?.precio_base || '42.50'}
                   value={repoForm.precio}
                   onChange={e => setRepoForm({...repoForm, precio: e.target.value})} />
                 <p style={{fontSize:10,color:'var(--app-text-secondary)',marginTop:3}}>
-                  Default: S/{selected.precio_base} (precio base)
+                  Default precio base: S/{selected?.precio_base}
                 </p>
               </div>
             </div>
             {repoForm.cantidad && (
-              <div className="bg-emerald-900/20 border border-emerald-800/50 rounded-lg p-3 text-sm space-y-1">
-                <p className="text-emerald-400">🟢 Llenos nuevos: <span className="font-bold">{selected.stock_actual + (parseInt(repoForm.cantidad) || 0)} balones</span></p>
-                <p style={{fontSize:11,color:'#fb923c'}}>
-                  🔖 Lote: {parseInt(repoForm.cantidad)||0} bal. × S/{repoForm.precio || selected.precio_base} = S/{((parseInt(repoForm.cantidad)||0) * (parseFloat(repoForm.precio)||selected.precio_base||0)).toLocaleString('es-PE')}
+              <div style={{background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.25)',borderRadius:10,padding:'10px 14px'}}>
+                <p style={{fontSize:12,color:'#34d399',margin:0,fontWeight:600}}>
+                  🟢 Nuevo total: {selected.stock_actual + (parseInt(repoForm.cantidad)||0)} balones
+                </p>
+                <p style={{fontSize:11,color:'#fb923c',margin:'4px 0 0'}}>
+                  🔖 Lote: {parseInt(repoForm.cantidad)||0} bal. × S/{repoForm.precio || selected?.precio_base} = S/{((parseInt(repoForm.cantidad)||0) * (parseFloat(repoForm.precio)||selected?.precio_base||0)).toLocaleString('es-PE')}
                 </p>
               </div>
             )}
-            <div><label className="label">Notas (opcional)</label><textarea className="input" rows={2} placeholder="Observaciones..." value={repoForm.notas} onChange={e => setRepoForm({...repoForm, notas: e.target.value})} /></div>
+            <div><label className="label">Notas (opcional)</label><textarea className="input" rows={2} placeholder="Ej: Subió precio — nuevo lote S/43..." value={repoForm.notas} onChange={e => setRepoForm({...repoForm, notas: e.target.value})} /></div>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setModal(null)} className="btn-secondary flex-1">Cancelar</button>
               <button onClick={guardarReposicion} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg transition-all flex-1 justify-center flex items-center gap-2">{saving ? 'Guardando...' : '✓ Confirmar reposición'}</button>
@@ -934,288 +938,136 @@ export default function Distribuidores() {
         </Modal>
       )}
 
-      {/* Modal historial */}
+      {/* Modal historial — tabla estilo rendición */}
       {modal === 'historial' && selected && (
-        <Modal title={`Historial — ${selected.nombre}`} onClose={() => setModal(null)} wide>
+        <Modal title={`📊 ${selected.nombre}`} onClose={() => setModal(null)} wide>
           <div className="space-y-5">
-            {/* Resumen actual */}
-            {(() => {
-              const totalVendidos = rendiciones.reduce((s,r) => s + (r.balones_vendidos||0), 0)
-              const stockInicial = selected.stock_actual + totalVendidos
-              return (
-                <div className="space-y-2">
-                  {/* Stock inicial vs actual */}
-                  <div style={{background:"var(--app-card-bg)",border:"1px solid var(--app-card-border)"}} className="rounded-xl p-3 flex items-center justify-between">
-                    <div className="text-center px-4">
-                      <p className="text-xs text-gray-500 mb-1">📦 Stock inicial</p>
-                      <p className="text-2xl font-bold text-gray-300">{stockInicial} bal.</p>
-                    </div>
-                    <div className="flex-1 flex items-center justify-center gap-2 text-gray-600">
-                      <div className="h-px flex-1 bg-gray-700" />
-                      <span className="text-xs">→ {totalVendidos} vendidos</span>
-                      <div className="h-px flex-1 bg-gray-700" />
-                    </div>
-                    <div className="text-center px-4">
-                      <p className="text-xs text-gray-500 mb-1">🟢 Llenos actuales</p>
-                      <p className="text-2xl font-bold text-emerald-400">{selected.stock_actual} bal.</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-gray-700/30 border border-gray-600/30 rounded-xl p-3 text-center">
-                      <p className="text-2xl font-bold text-gray-300">{selected.balones_vacios || 0}</p>
-                      <p className="text-xs text-gray-500 mt-1">⚪ Vacíos devueltos</p>
-                    </div>
-                    <div className="bg-blue-900/20 border border-blue-700/30 rounded-xl p-3 text-center">
-                      <p className="text-2xl font-bold text-blue-400">S/{selected.precio_base}</p>
-                      <p className="text-xs text-gray-500 mt-1">Precio/bal.</p>
-                    </div>
-                    <div className="bg-yellow-900/20 border border-yellow-700/30 rounded-xl p-3 text-center">
-                      <p className="text-xl font-bold text-yellow-400">S/{(selected.stock_actual * selected.precio_base).toLocaleString()}</p>
-                      <p className="text-xs text-gray-500 mt-1">Valor campo</p>
-                    </div>
-                  </div>
-                </div>
-              )
-            })()}
 
-            {/* Resumen de movimientos */}
-            {rendiciones.length > 0 && (() => {
-              const totalVendidos = rendiciones.reduce((s,r) => s + (r.balones_vendidos||0), 0)
-              const totalDevueltos = rendiciones.reduce((s,r) => s + (r.balones_devueltos||0), 0)
-              const totalPendientes = rendiciones.reduce((s,r) => s + (r.balones_faltantes||0), 0)
-              // Total esperado solo de rendiciones con balones
-              const totalEsperado = rendiciones.reduce((s,r) => s + (r.total_esperado||0), 0)
-              // Total abonado en TODAS las rendiciones (vales + adelantos)
-              const totalAbonado = rendiciones.reduce((s,r) => s + (r.total_vales||0) + (r.total_adelantos||0), 0)
-              const totalCobrar = Math.max(0, totalEsperado - totalAbonado)
-              return (
-                <div className="bg-blue-900/10 border border-blue-800/30 rounded-xl p-4">
-                  <p className="text-xs text-blue-300 font-semibold mb-3">📊 Resumen total de rendiciones</p>
-                  <div className="grid grid-cols-4 gap-3 text-center">
-                    <div><p className="text-white font-bold">{totalVendidos}</p><p className="text-xs text-gray-500">Vendidos</p></div>
-                    <div><p className="text-gray-300 font-bold">{totalDevueltos}</p><p className="text-xs text-gray-500">Devueltos</p></div>
-                    <div><p className="text-orange-400 font-bold">{totalPendientes}</p><p className="text-xs text-gray-500">⏳ Pendientes</p></div>
-                    <div><p className="text-emerald-400 font-bold">S/{totalCobrar.toLocaleString()}</p><p className="text-xs text-gray-500">💰 Por cobrar</p></div>
-                  </div>
+            {/* ── Resumen actual ── */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10}}>
+              {[
+                { label:'🟢 Llenos en campo', value: `${selected.stock_actual} bal.`, color:'#34d399' },
+                { label:'⚪ Vacíos devueltos', value: `${selected.balones_vacios||0} bal.`, color:'var(--app-text)' },
+                { label:'💰 Precio/bal.', value: `S/${selected.precio_base}`, color:'#60a5fa' },
+                { label:'📦 Valor en campo', value: `S/${(selected.stock_actual*(selected.precio_base||0)).toLocaleString('es-PE')}`, color:'#fb923c' },
+              ].map(({label,value,color}) => (
+                <div key={label} style={{background:'var(--app-card-bg-alt)',border:'1px solid var(--app-card-border)',borderRadius:10,padding:'12px',textAlign:'center'}}>
+                  <p style={{fontSize:10,color:'var(--app-text-secondary)',margin:'0 0 4px',textTransform:'uppercase'}}>{label}</p>
+                  <p style={{fontSize:18,fontWeight:700,color,margin:0}}>{value}</p>
                 </div>
-              )
-            })()}
+              ))}
+            </div>
 
-            {/* Rendiciones */}
+            {/* ── Lotes FIFO activos ── */}
             <div>
-              {/* ── Lotes FIFO activos ── */}
-            {lotesDistribuidor.length > 0 && (
-              <div>
-                <h4 className="text-sm font-semibold text-white mb-3">🔖 Lotes de precio (FIFO)</h4>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                <h4 style={{fontSize:13,fontWeight:700,color:'var(--app-text)',margin:0}}>🔖 Lotes de precio (FIFO)</h4>
+                <button onClick={() => { setModal('reponer'); setRepoForm({ cantidad:'', precio:'', notas:'' }) }}
+                  style={{fontSize:11,padding:'5px 12px',borderRadius:7,border:'1px solid rgba(52,211,153,0.4)',background:'rgba(52,211,153,0.1)',color:'#34d399',cursor:'pointer',fontWeight:600}}>
+                  + Nueva reposición
+                </button>
+              </div>
+              {lotesDistribuidor.length === 0 ? (
+                <div style={{textAlign:'center',padding:'20px',color:'var(--app-text-secondary)',fontSize:13}}>
+                  Sin lotes registrados — registra una reposición para activar el sistema FIFO
+                </div>
+              ) : (
                 <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden'}}>
-                  {/* Header tabla */}
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr 1fr 1fr',background:'var(--app-card-bg-alt)',borderBottom:'1px solid var(--app-card-border)'}}>
-                    {['Fecha','Precio','Inicial','Vendidos','Restantes','Estado'].map(h => (
+                  {/* Cabecera */}
+                  <div style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',background:'var(--app-card-bg-alt)',borderBottom:'1px solid var(--app-card-border)'}}>
+                    {['Fecha','Precio/bal.','Inicial','Vendidos','Restantes','Estado'].map(h => (
                       <div key={h} style={{padding:'8px 10px',fontSize:10,fontWeight:700,color:'var(--app-text-secondary)',textTransform:'uppercase',borderRight:'1px solid var(--app-card-border)'}}>
                         {h}
                       </div>
                     ))}
                   </div>
                   {/* Filas */}
-                  {lotesDistribuidor.map((lote, i) => (
-                    <div key={lote.id} style={{
-                      display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr 1fr 1fr',
-                      borderBottom: i < lotesDistribuidor.length-1 ? '1px solid var(--app-card-border)' : 'none',
-                      background: !lote.cerrado && lote.cantidad_restante > 0 ? 'rgba(251,146,60,0.05)' : 'transparent'
-                    }}>
-                      <div style={{padding:'8px 10px',fontSize:12,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)'}}>
-                        {lote.fecha}
-                      </div>
-                      <div style={{padding:'8px 10px',fontSize:12,fontWeight:700,color:'#fb923c',borderRight:'1px solid var(--app-card-border)'}}>
-                        S/ {lote.precio_unitario}
-                      </div>
-                      <div style={{padding:'8px 10px',fontSize:12,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>
-                        {lote.cantidad_inicial} bal.
-                      </div>
-                      <div style={{padding:'8px 10px',fontSize:12,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)'}}>
-                        {lote.cantidad_vendida} bal.
-                      </div>
-                      <div style={{padding:'8px 10px',fontSize:12,fontWeight:700,
-                        color: lote.cantidad_restante > 0 ? '#34d399' : 'var(--app-text-secondary)',
-                        borderRight:'1px solid var(--app-card-border)'}}>
-                        {lote.cantidad_restante} bal.
-                      </div>
-                      <div style={{padding:'8px 10px',display:'flex',alignItems:'center'}}>
-                        {lote.cerrado ? (
-                          <span style={{fontSize:10,fontWeight:700,padding:'2px 6px',borderRadius:4,background:'rgba(107,114,128,0.2)',color:'#9ca3af'}}>
-                            Agotado
-                          </span>
-                        ) : lote.cantidad_restante === lote.cantidad_inicial ? (
-                          <span style={{fontSize:10,fontWeight:700,padding:'2px 6px',borderRadius:4,background:'rgba(59,130,246,0.15)',color:'#60a5fa'}}>
-                            Nuevo
-                          </span>
-                        ) : (
-                          <span style={{fontSize:10,fontWeight:700,padding:'2px 6px',borderRadius:4,background:'rgba(251,146,60,0.15)',color:'#fb923c'}}>
-                            Activo
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {/* Total valor en campo */}
-                  <div style={{padding:'10px 12px',background:'var(--app-card-bg-alt)',borderTop:'1px solid var(--app-card-border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                    <span style={{fontSize:12,color:'var(--app-text-secondary)'}}>
-                      Total en campo: {lotesDistribuidor.filter(l=>!l.cerrado).reduce((s,l)=>s+l.cantidad_restante,0)} bal.
-                    </span>
-                    <span style={{fontSize:13,fontWeight:700,color:'#fb923c'}}>
-                      Valor: S/ {lotesDistribuidor.filter(l=>!l.cerrado).reduce((s,l)=>s+(l.cantidad_restante*l.precio_unitario),0).toLocaleString('es-PE')}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <h4 className="text-sm font-semibold text-white mb-3">📋 Historial de rendiciones</h4>
-              {rendiciones.length === 0 ? (
-                <p className="text-gray-600 text-sm text-center py-4">Sin rendiciones registradas</p>
-              ) : (
-                <div className="space-y-3">
-                  {rendiciones.map(r => {
-                    const v20count = r.total_vales > 0 ? Math.round((r.total_vales * 20/63) / 20) : 0
-                    const saldo = (r.total_esperado||0) - (r.total_vales||0) - (r.total_adelantos||0)
+                  {lotesDistribuidor.map((lote, i) => {
+                    const agotado = lote.cerrado || lote.cantidad_restante <= 0
+                    const nuevo = lote.cantidad_vendida === 0
                     return (
-                      <div key={r.id} style={{background:"var(--app-card-bg)",border:"1px solid var(--app-card-border)"}} className="rounded-xl p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <p className="text-white font-semibold text-sm">📅 {format(new Date(r.periodo_fin + 'T12:00:00'), 'dd/MM/yyyy', { locale: es })}</p>
-                            <p className="text-gray-500 text-xs mt-0.5">{r.balones_vendidos || r.balones_entregados} balones vendidos · S/{r.precio_por_balon}/bal.</p>
-                          </div>
-                          <span className={`text-xs px-2 py-1 rounded-full font-bold ${r.estado === 'cancelado' ? 'bg-emerald-900/50 text-emerald-400 border border-emerald-600/50' : 'bg-yellow-900/50 text-yellow-400 border border-yellow-600/50'}`}>
-                            {r.estado === 'cancelado' ? '✅ CANCELADO' : '⏳ POR COBRAR'}
+                      <div key={lote.id} style={{
+                        display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',
+                        borderBottom: i < lotesDistribuidor.length-1 ? '1px solid var(--app-card-border)' : 'none',
+                        background: agotado ? 'transparent' : nuevo ? 'rgba(52,211,153,0.03)' : 'rgba(251,146,60,0.04)'
+                      }}>
+                        <div style={{padding:'10px',fontSize:12,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',fontWeight:500}}>
+                          {lote.fecha}
+                          {lote.notas && <p style={{fontSize:10,color:'var(--app-text-secondary)',margin:'2px 0 0',fontStyle:'italic'}}>{lote.notas}</p>}
+                        </div>
+                        <div style={{padding:'10px',fontSize:13,fontWeight:700,color:'#fb923c',borderRight:'1px solid var(--app-card-border)'}}>
+                          S/ {lote.precio_unitario}
+                        </div>
+                        <div style={{padding:'10px',fontSize:12,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>
+                          {lote.cantidad_inicial}
+                        </div>
+                        <div style={{padding:'10px',fontSize:12,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)'}}>
+                          {lote.cantidad_vendida}
+                        </div>
+                        <div style={{padding:'10px',fontSize:13,fontWeight:700,
+                          color: agotado ? 'var(--app-text-secondary)' : lote.cantidad_restante < 10 ? '#f87171' : '#34d399',
+                          borderRight:'1px solid var(--app-card-border)'}}>
+                          {lote.cantidad_restante}
+                        </div>
+                        <div style={{padding:'10px',display:'flex',alignItems:'center'}}>
+                          <span style={{
+                            fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:5,
+                            background: agotado ? 'rgba(107,114,128,0.15)' : nuevo ? 'rgba(52,211,153,0.15)' : 'rgba(251,146,60,0.15)',
+                            color: agotado ? '#9ca3af' : nuevo ? '#34d399' : '#fb923c',
+                          }}>
+                            {agotado ? 'Agotado' : nuevo ? 'Sin ventas' : 'Activo'}
                           </span>
-                        </div>
-                        {/* Balones */}
-                        <div className="grid grid-cols-3 gap-2 text-center mb-2">
-                          <div className="bg-transparent rounded-lg p-2">
-                            <p className="text-white font-bold text-sm">{r.balones_vendidos || 0}</p>
-                            <p className="text-xs text-gray-500">🔵 Vendidos</p>
-                          </div>
-                          <div className="bg-gray-700/50 rounded-lg p-2">
-                            <p className="text-gray-300 font-bold text-sm">{r.balones_devueltos || 0}</p>
-                            <p className="text-xs text-gray-500">⚪ Devueltos</p>
-                          </div>
-                          <div className={`rounded-lg p-2 ${(r.balones_faltantes||0) > 0 ? 'bg-orange-900/20' : 'bg-emerald-900/20'}`}>
-                            <p className={`font-bold text-sm ${(r.balones_faltantes||0) > 0 ? 'text-orange-400' : 'text-emerald-400'}`}>
-                              {r.balones_faltantes || 0}
-                            </p>
-                            <p className="text-xs text-gray-500">⏳ Pendientes</p>
-                          </div>
-                        </div>
-                        {/* Dinero */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-                          <div className="bg-blue-900/20 rounded-lg p-2">
-                            <p className="text-blue-400 font-bold text-sm">S/ {(r.total_esperado||0).toLocaleString()}</p>
-                            <p className="text-xs text-gray-500">Total esperado</p>
-                          </div>
-                          <div className="bg-yellow-900/20 rounded-lg p-2">
-                            <p className="text-yellow-400 font-bold text-sm">S/ {(r.total_vales||0).toLocaleString()}</p>
-                            <p className="text-xs text-gray-500">Vales</p>
-                          </div>
-                          <div className="bg-orange-900/20 rounded-lg p-2">
-                            <p className="text-orange-400 font-bold text-sm">S/ {(r.total_adelantos||0).toLocaleString()}</p>
-                            <p className="text-xs text-gray-500">Adelantos</p>
-                          </div>
-                          <div className={`rounded-lg p-2 ${saldo > 0 ? 'bg-emerald-900/20' : 'bg-transparent'}`}>
-                            <p className={`font-bold text-sm ${saldo > 0 ? 'text-emerald-400' : 'text-gray-400'}`}>S/ {saldo.toLocaleString()}</p>
-                            <p className="text-xs text-gray-500">💰 Saldo efectivo</p>
-                          </div>
-                        </div>
-                        {r.notas && <p className="text-xs text-gray-500 mt-2">📝 {r.notas}</p>}
-                        {/* Botones abono/borrar */}
-                        <div className="flex gap-2 mt-3 pt-3 border-t border-[var(--app-card-border)]">
-                          {r.estado !== 'cancelado' && (
-                            <button onClick={() => { setAbonoModal(r); setAbonoForm({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', notas: '' }) }}
-                              className="text-xs bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 px-3 py-1.5 rounded-lg transition-all flex-1 text-center">
-                              💰 Registrar abono
-                            </button>
-                          )}
-                          <button onClick={async () => {
-                            if (!confirm(`¿Borrar esta rendición del ${r.periodo_fin}? Esto restaurará el stock del almacén.`)) return
-                            // Restaurar stock: devolver llenos, quitar vacíos devueltos
-                            const almacen = almacenes.find(a => a.id === selected.almacen_id)
-                            if (almacen) {
-                              const vendidos = r.balones_vendidos || 0
-                              const devueltos = r.balones_devueltos || 0
-                              // Restaurar: devolver llenos vendidos, quitar vacíos devueltos
-                              await supabase.from('almacenes').update({
-                                stock_actual: (almacen.stock_actual || 0) + vendidos,
-                                balones_vacios: Math.max(0, (almacen.balones_vacios || 0) - devueltos),
-                                vacios_10kg: Math.max(0, (almacen.vacios_10kg || 0) - devueltos),
-                                balones_pendientes_devolucion: Math.max(0, (almacen.balones_pendientes_devolucion || 0) - (r.balones_faltantes || 0))
-                              }).eq('id', selected.almacen_id)
-                              // Restaurar stock_por_tipo
-                              const { data: spt } = await supabase.from('stock_por_tipo')
-                                .select('stock_actual').eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg').single()
-                              if (spt) await supabase.from('stock_por_tipo')
-                                .update({ stock_actual: spt.stock_actual + vendidos })
-                                .eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg')
-                            }
-                            // Borrar rendición
-                            await supabase.from('cuenta_distribuidor_detalles').delete().eq('cuenta_id', r.id)
-                            await supabase.from('cuentas_distribuidor').delete().eq('id', r.id)
-                            await cargarHistorial(selected.id)
-                            cargar()
-                          }}
-                            className="text-xs bg-red-600/20 hover:bg-red-600/30 border border-red-600/30 text-red-400 px-3 py-1.5 rounded-lg transition-all flex-1 text-center">
-                            🗑️ Borrar rendición
-                          </button>
                         </div>
                       </div>
                     )
                   })}
+                  {/* Totales */}
+                  <div style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',background:'var(--app-card-bg-alt)',borderTop:'1px solid var(--app-card-border)'}}>
+                    <div style={{padding:'10px',fontSize:11,fontWeight:700,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>TOTAL ACTIVOS</div>
+                    <div style={{padding:'10px',borderRight:'1px solid var(--app-card-border)'}}/>
+                    <div style={{padding:'10px',fontSize:12,fontWeight:700,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)'}}>
+                      {lotesDistribuidor.filter(l=>!l.cerrado).reduce((s,l)=>s+l.cantidad_inicial,0)}
+                    </div>
+                    <div style={{padding:'10px',fontSize:12,fontWeight:700,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)'}}>
+                      {lotesDistribuidor.filter(l=>!l.cerrado).reduce((s,l)=>s+l.cantidad_vendida,0)}
+                    </div>
+                    <div style={{padding:'10px',fontSize:13,fontWeight:700,color:'#34d399',borderRight:'1px solid var(--app-card-border)'}}>
+                      {lotesDistribuidor.filter(l=>!l.cerrado).reduce((s,l)=>s+l.cantidad_restante,0)}
+                    </div>
+                    <div style={{padding:'10px',fontSize:12,fontWeight:700,color:'#fb923c'}}>
+                      S/{lotesDistribuidor.filter(l=>!l.cerrado).reduce((s,l)=>s+(l.cantidad_restante*l.precio_unitario),0).toLocaleString('es-PE')}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Movimientos del almacén */}
-            <div>
-              <h4 className="text-sm font-semibold text-white mb-3">📦 Historial de stock del almacén</h4>
-              {historial.length === 0 && movimientos.length === 0 ? (
-                <p className="text-gray-600 text-sm text-center py-4">Sin movimientos registrados</p>
-              ) : (
-                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                  {/* Reposiciones desde distribuidores */}
+            {/* ── Historial de reposiciones ── */}
+            {historial.length > 0 && (
+              <div>
+                <h4 style={{fontSize:13,fontWeight:700,color:'var(--app-text)',margin:'0 0 10px'}}>📥 Reposiciones</h4>
+                <div style={{display:'flex',flexDirection:'column',gap:6}}>
                   {historial.map(r => (
-                    <div key={r.id} className="flex items-center justify-between bg-emerald-900/20 border border-emerald-800/30 rounded-lg px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <span className="text-emerald-400 text-lg">📥</span>
+                    <div key={r.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderRadius:10,background:'rgba(52,211,153,0.06)',border:'1px solid rgba(52,211,153,0.2)'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:10}}>
+                        <span style={{fontSize:16}}>📥</span>
                         <div>
-                          <p className="text-white text-sm font-medium">Reposición +{r.cantidad} balones</p>
-                          <p className="text-gray-500 text-xs">{format(new Date(r.fecha), "dd/MM/yyyy HH:mm", { locale: es })}</p>
-                          {r.notas && <p className="text-gray-600 text-xs italic">{r.notas}</p>}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-gray-500">{r.stock_antes_dist} → <span className="text-emerald-400 font-semibold">{r.stock_despues_dist}</span> bal.</p>
-                      </div>
-                    </div>
-                  ))}
-                  {/* Movimientos del almacén (traslados, compras) */}
-                  {movimientos.map(m => (
-                    <div key={m.id} className="flex items-center justify-between bg-blue-900/20 border border-blue-800/30 rounded-lg px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <span className="text-blue-400 text-lg">
-                          {m.tipo === 'traslado' ? '🔄' : m.tipo === 'ajuste_manual' ? '✏️' : '📦'}
-                        </span>
-                        <div>
-                          <p className="text-white text-sm font-medium capitalize">
-                            {m.tipo === 'traslado' ? 'Traslado' : m.tipo === 'ajuste_manual' ? 'Ajuste manual' : m.tipo}
-                            {m.cantidad > 0 ? ` +${m.cantidad}` : ` ${m.cantidad}`} bal.
+                          <p style={{color:'var(--app-text)',fontSize:13,fontWeight:600,margin:0}}>+{r.cantidad} balones</p>
+                          <p style={{color:'var(--app-text-secondary)',fontSize:11,margin:'2px 0 0'}}>
+                            {format(new Date(r.fecha), 'dd/MM/yyyy HH:mm', {locale:es})}
+                            {r.notas ? ` · ${r.notas}` : ''}
                           </p>
-                          <p className="text-gray-500 text-xs">{format(new Date(m.created_at), "dd/MM/yyyy HH:mm", { locale: es })}</p>
-                          {m.notas && <p className="text-gray-600 text-xs italic">{m.notas}</p>}
                         </div>
                       </div>
+                      <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>
+                        {r.stock_antes_dist} → <span style={{color:'#34d399',fontWeight:700}}>{r.stock_despues_dist}</span> bal.
+                      </p>
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
           </div>
         </Modal>
       )}
