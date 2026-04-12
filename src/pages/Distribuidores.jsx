@@ -43,6 +43,16 @@ export default function Distribuidores() {
   const [abonoModal, setAbonoModal] = useState(null)
   const [abonoForm, setAbonoForm] = useState({ efectivo: '', vales20: '', vales43: '', balones_devueltos: '', vacios_extra: '', notas: '', modo: 'abono', fecha: hoyPeru() })
   const [savingAbono, setSavingAbono] = useState(false)
+  // Estados para cuenta corriente (Cristian)
+  const [cargaModal, setCargaModal] = useState(false)
+  const [cargaForm, setCargaForm] = useState({ cargados: '', descargados: '', notas: '', fecha: hoyPeru() })
+  const [abonoParciModal, setAbonoParciModal] = useState(false)
+  const [abonoParciForm, setAbonoParciForm] = useState({ vales20: '', vales30: '', vales43: '', efectivo: '', yape: '', notas: '', fecha: hoyPeru() })
+  const [arregloModal, setArregloModal] = useState(false)
+  const [arregloForm, setArregloForm] = useState({ vales20: '', vales30: '', vales43: '', efectivo: '', yape: '', notas: '', fecha: hoyPeru() })
+  const [cuentaActiva, setCuentaActiva] = useState(null)
+  const [cargasDist, setCargasDist] = useState([])
+  const [abonosParciales, setAbonosParciales] = useState([])
   const [acuentaDist, setAcuentaDist] = useState([]) // registros a cuenta del distribuidor seleccionado
   const [acuentaModal, setAcuentaModal] = useState(false)
   const [acuentaForm, setAcuentaForm] = useState({ nombre_cliente: '', vales_20: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() })
@@ -65,6 +75,197 @@ export default function Distribuidores() {
     const { data } = await supabase.from('clientes').select('id, nombre').eq('es_varios', false).order('nombre')
     setClientes(data || [])
   }
+
+  // ── Funciones cuenta corriente (Cristian) ──────────────────────────────
+  async function cargarCuentaCorriente(distId) {
+    const [{ data: cuenta }, { data: cargas }, { data: abonos }] = await Promise.all([
+      supabase.from('cuentas_corrientes_distribuidor')
+        .select('*').eq('distribuidor_id', distId).eq('estado', 'abierta').single(),
+      supabase.from('cargas_distribuidor')
+        .select('*').eq('distribuidor_id', distId).order('fecha', { ascending: true }),
+      supabase.from('abonos_distribuidor_parcial')
+        .select('*').eq('distribuidor_id', distId).order('fecha', { ascending: true })
+    ])
+    setCuentaActiva(cuenta || null)
+    setCargasDist(cargas || [])
+    setAbonosParciales(abonos || [])
+  }
+
+  async function guardarCarga() {
+    const cant = parseInt(cargaForm.cargados) || 0
+    const desc = parseInt(cargaForm.descargados) || 0
+    if (cant <= 0) { setError('Ingresa la cantidad a cargar'); return }
+    setSaving(true); setError('')
+    // Obtener precio FIFO activo
+    const { data: loteActivo } = await supabase.from('lotes_distribuidor')
+      .select('*').eq('distribuidor_id', selected.id).eq('cerrado', false)
+      .gt('cantidad_restante', 0).order('fecha', { ascending: true }).limit(1).single()
+    const precio = loteActivo?.precio_unitario || selected.precio_base || 0
+    const monto = cant * precio
+
+    // Obtener o crear cuenta activa
+    let cuentaId = cuentaActiva?.id
+    if (!cuentaId) {
+      const { data: nuevaCuenta } = await supabase.from('cuentas_corrientes_distribuidor').insert({
+        distribuidor_id: selected.id,
+        fecha_inicio: cargaForm.fecha || hoyPeru(),
+        saldo_anterior: 0, faltantes_anterior: 0,
+        estado: 'abierta'
+      }).select().single()
+      cuentaId = nuevaCuenta?.id
+    }
+
+    // Registrar carga
+    await supabase.from('cargas_distribuidor').insert({
+      distribuidor_id: selected.id,
+      cuenta_id: cuentaId,
+      fecha: cargaForm.fecha || hoyPeru(),
+      cargados: cant,
+      descargados: desc,
+      precio_unitario: precio,
+      monto,
+      notas: cargaForm.notas || null
+    })
+
+    // Actualizar almacén: descuenta llenos, suma vacíos
+    const almacen = almacenes.find(a => a.id === selected.almacen_id)
+    if (almacen) {
+      await supabase.from('almacenes').update({
+        stock_actual: Math.max(0, (almacen.stock_actual || 0) - cant),
+        balones_vacios: (almacen.balones_vacios || 0) + desc,
+        vacios_10kg: (almacen.vacios_10kg || 0) + desc,
+        updated_at: new Date().toISOString()
+      }).eq('id', selected.almacen_id)
+      // stock_por_tipo
+      const { data: spt } = await supabase.from('stock_por_tipo')
+        .select('stock_actual').eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg').single()
+      if (spt) await supabase.from('stock_por_tipo')
+        .update({ stock_actual: Math.max(0, spt.stock_actual - cant) })
+        .eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg')
+    }
+
+    // Aplicar FIFO al lote
+    if (cant > 0 && loteActivo) {
+      const nuevaVendida = (loteActivo.cantidad_vendida || 0) + cant
+      const nuevaRestante = Math.max(0, loteActivo.cantidad_restante - cant)
+      await supabase.from('lotes_distribuidor').update({
+        cantidad_vendida: nuevaVendida,
+        cantidad_restante: nuevaRestante,
+        cerrado: nuevaRestante <= 0
+      }).eq('id', loteActivo.id)
+    }
+
+    setSaving(false)
+    setCargaModal(false)
+    setCargaForm({ cargados: '', descargados: '', notas: '', fecha: hoyPeru() })
+    await cargarCuentaCorriente(selected.id)
+    cargar()
+  }
+
+  async function guardarAbonoParcial() {
+    const v20 = parseInt(abonoParciForm.vales20) || 0
+    const v30 = parseInt(abonoParciForm.vales30) || 0
+    const v43 = parseInt(abonoParciForm.vales43) || 0
+    const efectivo = parseFloat(abonoParciForm.efectivo) || 0
+    const yape = parseFloat(abonoParciForm.yape) || 0
+    const total = v20*20 + v30*30 + v43*43 + efectivo + yape
+    if (total <= 0) { setError('Ingresa al menos un pago'); return }
+    setSaving(true); setError('')
+
+    await supabase.from('abonos_distribuidor_parcial').insert({
+      distribuidor_id: selected.id,
+      cuenta_id: cuentaActiva?.id || null,
+      fecha: abonoParciForm.fecha || hoyPeru(),
+      vales_20: v20, vales_30: v30, vales_43: v43,
+      efectivo, yape, total,
+      notas: abonoParciForm.notas || null
+    })
+
+    setSaving(false)
+    setAbonoParciModal(false)
+    setAbonoParciForm({ vales20: '', vales30: '', vales43: '', efectivo: '', yape: '', notas: '', fecha: hoyPeru() })
+    await cargarCuentaCorriente(selected.id)
+  }
+
+  async function guardarArreglo() {
+    const v20 = parseInt(arregloForm.vales20) || 0
+    const v30 = parseInt(arregloForm.vales30) || 0
+    const v43 = parseInt(arregloForm.vales43) || 0
+    const efectivo = parseFloat(arregloForm.efectivo) || 0
+    const yape = parseFloat(arregloForm.yape) || 0
+    const pagoHoy = v20*20 + v30*30 + v43*43 + efectivo + yape
+
+    // Calcular totales de la cuenta
+    const totalCargado = cargasDist.reduce((s,c) => s+(c.cargados||0), 0)
+    const totalDescargado = cargasDist.reduce((s,c) => s+(c.descargados||0), 0)
+    const montoTotal = cargasDist.reduce((s,c) => s+(c.monto||0), 0)
+    const saldoAnterior = cuentaActiva?.saldo_anterior || 0
+    const faltantesAnterior = cuentaActiva?.faltantes_anterior || 0
+    const totalAbonado = abonosParciales.reduce((s,a) => s+(a.total||0), 0)
+    const totalPagado = totalAbonado + pagoHoy
+    const montoConSaldo = montoTotal + saldoAnterior
+    const saldoPendiente = Math.max(0, montoConSaldo - totalPagado)
+    const faltantesBal = Math.max(0, totalCargado - totalDescargado)
+    const cancelado = saldoPendiente <= 0
+
+    setSaving(true); setError('')
+
+    // Registrar pago de hoy como abono parcial
+    if (pagoHoy > 0) {
+      await supabase.from('abonos_distribuidor_parcial').insert({
+        distribuidor_id: selected.id,
+        cuenta_id: cuentaActiva?.id || null,
+        fecha: arregloForm.fecha || hoyPeru(),
+        vales_20: v20, vales_30: v30, vales_43: v43,
+        efectivo, yape, total: pagoHoy,
+        notas: 'Pago en arreglo'
+      })
+    }
+
+    // Cerrar cuenta actual
+    if (cuentaActiva?.id) {
+      await supabase.from('cuentas_corrientes_distribuidor').update({
+        fecha_cierre: arregloForm.fecha || hoyPeru(),
+        total_cargado: totalCargado,
+        total_descargado: totalDescargado,
+        faltantes_bal: faltantesBal + faltantesAnterior,
+        monto_total: montoConSaldo,
+        total_pagado: totalPagado,
+        saldo_pendiente: saldoPendiente,
+        estado: 'cerrada'
+      }).eq('id', cuentaActiva.id)
+    }
+
+    // Registrar ingreso en ventas para reportes
+    if (totalPagado > 0 && selected.almacen_id) {
+      await supabase.from('ventas').insert({
+        almacen_id: selected.almacen_id,
+        tipo_balon: '10kg',
+        fecha: new Date().toISOString(),
+        cantidad: totalCargado,
+        precio_unitario: totalCargado > 0 ? montoTotal/totalCargado : 0,
+        metodo_pago: 'arreglo_distribuidor',
+        notas: `Arreglo ${selected.nombre} — pagado S/${totalPagado.toLocaleString()}${saldoPendiente>0?' — pendiente S/'+saldoPendiente.toLocaleString():''}`,
+        usuario_id: perfil?.id || null
+      })
+    }
+
+    // Abrir nueva cuenta con pendientes
+    await supabase.from('cuentas_corrientes_distribuidor').insert({
+      distribuidor_id: selected.id,
+      fecha_inicio: arregloForm.fecha || hoyPeru(),
+      saldo_anterior: saldoPendiente,
+      faltantes_anterior: faltantesBal + faltantesAnterior,
+      estado: 'abierta'
+    })
+
+    setSaving(false)
+    setArregloModal(false)
+    setArregloForm({ vales20: '', vales30: '', vales43: '', efectivo: '', yape: '', notas: '', fecha: hoyPeru() })
+    await cargarCuentaCorriente(selected.id)
+    cargar()
+  }
+  // ── Fin funciones cuenta corriente ─────────────────────────────────────
 
   async function cargar() {
     setLoading(true)
@@ -98,6 +299,12 @@ export default function Distribuidores() {
     // Obtener almacen_id del distribuidor seleccionado
     const dist = distribuidores.find(d => d.id === distId)
     const almacenId = dist?.almacen_id
+
+    // Si es cuenta corriente, cargar también sus datos
+    const dist = distribuidores.find(d => d.id === distId)
+    if (dist?.modalidad === 'cuenta_corriente') {
+      await cargarCuentaCorriente(distId)
+    }
 
     const [{ data: repos }, { data: rends }, { data: movs }, { data: lotes }, { data: ventas }] = await Promise.all([
       supabase.from('reposiciones_distribuidor')
@@ -595,17 +802,34 @@ export default function Distribuidores() {
                 </div>
               </div>
 
-              {/* Acciones */}
+              {/* Acciones según modalidad */}
               <div className="grid grid-cols-2 gap-2 mb-2">
                 <button onClick={() => abrirHistorial(d)}
                   className="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/30 text-blue-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
                   <History className="w-3 h-3" />Historial
                 </button>
 
-                <button onClick={() => { setSelected(d); setAcuentaModal(true); setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() }); cargarAcuentaDist(d.id) }}
-                  className="col-span-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/30 text-yellow-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
-                  <ClipboardList className="w-3 h-3" />📋 A Cuenta ({d.vales_pendientes || 0} pendientes)
-                </button>
+                {d.modalidad === 'cuenta_corriente' ? (
+                  <>
+                    <button onClick={() => { setSelected(d); setCargaModal(true); setCargaForm({ cargados:'', descargados:'', notas:'', fecha:hoyPeru() }); cargarCuentaCorriente(d.id) }}
+                      className="bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
+                      📦 Registrar carga
+                    </button>
+                    <button onClick={() => { setSelected(d); setAbonoParciModal(true); setAbonoParciForm({ vales20:'', vales30:'', vales43:'', efectivo:'', yape:'', notas:'', fecha:hoyPeru() }); cargarCuentaCorriente(d.id) }}
+                      className="bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/30 text-yellow-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
+                      💵 Registrar abono
+                    </button>
+                    <button onClick={() => { setSelected(d); setArregloModal(true); setArregloForm({ vales20:'', vales30:'', vales43:'', efectivo:'', yape:'', notas:'', fecha:hoyPeru() }); cargarCuentaCorriente(d.id) }}
+                      className="col-span-2 bg-orange-600/20 hover:bg-orange-600/30 border border-orange-600/30 text-orange-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
+                      🧾 Arreglar cuentas
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={() => { setSelected(d); setAcuentaModal(true); setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() }); cargarAcuentaDist(d.id) }}
+                    className="col-span-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/30 text-yellow-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
+                    <ClipboardList className="w-3 h-3" />📋 A Cuenta ({d.vales_pendientes || 0} pendientes)
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -1365,6 +1589,322 @@ export default function Distribuidores() {
           </div>
         </div>
       )}
+
+      {/* ── Modal Registrar Carga (Cristian) ── */}
+      {cargaModal && selected && (
+        <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
+            style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
+            <div className="flex items-center justify-between px-6 py-4" style={{borderBottom:'1px solid var(--app-card-border)'}}>
+              <div>
+                <h3 style={{color:'var(--app-text)',fontWeight:700,fontSize:16,margin:0}}>📦 Registrar carga — {selected.nombre}</h3>
+                <p style={{color:'var(--app-text-secondary)',fontSize:11,margin:'2px 0 0'}}>Llenos que lleva + vacíos que devuelve</p>
+              </div>
+              <button onClick={() => setCargaModal(false)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--app-text-secondary)'}}><X style={{width:20,height:20}} /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
+
+              {/* Precio FIFO actual */}
+              {(() => {
+                const lote = lotesDistribuidor.find(l => !l.cerrado && l.cantidad_restante > 0)
+                return lote ? (
+                  <div style={{background:'rgba(251,146,60,0.08)',border:'1px solid rgba(251,146,60,0.25)',borderRadius:10,padding:'10px 14px'}}>
+                    <p style={{fontSize:12,color:'#fb923c',margin:0,fontWeight:600}}>
+                      🔖 Precio FIFO activo: S/{lote.precio_unitario}/bal. · {lote.cantidad_restante} restantes en lote
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.25)',borderRadius:10,padding:'10px 14px'}}>
+                    <p style={{fontSize:12,color:'#f87171',margin:0}}>⚠️ Sin lotes activos — registra una compra primero en Inventario</p>
+                  </div>
+                )
+              })()}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">📦 Llenos que carga</label>
+                  <input type="number" min="0" className="input text-center text-lg font-bold"
+                    placeholder="0" value={cargaForm.cargados}
+                    onChange={e => setCargaForm(f => ({...f, cargados: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="label">⚪ Vacíos que devuelve</label>
+                  <input type="number" min="0" className="input text-center text-lg font-bold"
+                    placeholder="0" value={cargaForm.descargados}
+                    onChange={e => setCargaForm(f => ({...f, descargados: e.target.value}))} />
+                </div>
+              </div>
+
+              {(parseInt(cargaForm.cargados)||0) > 0 && (() => {
+                const lote = lotesDistribuidor.find(l => !l.cerrado && l.cantidad_restante > 0)
+                const precio = lote?.precio_unitario || selected.precio_base || 0
+                const monto = (parseInt(cargaForm.cargados)||0) * precio
+                return (
+                  <div style={{background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.25)',borderRadius:10,padding:'10px 14px'}}>
+                    <p style={{fontSize:13,color:'#34d399',fontWeight:700,margin:0}}>
+                      {cargaForm.cargados} bal × S/{precio} = S/{monto.toLocaleString('es-PE')}
+                    </p>
+                    {(parseInt(cargaForm.descargados)||0) > 0 && (
+                      <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'4px 0 0'}}>
+                        ⚪ Devuelve: {cargaForm.descargados} vacíos → entran a tu stock
+                      </p>
+                    )}
+                  </div>
+                )
+              })()}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="label">Fecha</label>
+                  <input type="date" className="input" value={cargaForm.fecha}
+                    onChange={e => setCargaForm(f => ({...f, fecha: e.target.value}))} /></div>
+                <div><label className="label">Notas (opcional)</label>
+                  <input className="input" placeholder="..." value={cargaForm.notas}
+                    onChange={e => setCargaForm(f => ({...f, notas: e.target.value}))} /></div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setCargaModal(false)} className="btn-secondary flex-1">Cancelar</button>
+                <button onClick={guardarCarga} disabled={saving} className="btn-primary flex-1 justify-center">
+                  {saving ? 'Guardando...' : '✓ Registrar carga'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Abono Parcial (Cristian) ── */}
+      {abonoParciModal && selected && (
+        <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl shadow-2xl"
+            style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
+            <div className="flex items-center justify-between px-6 py-4" style={{borderBottom:'1px solid var(--app-card-border)'}}>
+              <h3 style={{color:'var(--app-text)',fontWeight:700,fontSize:16,margin:0}}>💵 Abono parcial — {selected.nombre}</h3>
+              <button onClick={() => setAbonoParciModal(false)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--app-text-secondary)'}}><X style={{width:20,height:20}} /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
+              <div className="grid grid-cols-3 gap-3">
+                <div><label className="label">🎫 Vales S/20</label>
+                  <input type="number" min="0" className="input text-center" placeholder="0"
+                    value={abonoParciForm.vales20} onChange={e => setAbonoParciForm(f => ({...f, vales20: e.target.value}))} />
+                  {(parseInt(abonoParciForm.vales20)||0)>0 && <p style={{fontSize:10,color:'#fde047',textAlign:'center',marginTop:2}}>= S/{(parseInt(abonoParciForm.vales20)||0)*20}</p>}
+                </div>
+                <div><label className="label">🎫 Vales S/30</label>
+                  <input type="number" min="0" className="input text-center" placeholder="0"
+                    value={abonoParciForm.vales30} onChange={e => setAbonoParciForm(f => ({...f, vales30: e.target.value}))} />
+                  {(parseInt(abonoParciForm.vales30)||0)>0 && <p style={{fontSize:10,color:'#fde047',textAlign:'center',marginTop:2}}>= S/{(parseInt(abonoParciForm.vales30)||0)*30}</p>}
+                </div>
+                <div><label className="label">🎫 Vales S/43</label>
+                  <input type="number" min="0" className="input text-center" placeholder="0"
+                    value={abonoParciForm.vales43} onChange={e => setAbonoParciForm(f => ({...f, vales43: e.target.value}))} />
+                  {(parseInt(abonoParciForm.vales43)||0)>0 && <p style={{fontSize:10,color:'#fde047',textAlign:'center',marginTop:2}}>= S/{(parseInt(abonoParciForm.vales43)||0)*43}</p>}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="label">💵 Efectivo S/</label>
+                  <input type="number" min="0" step="0.50" className="input text-center" placeholder="0"
+                    value={abonoParciForm.efectivo} onChange={e => setAbonoParciForm(f => ({...f, efectivo: e.target.value}))} /></div>
+                <div><label className="label">📱 Yape S/</label>
+                  <input type="number" min="0" step="0.50" className="input text-center" placeholder="0"
+                    value={abonoParciForm.yape} onChange={e => setAbonoParciForm(f => ({...f, yape: e.target.value}))} /></div>
+              </div>
+              {(() => {
+                const total = (parseInt(abonoParciForm.vales20)||0)*20+(parseInt(abonoParciForm.vales30)||0)*30+(parseInt(abonoParciForm.vales43)||0)*43+(parseFloat(abonoParciForm.efectivo)||0)+(parseFloat(abonoParciForm.yape)||0)
+                return total > 0 ? (
+                  <div style={{background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.25)',borderRadius:10,padding:'10px 14px'}}>
+                    <p style={{fontSize:14,color:'#34d399',fontWeight:700,margin:0}}>Total abono: S/{total.toLocaleString('es-PE')}</p>
+                  </div>
+                ) : null
+              })()}
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="label">Fecha</label>
+                  <input type="date" className="input" value={abonoParciForm.fecha}
+                    onChange={e => setAbonoParciForm(f => ({...f, fecha: e.target.value}))} /></div>
+                <div><label className="label">Notas</label>
+                  <input className="input" placeholder="..." value={abonoParciForm.notas}
+                    onChange={e => setAbonoParciForm(f => ({...f, notas: e.target.value}))} /></div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setAbonoParciModal(false)} className="btn-secondary flex-1">Cancelar</button>
+                <button onClick={guardarAbonoParcial} disabled={saving} className="btn-primary flex-1 justify-center">
+                  {saving ? 'Guardando...' : '✓ Registrar abono'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Arreglo Final (Cristian) ── */}
+      {arregloModal && selected && (() => {
+        const totalCargado = cargasDist.reduce((s,c) => s+(c.cargados||0), 0)
+        const totalDescargado = cargasDist.reduce((s,c) => s+(c.descargados||0), 0)
+        const montoTotal = cargasDist.reduce((s,c) => s+(c.monto||0), 0)
+        const saldoAnterior = cuentaActiva?.saldo_anterior || 0
+        const faltantesAnterior = cuentaActiva?.faltantes_anterior || 0
+        const totalAbonado = abonosParciales.reduce((s,a) => s+(a.total||0), 0)
+        const v20h = parseInt(arregloForm.vales20)||0
+        const v30h = parseInt(arregloForm.vales30)||0
+        const v43h = parseInt(arregloForm.vales43)||0
+        const efh = parseFloat(arregloForm.efectivo)||0
+        const yph = parseFloat(arregloForm.yape)||0
+        const pagoHoy = v20h*20+v30h*30+v43h*43+efh+yph
+        const totalPagado = totalAbonado + pagoHoy
+        const montoConSaldo = montoTotal + saldoAnterior
+        const saldoPendiente = Math.max(0, montoConSaldo - totalPagado)
+        const faltantesBal = Math.max(0, totalCargado - totalDescargado) + faltantesAnterior
+        const cancelado = saldoPendiente <= 0
+
+        return (
+          <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
+            <div className="w-full max-w-2xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
+              style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
+              <div className="flex items-center justify-between px-6 py-4" style={{borderBottom:'1px solid var(--app-card-border)'}}>
+                <div>
+                  <h3 style={{color:'var(--app-text)',fontWeight:700,fontSize:16,margin:0}}>🧾 Arreglo — {selected.nombre}</h3>
+                  <p style={{color:'var(--app-text-secondary)',fontSize:11,margin:'2px 0 0'}}>Totalización de cuenta corriente</p>
+                </div>
+                <button onClick={() => setArregloModal(false)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--app-text-secondary)'}}><X style={{width:20,height:20}} /></button>
+              </div>
+              <div className="px-6 py-5 space-y-4">
+
+                {/* Tabla resumen Excel */}
+                <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden'}}>
+                  {/* Header */}
+                  <div style={{background:'var(--app-accent)',padding:'8px 16px',textAlign:'center'}}>
+                    <p style={{color:'#fff',fontWeight:700,fontSize:12,margin:0,textTransform:'uppercase'}}>
+                      ARREGLO CON {selected.nombre?.toUpperCase()}
+                    </p>
+                  </div>
+                  {/* Cabeceras */}
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 0.8fr 0.8fr 0.8fr 0.8fr',background:'var(--app-card-bg-alt)',borderBottom:'1px solid var(--app-card-border)'}}>
+                    {['Fecha','Cargados','Descargados','Faltantes','Monto'].map(h => (
+                      <div key={h} style={{padding:'7px 8px',fontSize:10,fontWeight:700,color:'var(--app-text-secondary)',textTransform:'uppercase',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{h}</div>
+                    ))}
+                  </div>
+                  {/* Filas de cargas */}
+                  {cargasDist.map((c,i) => (
+                    <div key={c.id} style={{display:'grid',gridTemplateColumns:'1fr 0.8fr 0.8fr 0.8fr 0.8fr',borderBottom:'1px solid var(--app-card-border)'}}>
+                      <div style={{padding:'7px 8px',fontSize:11,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{c.fecha}</div>
+                      <div style={{padding:'7px 8px',fontSize:12,fontWeight:600,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{c.cargados}</div>
+                      <div style={{padding:'7px 8px',fontSize:12,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{c.descargados}</div>
+                      <div style={{padding:'7px 8px',fontSize:12,color:'#fb923c',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{Math.max(0,c.cargados-c.descargados)}</div>
+                      <div style={{padding:'7px 8px',fontSize:12,fontWeight:600,color:'#34d399',textAlign:'center'}}>S/{(c.monto||0).toLocaleString('es-PE')}</div>
+                    </div>
+                  ))}
+                  {/* Totales */}
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 0.8fr 0.8fr 0.8fr 0.8fr',background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)'}}>
+                    <div style={{padding:'8px',fontSize:11,fontWeight:700,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>TOTAL</div>
+                    <div style={{padding:'8px',fontSize:13,fontWeight:700,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{totalCargado}</div>
+                    <div style={{padding:'8px',fontSize:13,fontWeight:700,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{totalDescargado}</div>
+                    <div style={{padding:'8px',fontSize:13,fontWeight:700,color:'#fb923c',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{faltantesBal}</div>
+                    <div style={{padding:'8px',fontSize:13,fontWeight:700,color:'#34d399',textAlign:'center'}}>S/{montoConSaldo.toLocaleString('es-PE')}</div>
+                  </div>
+                </div>
+
+                {/* Abonos previos */}
+                {totalAbonado > 0 && (
+                  <div style={{background:'rgba(99,102,241,0.08)',border:'1px solid rgba(99,102,241,0.25)',borderRadius:10,padding:'10px 14px'}}>
+                    <p style={{fontSize:12,color:'#818cf8',margin:0,fontWeight:600}}>
+                      💰 Ya abonado en cuenta: S/{totalAbonado.toLocaleString('es-PE')}
+                      {saldoAnterior > 0 && ` (incluye S/${saldoAnterior.toLocaleString()} de cuenta anterior)`}
+                    </p>
+                  </div>
+                )}
+
+                {/* Pago de hoy */}
+                <div>
+                  <p style={{fontSize:12,fontWeight:700,color:'var(--app-text)',marginBottom:8}}>💳 Paga HOY en el arreglo:</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div><label className="label">🎫 Vales S/20</label>
+                      <input type="number" min="0" className="input text-center" placeholder="0"
+                        value={arregloForm.vales20} onChange={e => setArregloForm(f => ({...f, vales20: e.target.value}))} />
+                      {v20h>0 && <p style={{fontSize:10,color:'#fde047',textAlign:'center',marginTop:2}}>= S/{v20h*20}</p>}
+                    </div>
+                    <div><label className="label">🎫 Vales S/30</label>
+                      <input type="number" min="0" className="input text-center" placeholder="0"
+                        value={arregloForm.vales30} onChange={e => setArregloForm(f => ({...f, vales30: e.target.value}))} />
+                      {v30h>0 && <p style={{fontSize:10,color:'#fde047',textAlign:'center',marginTop:2}}>= S/{v30h*30}</p>}
+                    </div>
+                    <div><label className="label">🎫 Vales S/43</label>
+                      <input type="number" min="0" className="input text-center" placeholder="0"
+                        value={arregloForm.vales43} onChange={e => setArregloForm(f => ({...f, vales43: e.target.value}))} />
+                      {v43h>0 && <p style={{fontSize:10,color:'#fde047',textAlign:'center',marginTop:2}}>= S/{v43h*43}</p>}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mt-3">
+                    <div><label className="label">💵 Efectivo S/</label>
+                      <input type="number" min="0" step="0.50" className="input text-center" placeholder="0"
+                        value={arregloForm.efectivo} onChange={e => setArregloForm(f => ({...f, efectivo: e.target.value}))} /></div>
+                    <div><label className="label">📱 Yape S/</label>
+                      <input type="number" min="0" step="0.50" className="input text-center" placeholder="0"
+                        value={arregloForm.yape} onChange={e => setArregloForm(f => ({...f, yape: e.target.value}))} /></div>
+                  </div>
+                </div>
+
+                {/* Resultado */}
+                <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden'}}>
+                  <div style={{background:'var(--app-card-bg-alt)',padding:'8px 14px',borderBottom:'1px solid var(--app-card-border)'}}>
+                    <p style={{fontSize:11,fontWeight:700,color:'var(--app-text-secondary)',margin:0,textTransform:'uppercase'}}>Resultado del arreglo</p>
+                  </div>
+                  <div style={{padding:'12px 14px',display:'flex',flexDirection:'column',gap:8}}>
+                    <div style={{display:'flex',justifyContent:'space-between'}}>
+                      <span style={{fontSize:12,color:'var(--app-text-secondary)'}}>Total a pagar:</span>
+                      <span style={{fontSize:13,fontWeight:700,color:'var(--app-text)'}}>S/{montoConSaldo.toLocaleString('es-PE')}</span>
+                    </div>
+                    <div style={{display:'flex',justifyContent:'space-between'}}>
+                      <span style={{fontSize:12,color:'var(--app-text-secondary)'}}>Ya abonado:</span>
+                      <span style={{fontSize:13,color:'#818cf8'}}>- S/{totalAbonado.toLocaleString('es-PE')}</span>
+                    </div>
+                    <div style={{display:'flex',justifyContent:'space-between'}}>
+                      <span style={{fontSize:12,color:'var(--app-text-secondary)'}}>Paga hoy:</span>
+                      <span style={{fontSize:13,color:'#fde047'}}>- S/{pagoHoy.toLocaleString('es-PE')}</span>
+                    </div>
+                    <div style={{borderTop:'1px solid var(--app-card-border)',paddingTop:8,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                      <span style={{fontSize:13,fontWeight:700,color:'var(--app-text)'}}>Saldo pendiente:</span>
+                      <span style={{fontSize:18,fontWeight:700,color:cancelado?'#34d399':'#f87171'}}>
+                        S/{saldoPendiente.toLocaleString('es-PE')} {cancelado?'✅':'⏳'}
+                      </span>
+                    </div>
+                    {faltantesBal > 0 && (
+                      <div style={{display:'flex',justifyContent:'space-between'}}>
+                        <span style={{fontSize:12,color:'var(--app-text-secondary)'}}>⚪ Vacíos pendientes:</span>
+                        <span style={{fontSize:13,fontWeight:700,color:'#fb923c'}}>{faltantesBal} bal.</span>
+                      </div>
+                    )}
+                    {!cancelado && (
+                      <div style={{background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:8,padding:'8px 12px',marginTop:4}}>
+                        <p style={{fontSize:11,color:'#f87171',margin:0}}>
+                          ⚠️ Nueva cuenta iniciará con S/{saldoPendiente.toLocaleString()} pendiente{faltantesBal>0?` + ${faltantesBal} vacíos`:''}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="label">Fecha arreglo</label>
+                    <input type="date" className="input" value={arregloForm.fecha}
+                      onChange={e => setArregloForm(f => ({...f, fecha: e.target.value}))} /></div>
+                  <div><label className="label">Notas</label>
+                    <input className="input" placeholder="..." value={arregloForm.notas}
+                      onChange={e => setArregloForm(f => ({...f, notas: e.target.value}))} /></div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button onClick={() => setArregloModal(false)} className="btn-secondary flex-1">Cancelar</button>
+                  <button onClick={guardarArreglo} disabled={saving}
+                    style={{flex:1,padding:'10px',borderRadius:8,border:'none',cursor:'pointer',background:'var(--app-accent)',color:'#fff',fontWeight:700,fontSize:14}}>
+                    {saving ? 'Cerrando cuenta...' : '✓ Cerrar cuenta y arreglar'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Modal A Cuenta del distribuidor */}
       {acuentaModal && selected && (
