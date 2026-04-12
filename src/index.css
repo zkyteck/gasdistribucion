@@ -1,34 +1,255 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 * { box-sizing: border-box; }
 
-body {
-  margin: 0;
-  background: #030712;
-  color: #f9fafb;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+/* ── Variables por defecto (tema Neón oscuro) ─────────────────────────────── */
+:root {
+  --app-bg:                    #0f172a;
+  --app-main-bg:               #0f172a;
+  --app-sidebar-bg:            #1e293b;
+  --app-sidebar-border:        #334155;
+  --app-sidebar-text:          #94a3b8;
+  --app-sidebar-active-bg:     rgba(59,130,246,0.15);
+  --app-sidebar-active-text:   #60a5fa;
+  --app-sidebar-active-border: rgba(59,130,246,0.4);
+  --app-sidebar-hover-bg:      rgba(255,255,255,0.05);
+  --app-sidebar-hover-text:    #e2e8f0;
+  --app-topbar-bg:             rgba(30,41,59,0.85);
+  --app-topbar-border:         #334155;
+  --app-text:                  #e2e8f0;
+  --app-text-secondary:        #94a3b8;
+  --app-accent:                #3b82f6;
+  --app-accent-hover:          #2563eb;
+  --app-card-bg:               rgba(30,41,59,0.6);
+  --app-card-border:           #334155;
+  --app-input-bg:              #1e293b;
+  --app-input-border:          #475569;
+  --app-input-text:            #e2e8f0;
+  --app-logo-text:             #ffffff;
+  --app-logo-sub:              #64748b;
+
+  /* Botón secundario */
+  --app-btn-secondary-bg:      #1e293b;
+  --app-btn-secondary-border:  #475569;
+  --app-btn-secondary-text:    #cbd5e1;
+  --app-btn-secondary-hover:   #334155;
+
+  /* Tabla */
+  --app-table-hover:           rgba(255,255,255,0.04);
+  --app-table-border:          rgba(255,255,255,0.06);
+
+  /* Modal */
+  --app-modal-bg:              #1e293b;
+  --app-modal-border:          #334155;
+  --app-modal-header-border:   #334155;
+
+  /* Label */
+  --app-label-color:           #94a3b8;
 }
 
-.card { background: #111827; border: 1px solid #1f2937; border-radius: 1rem; padding: 1.25rem; }
-.stat-card { background: #111827; border-radius: 1rem; padding: 1.25rem; display: flex; flex-direction: column; gap: 0.5rem; }
+/* ── Modo claro (aplicado via JS en body.tema-claro) ────────────────────────── */
+body.tema-claro {
+  --app-bg:                    #f1f5f9;
+  --app-main-bg:               #f8fafc;
+  --app-sidebar-bg:            #ffffff;
+  --app-sidebar-border:        #e2e8f0;
+  --app-sidebar-text:          #64748b;
+  --app-sidebar-active-bg:     rgba(99,102,241,0.1);
+  --app-sidebar-active-text:   #6366f1;
+  --app-sidebar-active-border: rgba(99,102,241,0.3);
+  --app-sidebar-hover-bg:      rgba(0,0,0,0.04);
+  --app-sidebar-hover-text:    #1e293b;
+  --app-topbar-bg:             rgba(255,255,255,0.9);
+  --app-topbar-border:         #e2e8f0;
+  --app-text:                  #1e293b;
+  --app-text-secondary:        #64748b;
+  --app-accent:                #6366f1;
+  --app-accent-hover:          #4f46e5;
+  --app-card-bg:               #ffffff;
+  --app-card-border:           #e2e8f0;
+  --app-input-bg:              #f8fafc;
+  --app-input-border:          #cbd5e1;
+  --app-input-text:            #1e293b;
+  --app-logo-text:             #1e293b;
+  --app-logo-sub:              #94a3b8;
 
-.input { width: 100%; background: #1f2937; border: 1px solid #374151; border-radius: 0.5rem; padding: 0.5rem 0.75rem; color: #f9fafb; font-size: 0.875rem; outline: none; transition: border-color 0.15s; }
-.input:focus { border-color: #3b82f6; }
-.label { display: block; font-size: 0.75rem; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.375rem; }
+  --app-btn-secondary-bg:      #f1f5f9;
+  --app-btn-secondary-border:  #cbd5e1;
+  --app-btn-secondary-text:    #475569;
+  --app-btn-secondary-hover:   #e2e8f0;
 
-.btn-primary { display: inline-flex; align-items: center; gap: 0.375rem; background: #2563eb; color: white; font-weight: 600; padding: 0.5rem 1rem; border-radius: 0.5rem; border: none; cursor: pointer; font-size: 0.875rem; transition: background 0.15s; }
-.btn-primary:hover { background: #1d4ed8; }
-.btn-secondary { display: inline-flex; align-items: center; gap: 0.375rem; background: #1f2937; color: #d1d5db; font-weight: 500; padding: 0.5rem 1rem; border-radius: 0.5rem; border: 1px solid #374151; cursor: pointer; font-size: 0.875rem; transition: all 0.15s; }
-.btn-secondary:hover { background: #374151; }
-.btn-danger { display: inline-flex; align-items: center; gap: 0.375rem; background: #dc2626; color: white; font-weight: 600; padding: 0.5rem 1rem; border-radius: 0.5rem; border: none; cursor: pointer; font-size: 0.875rem; transition: background 0.15s; }
+  --app-table-hover:           rgba(0,0,0,0.03);
+  --app-table-border:          rgba(0,0,0,0.07);
+
+  --app-modal-bg:              #ffffff;
+  --app-modal-border:          #e2e8f0;
+  --app-modal-header-border:   #f1f5f9;
+
+  --app-label-color:           #64748b;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  background: var(--app-bg);
+  color: var(--app-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  transition: background 0.2s, color 0.2s;
+}
+
+/* ── Componentes ──────────────────────────────────────────────────────────── */
+.card {
+  background: var(--app-card-bg);
+  border: 1px solid var(--app-card-border);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.stat-card {
+  background: var(--app-card-bg);
+  border: 1px solid var(--app-card-border);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+/* ── Inputs ───────────────────────────────────────────────────────────────── */
+.input {
+  width: 100%;
+  background: var(--app-input-bg);
+  border: 1px solid var(--app-input-border);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--app-input-text);
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.15s, background 0.2s;
+}
+.input:focus { border-color: var(--app-accent); }
+.input::placeholder { color: var(--app-text-secondary); opacity: 0.6; }
+
+.label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--app-label-color);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.375rem;
+}
+
+/* ── Botones ──────────────────────────────────────────────────────────────── */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: var(--app-accent);
+  color: white;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background 0.15s;
+}
+.btn-primary:hover { background: var(--app-accent-hover); }
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: var(--app-btn-secondary-bg);
+  color: var(--app-btn-secondary-text);
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--app-btn-secondary-border);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.15s;
+}
+.btn-secondary:hover { background: var(--app-btn-secondary-hover); }
+
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: #dc2626;
+  color: white;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background 0.15s;
+}
 .btn-danger:hover { background: #b91c1c; }
 
+/* ── Badges ───────────────────────────────────────────────────────────────── */
 .badge-red    { display:inline-flex; align-items:center; background:#450a0a; color:#fca5a5; border:1px solid #7f1d1d; border-radius:9999px; padding:0.125rem 0.625rem; font-size:0.75rem; font-weight:600; }
 .badge-green  { display:inline-flex; align-items:center; background:#052e16; color:#86efac; border:1px solid #14532d; border-radius:9999px; padding:0.125rem 0.625rem; font-size:0.75rem; font-weight:600; }
 .badge-yellow { display:inline-flex; align-items:center; background:#422006; color:#fcd34d; border:1px solid #78350f; border-radius:9999px; padding:0.125rem 0.625rem; font-size:0.75rem; font-weight:600; }
 .badge-blue   { display:inline-flex; align-items:center; background:#172554; color:#93c5fd; border:1px solid #1e3a8a; border-radius:9999px; padding:0.125rem 0.625rem; font-size:0.75rem; font-weight:600; }
 
-.table-row-hover:hover { background: rgba(31,41,55,0.5); }
+/* Badges adaptados al modo claro */
+body.tema-claro .badge-red    { background:#fee2e2; color:#991b1b; border-color:#fca5a5; }
+body.tema-claro .badge-green  { background:#dcfce7; color:#166534; border-color:#86efac; }
+body.tema-claro .badge-yellow { background:#fef9c3; color:#854d0e; border-color:#fde047; }
+body.tema-claro .badge-blue   { background:#dbeafe; color:#1e40af; border-color:#93c5fd; }
+
+/* ── Tabla ────────────────────────────────────────────────────────────────── */
+.table-row-hover:hover { background: var(--app-table-hover); }
+
+/* ── Texto global adaptado ────────────────────────────────────────────────── */
+.text-white  { color: var(--app-text) !important; }
+.text-gray-300 { color: var(--app-text) !important; }
+.text-gray-400 { color: var(--app-text-secondary) !important; }
+.text-gray-500 { color: var(--app-text-secondary) !important; }
+.text-gray-600 { color: var(--app-text-secondary) !important; }
+
+/* ── Fondos de cards adaptados ────────────────────────────────────────────── */
+.bg-gray-800\/50,
+.bg-gray-800,
+.bg-gray-900 {
+  background: var(--app-card-bg) !important;
+}
+
+/* Bordes adaptados */
+.border-gray-700,
+.border-gray-700\/50,
+.border-gray-800 {
+  border-color: var(--app-card-border) !important;
+}
+
+/* ── Modales ──────────────────────────────────────────────────────────────── */
+/* Las clases de modal en las páginas usan bg-gray-900/border-gray-700,
+   que ya quedan cubiertas arriba. */
+
+/* ── Inputs dentro de páginas (Tailwind inline) ───────────────────────────── */
+input, select, textarea {
+  color: var(--app-input-text);
+}
+input::placeholder, textarea::placeholder {
+  color: var(--app-text-secondary);
+  opacity: 0.6;
+}
+
+/* ── Hover de acciones rápidas ────────────────────────────────────────────── */
+body.tema-claro a[href]:hover,
+body.tema-claro button:hover {
+  color: var(--app-text);
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--app-card-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--app-text-secondary); }
