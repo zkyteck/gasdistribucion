@@ -388,6 +388,7 @@ export default function Ventas() {
               <ShoppingCart className="w-8 h-8 opacity-30" /><p className="text-sm">Sin ventas registradas</p>
             </div>
           ) : (
+            <>
             {/* Móvil — cards */}
             <div className="lg:hidden divide-y" style={{borderColor:'var(--app-card-border)'}}>
               {ventasFiltradas.map(v => (
@@ -447,6 +448,7 @@ export default function Ventas() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
       </div>
 
