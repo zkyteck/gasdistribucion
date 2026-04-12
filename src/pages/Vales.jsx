@@ -473,40 +473,30 @@ function HistorialVales({ filtroFecha, onFechaClick }) {
 
   async function cargarHistorial() {
     setLoading(true)
-    // ✅ FIX: usar vista agrupada en lugar de traer filas individuales
-    const { data, error } = await supabase
-      .from('vista_historial_vales')
-      .select('*')
+    // Traer datos raw para agrupar con todos los tipos de vale
+    const { data: raw } = await supabase
+      .from('vales_fise')
+      .select('lote_dia, tipo_vale, monto')
+      .neq('estado', 'anulado')
       .order('lote_dia', { ascending: false })
-      .limit(14)
 
-    if (error || !data) {
-      const { data: raw } = await supabase
-        .from('vales_fise')
-        .select('lote_dia, tipo_vale, monto')
-        .order('lote_dia', { ascending: false })
-      if (raw) {
-        const porDia = {}
-        raw.forEach(v => {
-          if (!porDia[v.lote_dia]) porDia[v.lote_dia] = { cant20: 0, cant43: 0, total: 0 }
-          if (v.tipo_vale === '20') porDia[v.lote_dia].cant20++
-          else if (v.tipo_vale === '43') porDia[v.lote_dia].cant43++
-          porDia[v.lote_dia].total += parseFloat(v.monto) || 0
-        })
-        setHistorial(Object.entries(porDia).slice(0, 14).map(([fecha, d]) => ({
-          fecha, cant20: d.cant20, cant43: d.cant43, total: d.total
-        })))
-      }
-      setLoading(false)
-      return
+    if (raw) {
+      const porDia = {}
+      raw.forEach(v => {
+        if (!porDia[v.lote_dia]) porDia[v.lote_dia] = { porTipo: {}, total: 0 }
+        if (!porDia[v.lote_dia].porTipo[v.tipo_vale]) porDia[v.lote_dia].porTipo[v.tipo_vale] = { cant: 0, monto: 0 }
+        porDia[v.lote_dia].porTipo[v.tipo_vale].cant++
+        porDia[v.lote_dia].porTipo[v.tipo_vale].monto += parseFloat(v.monto) || 0
+        porDia[v.lote_dia].total += parseFloat(v.monto) || 0
+      })
+      setHistorial(Object.entries(porDia).slice(0, 30).map(([fecha, d]) => ({
+        fecha,
+        cant20: d.porTipo['20']?.cant || 0,
+        cant43: d.porTipo['43']?.cant || 0,
+        porTipo: d.porTipo,
+        total: d.total
+      })))
     }
-
-    setHistorial(data.map(d => ({
-      fecha: d.lote_dia,
-      cant20: d.cant20 || 0,
-      cant43: d.cant43 || 0,
-      total: parseFloat(d.total_monto) || (d.cant20 * 20 + d.cant43 * 43)
-    })))
     setLoading(false)
   }
 
@@ -547,7 +537,7 @@ function HistorialVales({ filtroFecha, onFechaClick }) {
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead><tr className="border-b border-gray-800">
-            {['Fecha','Vales S/20','Vales S/43','Total vales','Monto total',''].map(h => (
+            {['Fecha','Detalle vales','Total vales','Monto total',''].map(h => (
               <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-5 py-3">{h}</th>
             ))}
           </tr></thead>
@@ -558,15 +548,24 @@ function HistorialVales({ filtroFecha, onFechaClick }) {
                   {format(new Date(d.fecha + 'T12:00:00'), "dd/MM/yyyy", { locale: es })}
                 </td>
                 <td className="px-5 py-3">
-                  <span className="text-yellow-400 font-bold text-lg">{d.cant20}</span>
-                  <span className="text-gray-600 text-xs ml-1">× S/20</span>
+                  <div className="flex flex-wrap gap-2">
+                    {d.porTipo ? Object.entries(d.porTipo).map(([tipo, data]) => (
+                      <span key={tipo} className="text-xs bg-gray-800 border border-gray-700 rounded-lg px-2 py-1">
+                        <span className="text-white font-bold">{data.cant}</span>
+                        <span className="text-gray-500 ml-1">× S/{tipo}</span>
+                      </span>
+                    )) : (
+                      <>
+                        {d.cant20 > 0 && <span className="text-xs bg-gray-800 border border-gray-700 rounded-lg px-2 py-1"><span className="text-yellow-400 font-bold">{d.cant20}</span><span className="text-gray-500 ml-1">× S/20</span></span>}
+                        {d.cant43 > 0 && <span className="text-xs bg-gray-800 border border-gray-700 rounded-lg px-2 py-1"><span className="text-orange-400 font-bold">{d.cant43}</span><span className="text-gray-500 ml-1">× S/43</span></span>}
+                      </>
+                    )}
+                  </div>
                 </td>
-                <td className="px-5 py-3">
-                  <span className="text-orange-400 font-bold text-lg">{d.cant43}</span>
-                  <span className="text-gray-600 text-xs ml-1">× S/43</span>
+                <td className="px-5 py-3 text-gray-300 text-sm">
+                  {d.porTipo ? Object.values(d.porTipo).reduce((s, x) => s + x.cant, 0) : d.cant20 + d.cant43} vales
                 </td>
-                <td className="px-5 py-3 text-gray-300 text-sm">{d.cant20 + d.cant43} vales</td>
-                <td className="px-5 py-3 text-emerald-400 font-bold">S/ {d.total}</td>
+                <td className="px-5 py-3 text-emerald-400 font-bold">S/ {typeof d.total === 'number' ? d.total.toFixed(0) : d.total}</td>
                 <td className="px-5 py-3">
                   <div className="flex gap-2">
                     <button onClick={() => { setEditDia(d); setEditForm({ cant20: d.cant20, cant43: d.cant43 }) }}
