@@ -8,8 +8,8 @@ import { es } from 'date-fns/locale'
 function Modal({ title, onClose, children, wide }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className={`rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full ${wide ? 'max-w-2xl' : 'max-w-md'} shadow-2xl max-h-[90vh] overflow-y-auto`}>
-        <div className="flex items-center justify-between px-6 py-4  sticky top-0">
+      <div className={`bg-gray-900 border border-gray-700 rounded-2xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} shadow-2xl max-h-[90vh] overflow-y-auto`}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
           <h3 className="text-white font-semibold">{title}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
         </div>
@@ -402,7 +402,7 @@ export default function Inventario() {
           const spt10 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '10kg')
           const spt45 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '45kg')
           return (
-          <div key={a.id} className="stat-card border border-[var(--app-card-border)]">
+          <div key={a.id} className="stat-card border border-gray-700/50">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-8 h-8 bg-blue-500/10 rounded-lg flex items-center justify-center"><Package className="w-4 h-4 text-blue-400" /></div>
               <p className="text-gray-300 text-sm font-medium">{a.nombre}</p>
@@ -437,7 +437,7 @@ export default function Inventario() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2  overflow-x-auto">
+      <div className="flex gap-2 border-b border-gray-800 overflow-x-auto">
         {[['stock','📦 Stock'],['compras','🛒 Compras'],['movimientos','🔄 Movimientos'],['historial','📋 Historial']].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${tab === key ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
@@ -449,18 +449,81 @@ export default function Inventario() {
       {/* Tab: Stock */}
       {tab === 'stock' && (
         <div className="card p-0 overflow-hidden">
-          <div className="px-6 py-4  flex items-center justify-between">
+          <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-white">Stock consolidado</h3>
             <span className="text-xs text-gray-500">Toca ✏️ para actualizar vacíos</span>
           </div>
-          <div className="overflow-x-auto">
+          {/* Vista móvil — cards */}
+          <div className="lg:hidden divide-y" style={{borderColor:'var(--app-card-border)'}}>
+            {almacenes.map(a => {
+              const esTienda = a.nombre?.toLowerCase().includes('tienda') || a.nombre?.toLowerCase().includes('principal')
+              const spt5 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '5kg')
+              const spt10 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '10kg')
+              const spt45 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '45kg')
+              return (
+                <div key={a.id} style={{padding:'14px 16px', display:'flex', flexDirection:'column', gap:10}}>
+                  {/* Nombre + estado */}
+                  <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+                    <div>
+                      <p style={{color:'var(--app-text)', fontWeight:600, fontSize:14, margin:0}}>{a.nombre}</p>
+                      <p style={{color:'var(--app-text-secondary)', fontSize:11, margin:0}}>{a.responsable}</p>
+                    </div>
+                    <span className={a.stock_actual > 50 ? 'badge-green' : a.stock_actual > 10 ? 'badge-yellow' : 'badge-red'}>
+                      {a.stock_actual > 50 ? 'Bien' : a.stock_actual > 10 ? 'Bajo' : 'Crítico'}
+                    </span>
+                  </div>
+                  {/* Stats */}
+                  <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8}}>
+                    <div style={{background:'var(--app-card-bg-alt)', borderRadius:10, padding:'8px 10px', border:'1px solid var(--app-card-border)'}}>
+                      <p style={{fontSize:10, color:'var(--app-text-secondary)', margin:'0 0 2px'}}>🟢 Llenos</p>
+                      <p style={{fontSize:18, fontWeight:700, color: a.stock_actual > 100 ? '#34d399' : a.stock_actual > 30 ? '#fbbf24' : '#f87171', margin:0}}>{a.stock_actual}</p>
+                      <div style={{display:'flex', gap:3, flexWrap:'wrap', marginTop:2}}>
+                        {(spt5?.stock_actual||0) > 0 && <span style={{fontSize:9, background:'rgba(59,130,246,0.15)', color:'#93c5fd', padding:'1px 4px', borderRadius:4}}>5kg:{spt5.stock_actual}</span>}
+                        {(spt10?.stock_actual||0) > 0 && <span style={{fontSize:9, background:'rgba(234,179,8,0.15)', color:'#fde047', padding:'1px 4px', borderRadius:4}}>10kg:{spt10.stock_actual}</span>}
+                        {(spt45?.stock_actual||0) > 0 && <span style={{fontSize:9, background:'rgba(239,68,68,0.15)', color:'#fca5a5', padding:'1px 4px', borderRadius:4}}>45kg:{spt45.stock_actual}</span>}
+                      </div>
+                    </div>
+                    <div style={{background:'var(--app-card-bg-alt)', borderRadius:10, padding:'8px 10px', border:'1px solid var(--app-card-border)'}}>
+                      <p style={{fontSize:10, color:'var(--app-text-secondary)', margin:'0 0 2px'}}>⚪ Vacíos</p>
+                      <p style={{fontSize:18, fontWeight:700, color:'var(--app-text)', margin:0}}>{a.balones_vacios||0}</p>
+                      <div style={{display:'flex', gap:3, flexWrap:'wrap', marginTop:2}}>
+                        {(a.vacios_5kg||0) > 0 && <span style={{fontSize:9, color:'var(--app-text-secondary)'}}>5kg:{a.vacios_5kg}</span>}
+                        {(a.vacios_10kg||0) > 0 && <span style={{fontSize:9, color:'var(--app-text-secondary)'}}>10kg:{a.vacios_10kg}</span>}
+                        {(a.vacios_45kg||0) > 0 && <span style={{fontSize:9, color:'var(--app-text-secondary)'}}>45kg:{a.vacios_45kg}</span>}
+                      </div>
+                    </div>
+                    <div style={{background:'var(--app-card-bg-alt)', borderRadius:10, padding:'8px 10px', border:'1px solid var(--app-card-border)'}}>
+                      <p style={{fontSize:10, color:'var(--app-text-secondary)', margin:'0 0 2px'}}>🔵 En calle</p>
+                      <p style={{fontSize:18, fontWeight:700, color: esTienda ? '#fb923c' : 'var(--app-text-secondary)', margin:0}}>
+                        {esTienda ? balonesEnCalle : '—'}
+                      </p>
+                    </div>
+                  </div>
+                  {/* Botones editar */}
+                  <div style={{display:'flex', gap:6}}>
+                    <button onClick={() => { setEditVaciosModal(a); setEditVaciosModalVal({ '5kg': a.vacios_5kg||0, '10kg': a.vacios_10kg||0, '45kg': a.vacios_45kg||0 }) }}
+                      style={{flex:1, padding:'7px', borderRadius:8, border:'1px solid var(--app-card-border)', background:'var(--app-card-bg-alt)', color:'var(--app-text-secondary)', fontSize:11, cursor:'pointer'}}>
+                      ✏️ Editar vacíos
+                    </button>
+                    <button onClick={() => { setEditStockAlmacen(a); setEditStockVal(a.stock_actual || 0) }}
+                      style={{flex:1, padding:'7px', borderRadius:8, border:'1px solid var(--app-card-border)', background:'var(--app-card-bg-alt)', color:'var(--app-text-secondary)', fontSize:11, cursor:'pointer'}}>
+                      📦 Editar stock
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Vista desktop — tabla */}
+          <div className="hidden lg:block overflow-x-auto">
             <table className="w-full">
-              <thead><tr className="">
+              <thead><tr className="border-b border-gray-800">
                 {['Almacén','Responsable','🟢 Llenos (por tipo)','⚪ Vacíos','🔵 En calle','Estado',''].map(h => (
                   <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-6 py-3">{h}</th>
                 ))}
               </tr></thead>
-              <tbody className="divide-y divide-[var(--app-card-border)]">
+              <tbody className="divide-y divide-gray-800/50">
                 {almacenes.map(a => {
                   const esTienda = a.nombre?.toLowerCase().includes('tienda') || a.nombre?.toLowerCase().includes('principal')
                   const spt5 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '5kg')
@@ -504,7 +567,7 @@ export default function Inventario() {
                               }).eq('id', a.id)
                               setEditVacios(null); cargar()
                             }} className="text-xs bg-emerald-600/30 border border-emerald-600/40 text-emerald-400 px-2 py-1 rounded-lg flex-1">✓</button>
-                            <button onClick={() => setEditVacios(null)} className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1 border border-[var(--app-card-border)] rounded-lg">✕</button>
+                            <button onClick={() => setEditVacios(null)} className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1 border border-gray-700 rounded-lg">✕</button>
                           </div>
                         </div>
                       ) : (
@@ -551,16 +614,16 @@ export default function Inventario() {
       {/* Tab: Compras */}
       {tab === 'compras' && (
         <div className="card p-0 overflow-hidden">
-          <div className="px-6 py-4 "><h3 className="text-sm font-semibold text-white">Historial de compras</h3></div>
+          <div className="px-6 py-4 border-b border-gray-800"><h3 className="text-sm font-semibold text-white">Historial de compras</h3></div>
           {compras.length === 0 ? <div className="flex items-center justify-center h-32 text-gray-500 text-sm">Sin compras registradas</div> : (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead><tr className="">
+                <thead><tr className="border-b border-gray-800">
                   {['Fecha','Proveedor','Marca','Cantidad','Costo/bal.','Total','Amortizado','Pendiente','Estado','Notas',''].map(h => (
                     <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">{h}</th>
                   ))}
                 </tr></thead>
-                <tbody className="divide-y divide-[var(--app-card-border)]">
+                <tbody className="divide-y divide-gray-800/50">
                   {compras.map(c => {
                     const montoTotal = c.monto_total || (c.cantidad_total * c.precio_unitario)
                     const amortizado = c.monto_amortizado || 0
@@ -648,7 +711,7 @@ export default function Inventario() {
       {/* Tab: Movimientos entre almacenes */}
       {tab === 'movimientos' && (
         <div className="card p-0 overflow-hidden">
-          <div className="px-6 py-4  flex items-center justify-between">
+          <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-white">Movimientos entre almacenes</h3>
             <button onClick={() => { setError(''); setMovimientoForm({ origen_id: '', destino_id: '', cantidad: '', tipo_balon: '10kg', notas: '', fecha: hoyPeru() }); setModal('movimiento') }}
               className="btn-primary text-xs py-1.5">
@@ -660,12 +723,12 @@ export default function Inventario() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead><tr className="">
+                <thead><tr className="border-b border-gray-800">
                   {['Fecha','Origen','Destino','Cantidad','Tipo balón','Notas'].map(h => (
                     <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-6 py-3">{h}</th>
                   ))}
                 </tr></thead>
-                <tbody className="divide-y divide-[var(--app-card-border)]">
+                <tbody className="divide-y divide-gray-800/50">
                   {movimientos.filter(m => m.tipo === 'traslado').map(m => (
                     <tr key={m.id} className="table-row-hover">
                       <td className="px-6 py-4 text-gray-400 text-xs">{m.fecha ? format(new Date(m.fecha + 'T12:00:00'), 'dd/MM/yyyy', { locale: es }) : format(new Date(m.created_at), 'dd/MM/yy', { locale: es })}</td>
@@ -686,16 +749,16 @@ export default function Inventario() {
       {/* Tab: Historial */}
       {tab === 'historial' && (
         <div className="card p-0 overflow-hidden">
-          <div className="px-6 py-4 "><h3 className="text-sm font-semibold text-white">Todos los movimientos</h3></div>
+          <div className="px-6 py-4 border-b border-gray-800"><h3 className="text-sm font-semibold text-white">Todos los movimientos</h3></div>
           {movimientos.length === 0 ? <div className="flex items-center justify-center h-32 text-gray-500 text-sm">Sin movimientos</div> : (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead><tr className="">
+                <thead><tr className="border-b border-gray-800">
                   {['Fecha','Almacén','Tipo','Cantidad','Notas',''].map(h => (
                     <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-6 py-3">{h}</th>
                   ))}
                 </tr></thead>
-                <tbody className="divide-y divide-[var(--app-card-border)]">
+                <tbody className="divide-y divide-gray-800/50">
                   {movimientos.map(m => (
                     <tr key={m.id} className="table-row-hover">
                       <td className="px-6 py-4 text-gray-400 text-xs">{format(new Date(m.created_at), 'dd/MM/yy HH:mm', { locale: es })}</td>
@@ -733,8 +796,8 @@ export default function Inventario() {
       {/* Modal detalle compra */}
       {detalleCompra && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4  sticky top-0">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
               <div>
                 <h3 className="text-white font-semibold">📦 Detalle de compra</h3>
                 <p className="text-gray-500 text-xs mt-0.5">
@@ -747,11 +810,11 @@ export default function Inventario() {
 
               {/* Resumen compra */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-transparent rounded-xl p-3">
+                <div className="bg-gray-800/50 rounded-xl p-3">
                   <p className="text-xs text-gray-500 mb-1">Proveedor</p>
                   <p className="text-white font-medium text-sm">{detalleCompra.compra.proveedores?.nombre || '-'}</p>
                 </div>
-                <div className="bg-transparent rounded-xl p-3">
+                <div className="bg-gray-800/50 rounded-xl p-3">
                   <p className="text-xs text-gray-500 mb-1">Marca</p>
                   <p className="text-white font-medium text-sm">{detalleCompra.compra.marcas_gas?.nombre || detalleCompra.compra.marca_nombre || '-'}</p>
                 </div>
@@ -781,7 +844,7 @@ export default function Inventario() {
                       const dets = detalleCompra.detalles.filter(d => d.almacen_id === a.id)
                       const totalAlmacen = dets.reduce((s, d) => s + (d.cantidad || 0), 0)
                       return (
-                        <div key={a.id} style={{background:"var(--app-card-bg)"}} className="rounded-xl p-4">
+                        <div key={a.id} className="bg-gray-800/40 rounded-xl p-4">
                           <div className="flex items-center justify-between mb-2">
                             <p className="text-white font-medium text-sm">📦 {a.nombre}</p>
                             <span className="text-emerald-400 font-bold text-sm">{totalAlmacen} bal.</span>
@@ -804,7 +867,7 @@ export default function Inventario() {
                       )
                     })}
                     {/* Total */}
-                    <div className="border-t border-[var(--app-card-border)] pt-3 flex justify-between items-center">
+                    <div className="border-t border-gray-700 pt-3 flex justify-between items-center">
                       <span className="text-gray-400 text-sm">Total distribuido:</span>
                       <span className="text-emerald-400 font-bold">{detalleCompra.detalles.reduce((s,d) => s+(d.cantidad||0), 0)} bal.</span>
                     </div>
@@ -829,8 +892,8 @@ export default function Inventario() {
       {/* Modal editar vacíos */}
       {editVaciosModal && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-sm shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 ">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
               <div>
                 <h3 className="text-white font-semibold text-sm">⚪ Editar balones vacíos</h3>
                 <p className="text-gray-500 text-xs mt-0.5">{editVaciosModal.nombre}</p>
@@ -841,7 +904,7 @@ export default function Inventario() {
               <p className="text-xs text-gray-500">Ingresa la cantidad de balones vacíos por tipo:</p>
               <div className="grid grid-cols-3 gap-3">
                 {[['5kg','🔵','blue'],['10kg','🟡','yellow'],['45kg','🔴','red']].map(([tipo, icon, color]) => (
-                  <div key={tipo} className={`bg-transparent border border-[var(--app-card-border)] rounded-xl p-3 text-center`}>
+                  <div key={tipo} className={`bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-center`}>
                     <p className="text-gray-300 font-bold text-xs mb-2">{icon} {tipo}</p>
                     <input type="number" min="0"
                       className="input text-center font-bold py-2"
@@ -878,8 +941,8 @@ export default function Inventario() {
 
       {editStockAlmacen && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-sm shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 ">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
               <div>
                 <h3 className="text-white font-semibold text-sm">✏️ Editar stock llenos</h3>
                 <p className="text-gray-500 text-xs mt-0.5">{editStockAlmacen.nombre}</p>
@@ -959,7 +1022,7 @@ export default function Inventario() {
                 <div className="flex gap-1 mt-1">
                   {['5kg','10kg','45kg'].map(t => (
                     <button key={t} type="button" onClick={() => setMovimientoForm(f => ({...f, tipo_balon: t}))}
-                      className={`flex-1 py-2 rounded-lg text-xs font-medium border transition-all ${movimientoForm.tipo_balon === t ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'border-[var(--app-card-border)] text-gray-500'}`}>
+                      className={`flex-1 py-2 rounded-lg text-xs font-medium border transition-all ${movimientoForm.tipo_balon === t ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'border-gray-700 text-gray-500'}`}>
                       {t}
                     </button>
                   ))}
@@ -996,7 +1059,7 @@ export default function Inventario() {
               <label className="label">Cantidad por tipo de balón</label>
               <div className="grid grid-cols-3 gap-3">
                 {[['5kg','🔵','blue'],['10kg','🟡','yellow'],['45kg','🔴','red']].map(([tipo, icon, color]) => (
-                  <div key={tipo} className={`bg-transparent border border-[var(--app-card-border)] rounded-xl p-3 text-center`}>
+                  <div key={tipo} className={`bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-center`}>
                     <p className="text-gray-300 font-bold text-xs mb-2">{icon} {tipo}</p>
                     <input type="number" min="0" className="input text-center font-bold py-2"
                       value={vaciosForm.cantidades[tipo] || ''}
@@ -1127,7 +1190,7 @@ export default function Inventario() {
                 </div>
                 <div className="space-y-3">
                   {distPorAlmacen.map(a => (
-                    <div key={a.id} style={{background:"var(--app-card-bg)"}} className="rounded-xl px-4 py-3">
+                    <div key={a.id} className="bg-gray-800/40 rounded-xl px-4 py-3">
                       <div className="flex items-center gap-2 mb-2"><p className="text-gray-300 text-sm font-medium">📦 {a.nombre}</p>{a.responsable && <span className="text-xs text-gray-500">({a.responsable})</span>}</div>
                       <div className="grid grid-cols-3 gap-2">
                         {a.tipos.map(({ tipo, idx, cantidad }) => (
@@ -1158,14 +1221,14 @@ export default function Inventario() {
               const amortizado = parseFloat(compraForm.monto_amortizado) || 0
               const pendiente = Math.max(0, montoTotal - amortizado)
               return (
-                <div className="bg-transparent border border-[var(--app-card-border)] rounded-xl p-4 space-y-3">
+                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3">
                   <p className="text-xs text-gray-400 font-semibold uppercase">💰 Estado de pago</p>
                   <div className="grid grid-cols-3 gap-3 text-center text-sm">
-                    <div className="rounded-lg p-2">
+                    <div className="bg-gray-900 rounded-lg p-2">
                       <p className="text-white font-bold">S/ {montoTotal.toLocaleString('es-PE')}</p>
                       <p className="text-xs text-gray-500">Monto total</p>
                     </div>
-                    <div className="rounded-lg p-2">
+                    <div className="bg-gray-900 rounded-lg p-2">
                       <p className={`font-bold ${pendiente > 0 ? 'text-red-400' : 'text-emerald-400'}`}>S/ {pendiente.toLocaleString('es-PE')}</p>
                       <p className="text-xs text-gray-500">Pendiente</p>
                     </div>
@@ -1198,8 +1261,8 @@ export default function Inventario() {
       {/* Quick modal: nueva marca / nuevo proveedor */}
       {quickModal && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-sm shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 ">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
               <h3 className="text-white font-semibold text-sm">
                 {quickModal === 'marca' ? '🏷️ Nueva marca de gas' : '🏢 Nuevo proveedor'}
               </h3>
@@ -1231,8 +1294,8 @@ export default function Inventario() {
       {/* Modal editar compra */}
       {modal === 'editCompra' && editCompraSelected && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-md shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 ">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
               <div>
                 <h3 className="text-white font-semibold">✏️ Editar compra</h3>
                 <p className="text-gray-500 text-xs mt-0.5">{editCompraSelected.cantidad_total} bal. · S/{editCompraSelected.precio_unitario}/bal.</p>
@@ -1269,7 +1332,7 @@ export default function Inventario() {
                 <label className="label">Distribución por almacén</label>
                 <div className="space-y-3 mt-1">
                   {almacenes.map(a => (
-                    <div key={a.id} className="bg-transparent rounded-xl p-3">
+                    <div key={a.id} className="bg-gray-800/50 rounded-xl p-3">
                       <p className="text-white text-sm font-semibold mb-2">{a.nombre} <span className="text-gray-500 font-normal text-xs">({a.responsable})</span></p>
                       <div className="grid grid-cols-3 gap-2">
                         {['5kg','10kg','45kg'].map(t => {

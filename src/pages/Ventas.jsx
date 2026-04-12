@@ -184,7 +184,7 @@ export default function Ventas() {
       const { error: e } = await supabase.from('ventas').insert({
         cliente_id: form.cliente_id || null, almacen_id: form.almacen_id,
         precio_tipo_id: form.precio_tipo_id || null, tipo_balon: form.tipo_balon,
-        fecha: nowPeru(),
+        fecha: (form.fecha || hoyPeru()) + 'T12:00:00-05:00',
         cantidad: cant, precio_unitario: precioGas, metodo_pago: form.metodo_pago,
         notas: form.notas, usuario_id: perfil?.id || null
       })
@@ -208,7 +208,7 @@ export default function Ventas() {
       const { error: e } = await supabase.from('ventas').insert({
         cliente_id: form.cliente_id || null, almacen_id: form.almacen_id,
         precio_tipo_id: form.precio_tipo_id || null, tipo_balon: form.tipo_balon,
-        fecha: nowPeru(),
+        fecha: (form.fecha || hoyPeru()) + 'T12:00:00-05:00',
         cantidad: cant, precio_unitario: precioTotal, metodo_pago: form.metodo_pago,
         notas: `Gas+Balón (gas:S/${precioGas} bal:S/${precioBajon})${form.notas ? ' — ' + form.notas : ''}`,
         usuario_id: perfil?.id || null
@@ -228,7 +228,7 @@ export default function Ventas() {
       const { error: e } = await supabase.from('ventas').insert({
         cliente_id: form.cliente_id || null, almacen_id: form.almacen_id,
         tipo_balon: form.tipo_balon,
-        fecha: nowPeru(),
+        fecha: (form.fecha || hoyPeru()) + 'T12:00:00-05:00',
         cantidad: cant, precio_unitario: precioBajon, metodo_pago: form.metodo_pago,
         notas: `Venta balón vacío${form.notas ? ' — ' + form.notas : ''}`,
         usuario_id: perfil?.id || null
@@ -328,7 +328,34 @@ export default function Ventas() {
               <ShoppingCart className="w-8 h-8 opacity-30" /><p className="text-sm">Sin ventas registradas</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            {/* Móvil — cards */}
+            <div className="lg:hidden divide-y" style={{borderColor:'var(--app-card-border)'}}>
+              {ventasFiltradas.map(v => (
+                <div key={v.id} style={{padding:'12px 16px', display:'flex', flexDirection:'column', gap:8}}>
+                  <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+                    <div>
+                      <p style={{color:'var(--app-text)', fontWeight:600, fontSize:14, margin:0}}>{v.clientes?.nombre || 'Cliente Varios'}</p>
+                      <p style={{color:'var(--app-text-secondary)', fontSize:11, margin:0}}>{new Date(v.fecha).toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit',timeZone:'America/Lima'})} · {v.almacenes?.nombre}</p>
+                    </div>
+                    <div style={{textAlign:'right'}}>
+                      <p style={{color:'#34d399', fontWeight:700, fontSize:16, margin:0}}>S/{(v.cantidad * v.precio_unitario).toLocaleString()}</p>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${v.metodo_pago==='efectivo'?'bg-emerald-900/40 text-emerald-400':v.metodo_pago==='yape'?'bg-blue-900/40 text-blue-400':v.metodo_pago==='vale'?'bg-yellow-900/40 text-yellow-400':'bg-purple-900/40 text-purple-400'}`}>{v.metodo_pago}</span>
+                    </div>
+                  </div>
+                  <div style={{display:'flex', gap:6, flexWrap:'wrap', alignItems:'center'}}>
+                    <span className="badge-blue">{v.tipo_balon||'10kg'}</span>
+                    <span style={{color:'var(--app-text-secondary)', fontSize:12}}>x{v.cantidad} · S/{v.precio_unitario}c/u</span>
+                    {v.precio_tipos?.nombre && <span style={{color:'var(--app-text-secondary)', fontSize:11}}>{v.precio_tipos.nombre}</span>}
+                    {v.notas && <span style={{color:'var(--app-text-secondary)', fontSize:11, fontStyle:'italic'}}>"{v.notas}"</span>}
+                    <button onClick={() => eliminarVenta(v)} style={{marginLeft:'auto', color:'#6b7280', background:'none', border:'none', cursor:'pointer', padding:4}}>
+                      <Trash2 style={{width:14,height:14}} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop — tabla */}
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full">
                 <thead><tr className="border-b border-gray-800">
                   {['Hora','Cliente','Almacén','Tipo cliente','Balón','Cant.','Precio','Total','Pago','Notas',''].map(h => (
@@ -338,7 +365,7 @@ export default function Ventas() {
                 <tbody className="divide-y divide-gray-800/50">
                   {ventasFiltradas.map(v => (
                     <tr key={v.id} className="table-row-hover">
-                      <td className="px-4 py-3 text-gray-500 text-xs">{new Date(v.fecha).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Lima' })}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{format(new Date(v.fecha), 'HH:mm')}</td>
                       <td className="px-4 py-3 text-white text-sm font-medium">{v.clientes?.nombre || 'Cliente Varios'}</td>
                       <td className="px-4 py-3 text-gray-400 text-xs">{v.almacenes?.nombre}</td>
                       <td className="px-4 py-3 text-gray-400 text-xs">{v.precio_tipos?.nombre || '-'}</td>

@@ -9,8 +9,8 @@ import { useAuth } from '../context/AuthContext'
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4  sticky top-0">
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
           <h3 className="text-white font-semibold">{title}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
         </div>
@@ -275,11 +275,11 @@ export default function Vales() {
       {/* Historial SMS FISE enviados */}
       {smsHistorial.length > 0 && (
         <div className="card p-0 overflow-hidden">
-          <div className="px-6 py-4  flex items-center justify-between">
+          <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-white">📱 Vales FISE enviados por SMS (esta sesión)</h3>
             <span className="text-xs text-gray-500">{smsHistorial.length} enviados</span>
           </div>
-          <div className="divide-y divide-[var(--app-card-border)]">
+          <div className="divide-y divide-gray-800/50">
             {smsHistorial.map(s => (
               <div key={s.id} className="flex items-center justify-between px-6 py-3 gap-4">
                 <div className="flex items-center gap-3">
@@ -408,20 +408,20 @@ export default function Vales() {
               <label className="label">Tipo de vale</label>
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => setSmsForm(f => ({...f, tipo: '20'}))}
-                  className={`py-3 rounded-xl border text-sm font-medium transition-all ${smsForm.tipo === '20' ? 'bg-yellow-900/30 border-yellow-500 text-yellow-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
+                  className={`py-3 rounded-xl border text-sm font-medium transition-all ${smsForm.tipo === '20' ? 'bg-yellow-900/30 border-yellow-500 text-yellow-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
                   🎫 Vale S/ 20
                 </button>
                 <button onClick={() => setSmsForm(f => ({...f, tipo: '43'}))}
-                  className={`py-3 rounded-xl border text-sm font-medium transition-all ${smsForm.tipo === '43' ? 'bg-orange-900/30 border-orange-500 text-orange-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
+                  className={`py-3 rounded-xl border text-sm font-medium transition-all ${smsForm.tipo === '43' ? 'bg-orange-900/30 border-orange-500 text-orange-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
                   🎫 Vale S/ 43
                 </button>
               </div>
             </div>
 
             {smsForm.dni && smsForm.cupon && (
-              <div className="bg-transparent rounded-xl p-4">
+              <div className="bg-gray-800/50 rounded-xl p-4">
                 <p className="text-xs text-gray-500 mb-1">Mensaje que se enviará al 58996:</p>
-                <p className="text-white font-mono text-sm rounded-lg px-3 py-2">
+                <p className="text-white font-mono text-sm bg-gray-900 rounded-lg px-3 py-2">
                   Fise ah01 {smsForm.dni} {smsForm.cupon}
                 </p>
               </div>
@@ -531,17 +531,45 @@ function HistorialVales({ filtroFecha, onFechaClick }) {
 
   return (
     <div className="card p-0 overflow-hidden">
-      <div className="px-6 py-4 ">
+      <div className="px-6 py-4 border-b border-gray-800">
         <h3 className="text-sm font-semibold text-white">Historial de días</h3>
       </div>
-      <div className="overflow-x-auto">
+      {/* Móvil — cards */}
+      <div className="lg:hidden divide-y" style={{borderColor:'var(--app-card-border)'}}>
+        {historial.map(d => (
+          <div key={d.fecha} style={{padding:'12px 16px', display:'flex', flexDirection:'column', gap:8}}>
+            <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+              <div>
+                <p style={{color:'var(--app-text)', fontWeight:600, fontSize:14, margin:0}}>
+                  {format(new Date(d.fecha + 'T12:00:00'), 'dd/MM/yyyy', {locale: es})}
+                </p>
+                <p style={{color:'var(--app-text-secondary)', fontSize:11, margin:0}}>{d.totalVales} vales</p>
+              </div>
+              <p style={{color:'#34d399', fontWeight:700, fontSize:16, margin:0}}>S/ {d.totalMonto?.toLocaleString('es-PE')}</p>
+            </div>
+            <div style={{display:'flex', gap:6, flexWrap:'wrap', alignItems:'center'}}>
+              {d.porTipo ? Object.entries(d.porTipo).map(([tipo, data]) => (
+                <span key={tipo} style={{fontSize:12, background:'var(--app-card-bg-alt)', border:'1px solid var(--app-card-border)', borderRadius:6, padding:'2px 8px', color:'var(--app-text)'}}>
+                  <b>{data.cant}</b> × S/{tipo}
+                </span>
+              )) : null}
+              <div style={{marginLeft:'auto', display:'flex', gap:4}}>
+                <button onClick={() => abrirEditDia(d)} style={{fontSize:11, background:'rgba(59,130,246,0.15)', color:'#93c5fd', border:'1px solid rgba(59,130,246,0.3)', borderRadius:6, padding:'4px 8px', cursor:'pointer'}}>✏️ Editar</button>
+                <button onClick={() => borrarDia(d.fecha)} style={{fontSize:11, background:'rgba(239,68,68,0.1)', color:'#f87171', border:'1px solid rgba(239,68,68,0.3)', borderRadius:6, padding:'4px 8px', cursor:'pointer'}}>🗑️</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* Desktop — tabla */}
+      <div className="hidden lg:block overflow-x-auto">
         <table className="w-full">
-          <thead><tr className="">
+          <thead><tr className="border-b border-gray-800">
             {['Fecha','Detalle vales','Total vales','Monto total',''].map(h => (
               <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-5 py-3">{h}</th>
             ))}
           </tr></thead>
-          <tbody className="divide-y divide-[var(--app-card-border)]">
+          <tbody className="divide-y divide-gray-800/50">
             {historial.map(d => (
               <tr key={d.fecha} className="table-row-hover">
                 <td className="px-5 py-3 text-white text-sm font-medium">
@@ -550,14 +578,14 @@ function HistorialVales({ filtroFecha, onFechaClick }) {
                 <td className="px-5 py-3">
                   <div className="flex flex-wrap gap-2">
                     {d.porTipo ? Object.entries(d.porTipo).map(([tipo, data]) => (
-                      <span key={tipo} className="text-xs  border border-[var(--app-card-border)] rounded-lg px-2 py-1">
+                      <span key={tipo} className="text-xs bg-gray-800 border border-gray-700 rounded-lg px-2 py-1">
                         <span className="text-white font-bold">{data.cant}</span>
                         <span className="text-gray-500 ml-1">× S/{tipo}</span>
                       </span>
                     )) : (
                       <>
-                        {d.cant20 > 0 && <span className="text-xs  border border-[var(--app-card-border)] rounded-lg px-2 py-1"><span className="text-yellow-400 font-bold">{d.cant20}</span><span className="text-gray-500 ml-1">× S/20</span></span>}
-                        {d.cant43 > 0 && <span className="text-xs  border border-[var(--app-card-border)] rounded-lg px-2 py-1"><span className="text-orange-400 font-bold">{d.cant43}</span><span className="text-gray-500 ml-1">× S/43</span></span>}
+                        {d.cant20 > 0 && <span className="text-xs bg-gray-800 border border-gray-700 rounded-lg px-2 py-1"><span className="text-yellow-400 font-bold">{d.cant20}</span><span className="text-gray-500 ml-1">× S/20</span></span>}
+                        {d.cant43 > 0 && <span className="text-xs bg-gray-800 border border-gray-700 rounded-lg px-2 py-1"><span className="text-orange-400 font-bold">{d.cant43}</span><span className="text-gray-500 ml-1">× S/43</span></span>}
                       </>
                     )}
                   </div>
@@ -583,39 +611,3 @@ function HistorialVales({ filtroFecha, onFechaClick }) {
           </tbody>
         </table>
       </div>
-
-      {editDia && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-sm shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 ">
-              <h3 className="text-white font-semibold text-sm">✏️ Editar vales — {format(new Date(editDia.fecha + 'T12:00:00'), 'dd/MM/yyyy', { locale: es })}</h3>
-              <button onClick={() => setEditDia(null)} className="text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-yellow-900/20 border border-yellow-800/40 rounded-xl p-4 text-center">
-                  <p className="text-yellow-400 font-bold mb-2">S/ 20</p>
-                  <input type="number" min="0" className="input text-center text-2xl font-bold py-2"
-                    value={editForm.cant20} onChange={e => setEditForm(f => ({...f, cant20: e.target.value}))} />
-                  <p className="text-gray-500 text-xs mt-1">vales</p>
-                </div>
-                <div className="bg-orange-900/20 border border-orange-800/40 rounded-xl p-4 text-center">
-                  <p className="text-orange-400 font-bold mb-2">S/ 43</p>
-                  <input type="number" min="0" className="input text-center text-2xl font-bold py-2"
-                    value={editForm.cant43} onChange={e => setEditForm(f => ({...f, cant43: e.target.value}))} />
-                  <p className="text-gray-500 text-xs mt-1">vales</p>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <button onClick={() => setEditDia(null)} className="btn-secondary flex-1">Cancelar</button>
-                <button onClick={guardarEdicion} disabled={saving} className="btn-primary flex-1 justify-center">
-                  {saving ? 'Guardando...' : '✓ Guardar'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}

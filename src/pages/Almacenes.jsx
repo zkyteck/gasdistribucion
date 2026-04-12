@@ -5,8 +5,8 @@ import { Warehouse, Plus, Edit2, Trash2, Package, X, AlertCircle, TestTube } fro
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className="rounded-2xl" style={{background:"var(--app-modal-bg)",border:"1px solid var(--app-modal-border)"}} className=" w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 ">
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
           <h3 className="text-white font-semibold">{title}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
         </div>
@@ -129,16 +129,51 @@ export default function Almacenes() {
       )}
 
       <div className="card p-0 overflow-hidden">
-        <div className="px-6 py-4 "><h3 className="text-sm font-semibold text-white">Lista de almacenes</h3></div>
+        <div className="px-6 py-4 border-b border-gray-800"><h3 className="text-sm font-semibold text-white">Lista de almacenes</h3></div>
         {loading ? <div className="flex items-center justify-center h-32 text-gray-500 text-sm">Cargando...</div> : (
-          <div className="overflow-x-auto">
+          {/* Móvil — cards */}
+        <div className="lg:hidden divide-y" style={{borderColor:'var(--app-card-border)'}}>
+          {almacenes.map(a => (
+            <div key={a.id} style={{padding:'12px 16px', display:'flex', flexDirection:'column', gap:8}}>
+              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+                <div style={{display:'flex', alignItems:'center', gap:8}}>
+                  <div style={{width:32,height:32,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',background:a.es_prueba?'rgba(168,85,247,0.1)':'rgba(59,130,246,0.1)'}}>
+                    {a.es_prueba ? <TestTube style={{width:16,height:16,color:'#a855f7'}} /> : <Warehouse style={{width:16,height:16,color:'#60a5fa'}} />}
+                  </div>
+                  <div>
+                    <p style={{color:'var(--app-text)',fontWeight:600,fontSize:14,margin:0}}>{a.nombre}</p>
+                    <p style={{color:'var(--app-text-secondary)',fontSize:11,margin:0}}>{a.responsable} · {a.ubicacion}</p>
+                  </div>
+                </div>
+                <span className={`font-bold text-sm ${a.stock_actual > 50 ? 'text-emerald-400' : a.stock_actual > 10 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  {a.stock_actual} bal.
+                </span>
+              </div>
+              <div style={{display:'flex', gap:6}}>
+                {a.es_prueba && (
+                  <button onClick={() => setDeleteConfirm({...a, modo:'limpiar'})} style={{flex:1,padding:'7px',borderRadius:8,border:'1px solid rgba(168,85,247,0.3)',background:'rgba(168,85,247,0.1)',color:'#a855f7',fontSize:11,cursor:'pointer'}}>
+                    Limpiar datos
+                  </button>
+                )}
+                <button onClick={() => abrirEditar(a)} style={{flex:1,padding:'7px',borderRadius:8,border:'1px solid var(--app-card-border)',background:'var(--app-card-bg-alt)',color:'var(--app-text-secondary)',fontSize:11,cursor:'pointer'}}>
+                  ✏️ Editar
+                </button>
+                <button onClick={() => setDeleteConfirm({...a, modo:'eliminar'})} style={{padding:'7px 12px',borderRadius:8,border:'1px solid rgba(239,68,68,0.3)',background:'rgba(239,68,68,0.08)',color:'#f87171',fontSize:11,cursor:'pointer'}}>
+                  🗑️
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* Desktop — tabla */}
+        <div className="hidden lg:block overflow-x-auto">
             <table className="w-full">
-              <thead><tr className="">
+              <thead><tr className="border-b border-gray-800">
                 {['Nombre','Responsable','Ubicacion','Stock','Acciones'].map(h => (
                   <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-6 py-3 last:text-right">{h}</th>
                 ))}
               </tr></thead>
-              <tbody className="divide-y divide-[var(--app-card-border)]">
+              <tbody className="divide-y divide-gray-800/50">
                 {almacenes.map(a => (
                   <tr key={a.id} className={`table-row-hover ${a.es_prueba ? 'bg-purple-900/5' : ''}`}>
                     <td className="px-6 py-4">
@@ -177,66 +212,5 @@ export default function Almacenes() {
             </table>
           </div>
         )}
-      </div>
-
-      {modal && (
-        <Modal title={editId ? 'Editar almacen' : 'Nuevo almacen'} onClose={() => setModal(false)}>
-          <div className="space-y-4">
-            {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
-            {[['nombre','Nombre del almacen','text','Ej: Almacen PRUEBA'],['responsable','Responsable','text','Nombre del encargado'],['ubicacion','Ubicacion','text','Direccion o zona']].map(([key,label,type,ph]) => (
-              <div key={key}>
-                <label className="label">{label}</label>
-                <input type={type} className="input" placeholder={ph} value={form[key]} onChange={e => setForm({...form,[key]:e.target.value})} />
-              </div>
-            ))}
-            <div
-              onClick={() => setForm(f => ({...f, es_prueba: !f.es_prueba}))}
-              className={`flex items-center justify-between rounded-xl border p-3 cursor-pointer transition-all ${form.es_prueba ? 'bg-purple-900/30 border-purple-600/50' : 'bg-transparent border-[var(--app-card-border)]'}`}>
-              <div>
-                <p className={`text-sm font-semibold ${form.es_prueba ? 'text-purple-300' : 'text-gray-300'}`}>Almacen de prueba</p>
-                <p className="text-xs text-gray-500 mt-0.5">Permite limpiar todos sus datos con un solo boton</p>
-              </div>
-              <div className={`w-10 h-6 rounded-full transition-all relative ${form.es_prueba ? 'bg-purple-500' : 'bg-gray-600'}`}>
-                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${form.es_prueba ? 'left-5' : 'left-1'}`} />
-              </div>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button onClick={() => setModal(false)} className="btn-secondary flex-1">Cancelar</button>
-              <button onClick={guardar} disabled={saving} className="btn-primary flex-1 justify-center">{saving ? 'Guardando...' : 'Guardar'}</button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {deleteConfirm && (
-        <Modal title={deleteConfirm.modo === 'limpiar' ? 'Limpiar datos de prueba' : 'Eliminar almacen'} onClose={() => setDeleteConfirm(null)}>
-          {deleteConfirm.modo === 'limpiar' ? (
-            <div className="space-y-4">
-              <div className="bg-purple-900/20 border border-purple-700/40 rounded-xl p-4">
-                <p className="text-white font-semibold mb-2">{deleteConfirm.nombre}</p>
-                <p className="text-xs text-gray-400 mb-3">Se eliminaran todos los registros generados con este almacen.</p>
-                <p className="text-xs text-emerald-400 mt-3">El almacen seguira activo con stock en 0.</p>
-              </div>
-              <p className="text-xs text-red-400">Esta accion no se puede deshacer.</p>
-              <div className="flex gap-3">
-                <button onClick={() => setDeleteConfirm(null)} className="btn-secondary flex-1">Cancelar</button>
-                <button onClick={() => limpiarPrueba(deleteConfirm)} disabled={limpiandoPrueba}
-                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-semibold px-4 py-2 rounded-lg transition-all">
-                  {limpiandoPrueba ? 'Limpiando...' : 'Confirmar limpieza'}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <p className="text-gray-400 text-sm mb-4">Eliminar <span className="text-white font-semibold">{deleteConfirm.nombre}</span>?</p>
-              <div className="flex gap-3">
-                <button onClick={() => setDeleteConfirm(null)} className="btn-secondary flex-1">Cancelar</button>
-                <button onClick={() => eliminar(deleteConfirm.id)} className="btn-danger flex-1 justify-center">Eliminar</button>
-              </div>
-            </div>
-          )}
-        </Modal>
-      )}
-    </div>
-  )
-}
+        </div>
+        )}

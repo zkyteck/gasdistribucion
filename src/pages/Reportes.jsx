@@ -14,7 +14,7 @@ const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
   return (
-    <div className="border border-[var(--app-card-border)] rounded-lg p-3 text-xs shadow-xl">
+    <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 text-xs shadow-xl">
       <p className="text-gray-400 mb-1 font-medium">{label}</p>
       {payload.map((p, i) => (
         <p key={i} style={{ color: p.color }} className="font-semibold">
@@ -253,7 +253,7 @@ export default function Reportes() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-transparent rounded-xl p-1 w-fit">
+      <div className="flex gap-1 bg-gray-800/50 rounded-xl p-1 w-fit">
         {[['resumen', '📊 Resumen'], ['ganancias', '📈 Ganancias'], ['stock', '📦 Stock']].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === key ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}>
@@ -265,7 +265,7 @@ export default function Reportes() {
       {/* Filtros */}
       <div className="flex flex-wrap gap-3 items-center">
         {/* Vista */}
-        <div className="flex gap-1 bg-transparent rounded-xl p-1">
+        <div className="flex gap-1 bg-gray-800/50 rounded-xl p-1">
           {[['todo', <><BarChart2 className="w-3 h-3" />Todo</>, 'gray'],
             ['tienda', <><Store className="w-3 h-3" />Tienda</>, 'blue'],
             ['distribuidores', <><Truck className="w-3 h-3" />Distribuidores</>, 'orange']
@@ -280,7 +280,7 @@ export default function Reportes() {
         </div>
 
         {/* Período */}
-        <div className="flex gap-1 bg-transparent rounded-xl p-1">
+        <div className="flex gap-1 bg-gray-800/50 rounded-xl p-1">
           {[['hoy', 'Hoy'], ['semana', 'Semana'], ['mes', 'Mes'], ['personalizado', 'Personalizado']].map(([key, label]) => (
             <button key={key} onClick={() => setPeriodo(key)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${periodo === key ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'}`}>
@@ -366,7 +366,7 @@ export default function Reportes() {
                                 <span className="text-gray-300">{lPago[tipo] || tipo}</span>
                                 <span className="text-white font-semibold">S/ {d.ingreso.toLocaleString()} <span className="text-gray-500 text-xs">({d.count} bal.)</span></span>
                               </div>
-                              <div className="h-2  rounded-full overflow-hidden">
+                              <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
                                 <div className="h-full rounded-full" style={{ width: `${(d.ingreso / max) * 100}%`, backgroundColor: COLORS[i % COLORS.length] }} />
                               </div>
                             </div>
@@ -392,7 +392,7 @@ export default function Reportes() {
                                 <span className="text-gray-300">{lBalon[tipo] || tipo}</span>
                                 <span className="text-white font-semibold">S/ {d.ingreso.toLocaleString()} <span className="text-gray-500 text-xs">({d.balones} bal.)</span></span>
                               </div>
-                              <div className="h-2  rounded-full overflow-hidden">
+                              <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
                                 <div className="h-full rounded-full" style={{ width: `${(d.ingreso / max) * 100}%`, backgroundColor: COLORS[i % COLORS.length] }} />
                               </div>
                             </div>
@@ -439,7 +439,7 @@ export default function Reportes() {
                               <span className="text-gray-300">{nombre}</span>
                               <span className="text-white font-semibold">S/ {d.ingreso.toLocaleString()} <span className="text-gray-500 text-xs">({d.balones} bal.)</span></span>
                             </div>
-                            <div className="h-2  rounded-full overflow-hidden">
+                            <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
                               <div className="h-full bg-orange-500 rounded-full" style={{ width: `${(d.ingreso / max) * 100}%` }} />
                             </div>
                           </div>
@@ -506,7 +506,7 @@ export default function Reportes() {
                   <h3 className="text-sm font-semibold text-white mb-4">Ganancia por tipo de balón</h3>
                   <div className="space-y-3">
                     {Object.entries(data.porBalon).sort((a, b) => b[1].ganancia - a[1].ganancia).map(([tipo, d], i) => (
-                      <div key={tipo} style={{background:"var(--app-card-bg)"}} className="rounded-xl p-4">
+                      <div key={tipo} className="bg-gray-800/40 rounded-xl p-4">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-white font-medium">{lBalon[tipo] || tipo}</span>
                           <div className="flex gap-4 text-right">
@@ -532,7 +532,7 @@ export default function Reportes() {
                   <h3 className="text-sm font-semibold text-white mb-4">🚛 Ganancia por distribuidor</h3>
                   <div className="space-y-3">
                     {Object.entries(data.porDist).map(([nombre, d]) => (
-                      <div key={nombre} style={{background:"var(--app-card-bg)"}} className="rounded-xl p-4">
+                      <div key={nombre} className="bg-gray-800/40 rounded-xl p-4">
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <p className="text-white font-semibold">{nombre}</p>
                           <div className="flex gap-4 text-right">
@@ -544,7 +544,7 @@ export default function Reportes() {
                         </div>
                       </div>
                     ))}
-                    <div className="border-t border-[var(--app-card-border)] pt-3 flex justify-between">
+                    <div className="border-t border-gray-700 pt-3 flex justify-between">
                       <span className="text-white font-semibold">Total distribuidores</span>
                       <div className="flex gap-6 text-right">
                         <div><p className="text-orange-400 font-bold">S/ {data.ingDist.toLocaleString()}</p><p className="text-gray-600 text-xs">recaudado</p></div>
@@ -571,17 +571,17 @@ export default function Reportes() {
 
               {/* Tabla stock por almacén */}
               <div className="card p-0 overflow-hidden">
-                <div className="px-6 py-4 ">
+                <div className="px-6 py-4 border-b border-gray-800">
                   <h3 className="text-sm font-semibold text-white">📦 Stock por almacén</h3>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead><tr className="">
+                    <thead><tr className="border-b border-gray-800">
                       {['Almacén', 'Responsable', '🟢 Llenos', '⚪ Vacíos', 'Detalle llenos', 'Detalle vacíos', 'Estado'].map(h => (
                         <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">{h}</th>
                       ))}
                     </tr></thead>
-                    <tbody className="divide-y divide-[var(--app-card-border)]">
+                    <tbody className="divide-y divide-gray-800/50">
                       {data.stockActual.map(a => (
                         <tr key={a.id} className="table-row-hover">
                           <td className="px-4 py-4 text-white font-medium text-sm">{a.nombre}</td>
@@ -623,17 +623,17 @@ export default function Reportes() {
               {/* Distribuidores stock */}
               {data.distribuidores.length > 0 && (
                 <div className="card p-0 overflow-hidden">
-                  <div className="px-6 py-4 ">
+                  <div className="px-6 py-4 border-b border-gray-800">
                     <h3 className="text-sm font-semibold text-white">🚛 Stock distribuidores</h3>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full">
-                      <thead><tr className="">
+                      <thead><tr className="border-b border-gray-800">
                         {['Distribuidor', '🟢 Llenos (en campo)', '⚪ Vacíos', 'Precio/bal.', 'Valor en campo', 'Estado'].map(h => (
                           <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-4 py-3">{h}</th>
                         ))}
                       </tr></thead>
-                      <tbody className="divide-y divide-[var(--app-card-border)]">
+                      <tbody className="divide-y divide-gray-800/50">
                         {data.distribuidores.map(d => (
                           <tr key={d.id} className="table-row-hover">
                             <td className="px-4 py-4 text-white font-medium text-sm">{d.nombre}</td>
