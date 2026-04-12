@@ -301,7 +301,6 @@ export default function Distribuidores() {
     const almacenId = dist?.almacen_id
 
     // Si es cuenta corriente, cargar también sus datos
-    const dist = distribuidores.find(d => d.id === distId)
     if (dist?.modalidad === 'cuenta_corriente') {
       await cargarCuentaCorriente(distId)
     }
