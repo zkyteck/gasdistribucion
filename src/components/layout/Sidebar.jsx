@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext'
 import {
   LayoutDashboard, ShoppingCart, Ticket, ClipboardList, Users,
   CreditCard, Package, Truck, Warehouse, BarChart3, Settings,
-  LogOut, Flame, X
+  LogOut, Flame, X, Palette
 } from 'lucide-react'
 
 const navItems = [
@@ -18,6 +18,7 @@ const navItems = [
   { to: '/almacenes',      icon: Warehouse,       label: 'Almacenes',      adminOnly: true },
   { to: '/reportes',       icon: BarChart3,       label: 'Reportes',       adminOnly: true },
   { to: '/configuracion',  icon: Settings,        label: 'Configuración',  adminOnly: true },
+  { to: '/apariencia',     icon: Palette,         label: 'Apariencia' },
 ]
 
 export default function Sidebar({ onClose }) {

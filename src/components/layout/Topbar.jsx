@@ -15,6 +15,7 @@ const titles = {
   '/almacenes':      'Almacenes',
   '/reportes':       'Reportes',
   '/configuracion':  'Configuración',
+  '/apariencia':     'Apariencia',
 }
 
 export default function Topbar({ onMenuClick }) {

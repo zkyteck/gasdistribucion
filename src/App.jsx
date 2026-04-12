@@ -15,6 +15,7 @@ import Almacenes from './pages/Almacenes'
 import ACuenta from './pages/ACuenta'
 import Reportes from './pages/Reportes'
 import Configuracion from './pages/Configuracion'
+import Apariencia from './pages/Apariencia'
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="acuenta"        element={<ACuenta />} />
             <Route path="clientes"       element={<Clientes />} />
             <Route path="deudas"         element={<Deudas />} />
+            <Route path="apariencia"     element={<Apariencia />} />
             <Route path="vales-distribuidor" element={<ProtectedRoute adminOnly><ValesDistribuidor /></ProtectedRoute>} />
             <Route path="inventario"     element={<ProtectedRoute adminOnly><Inventario /></ProtectedRoute>} />
             <Route path="distribuidores" element={<ProtectedRoute adminOnly><Distribuidores /></ProtectedRoute>} />
