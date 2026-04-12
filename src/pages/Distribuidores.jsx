@@ -1456,7 +1456,7 @@ export default function Distribuidores() {
                     const totalV43 = c.abonos.reduce((s,a)=>s+(a.vales_43||0),0)
                     const totalEfectivo = c.abonos.reduce((s,a)=>s+(parseFloat(a.efectivo)||0),0)
                     const totalYape = c.abonos.reduce((s,a)=>s+(parseFloat(a.yape)||0),0)
-                    const [open, setOpen] = [false, ()=>{}] // simplificado
+                    const [open, setOpen] = [false, ()=>{}]
                     return (
                       <div key={c.id} style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden'}}>
                         {/* Header cuenta cerrada */}
