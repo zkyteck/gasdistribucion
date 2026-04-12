@@ -469,7 +469,7 @@ export default function Ventas() {
                   <div className="mt-1 flex items-center gap-2 text-xs text-emerald-400 px-1">✅ {exacto.nombre}</div>
                 )
                 return (
-                  <div className="mt-1 bg-gray-800 border border-gray-700 rounded-lg overflow-hidden z-10">
+                  <div className=" mt-1 rounded-lg overflow-hidden" style={{zIndex:9999,position:'absolute',background:'var(--app-modal-bg)',border:'1px solid #374151',width:'100%'}}>
                     {coincidencias.slice(0,6).map(c => (
                       <button key={c.id} type="button"
                         onClick={() => { seleccionarCliente(c.id); setBusquedaCliente(c.nombre) }}

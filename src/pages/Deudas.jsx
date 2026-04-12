@@ -530,7 +530,7 @@ export default function Deudas() {
                     <p className="text-xs text-emerald-400 mt-1 px-1">✅ Cliente registrado</p>
                   )}
                   {deudaForm.nombre_deudor.length >= 2 && !clientes.find(c => c.nombre.toLowerCase() === deudaForm.nombre_deudor.toLowerCase()) && (
-                    <div className="absolute w-full mt-1 bg-gray-800 border border-gray-700 rounded-xl shadow-xl max-h-48 overflow-y-auto" style={{zIndex:9999,position:'absolute'}}>
+                    <div className=" w-full mt-1 rounded-xl shadow-2xl max-h-48 overflow-y-auto" style={{zIndex:9999,position:'absolute',background:'var(--app-modal-bg)',border:'1px solid #374151',top:'100%',left:0}}>
                       {clientes.filter(c => c.nombre.toLowerCase().includes(deudaForm.nombre_deudor.toLowerCase())).map(c => (
                         <button key={c.id} type="button"
                           onMouseDown={() => { setDeudaForm(f => ({...f, nombre_deudor: c.nombre, cliente_id: c.id})); setMostrarSugerencias(false) }}
