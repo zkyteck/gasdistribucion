@@ -38,6 +38,8 @@ export default function Configuracion() {
   const [savingCostos, setSavingCostos] = useState(false)
   const [costoBalon, setCostoBalon] = useState({ '5kg': '', '10kg': '', '45kg': '' })
   const [precioVentaBalon, setPrecioVentaBalon] = useState({ '5kg': '100', '10kg': '100', '45kg': '100' })
+  const [valorVales, setValorVales] = useState({ pequeno: '20', grande: '43' })
+  const [savingVales, setSavingVales] = useState(false)
   const [almacenesLista, setAlmacenesLista] = useState([])
 
   const [provForm, setProvForm] = useState({ nombre: '', telefono: '', direccion: '', ruc: '' })
@@ -114,6 +116,15 @@ export default function Configuracion() {
       setCostoBalon(mapaBalon)
       setDistribuidores(dists || [])
       setPreciosDistTipo(pdt || [])
+    } else if (tab === 'vales') {
+      const { data } = await supabase.from('configuracion').select('*')
+        .in('clave', ['valor_vale_pequeno', 'valor_vale_grande'])
+      const mapa = { pequeno: '20', grande: '43' }
+      data?.forEach(r => {
+        if (r.clave === 'valor_vale_pequeno') mapa.pequeno = r.valor || '20'
+        if (r.clave === 'valor_vale_grande') mapa.grande = r.valor || '43'
+      })
+      setValorVales(mapa)
     } else if (tab === 'proveedores') {
       const { data } = await supabase.from('proveedores').select('*').eq('activo', true).order('nombre')
       setProveedores(data || [])
@@ -125,6 +136,16 @@ export default function Configuracion() {
       setUsuarios(data || [])
       setAlmacenesLista(alms || [])
     }    setLoading(false)
+  }
+
+  async function guardarVales() {
+    setSavingVales(true)
+    await Promise.all([
+      supabase.from('configuracion').upsert({ clave: 'valor_vale_pequeno', valor: valorVales.pequeno?.toString() || '20', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
+      supabase.from('configuracion').upsert({ clave: 'valor_vale_grande', valor: valorVales.grande?.toString() || '43', updated_at: new Date().toISOString() }, { onConflict: 'clave' }),
+    ])
+    setSavingVales(false)
+    alert('✅ Valores de vales guardados')
   }
 
   async function guardarCostos() {
@@ -305,6 +326,7 @@ export default function Configuracion() {
           ['precios','💰 Precios tienda'],
           ['distribuidores_precios','🚛 Precios distribuidores'],
           ['costos','💲 Costos compra'],
+          ['vales','🎫 Vales FISE'],
           ['proveedores','🚚 Proveedores'],
           ['usuarios','👤 Usuarios']
         ].map(([key, label]) => (
@@ -530,6 +552,62 @@ export default function Configuracion() {
             <p>• Cuando registras una <strong className="text-white">compra nueva</strong>, estos precios se actualizan automáticamente.</p>
             <p className="mt-1">• El reporte de <strong className="text-white">Ganancias</strong> usa estos precios para calcular cuánto ganaste por cada balón vendido.</p>
             <p className="mt-1">• Se calcula por separado para <strong className="text-white">Tienda</strong> y <strong className="text-white">Distribuidores</strong>.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Tab Vales FISE */}
+      {tab === 'vales' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <p className="text-gray-400 text-sm">Valor actual de los vales FISE — cambia aquí antes de registrar</p>
+            <button onClick={guardarVales} disabled={savingVales} className="btn-primary">
+              <Save className="w-4 h-4" />{savingVales ? 'Guardando...' : 'Guardar valores'}
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="card border border-yellow-800/40">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-2xl">🎫</span>
+                <div>
+                  <p className="text-white font-bold">Vale pequeño</p>
+                  <p className="text-gray-500 text-xs">Antes S/20, ahora puede ser S/30 u otro</p>
+                </div>
+              </div>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">S/</span>
+                <input type="number" min="1" className="input pl-9 text-3xl font-bold text-center text-yellow-300"
+                  value={valorVales.pequeno}
+                  onChange={e => setValorVales(v => ({...v, pequeno: e.target.value}))} />
+              </div>
+              <div className="mt-3 bg-yellow-900/20 rounded-lg p-3 text-xs text-yellow-300">
+                💡 Cuando registres vales, cada vale pequeño valdrá S/{valorVales.pequeno}
+              </div>
+            </div>
+            <div className="card border border-orange-800/40">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-2xl">🎫</span>
+                <div>
+                  <p className="text-white font-bold">Vale grande</p>
+                  <p className="text-gray-500 text-xs">Normalmente S/43</p>
+                </div>
+              </div>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">S/</span>
+                <input type="number" min="1" className="input pl-9 text-3xl font-bold text-center text-orange-300"
+                  value={valorVales.grande}
+                  onChange={e => setValorVales(v => ({...v, grande: e.target.value}))} />
+              </div>
+              <div className="mt-3 bg-orange-900/20 rounded-lg p-3 text-xs text-orange-300">
+                💡 Cuando registres vales, cada vale grande valdrá S/{valorVales.grande}
+              </div>
+            </div>
+          </div>
+          <div className="bg-blue-900/20 border border-blue-800/40 rounded-xl p-4 text-sm text-gray-400">
+            <p className="text-blue-300 font-medium mb-2">📋 ¿Cómo usarlo?</p>
+            <p>• Si hoy tienes <strong className="text-white">90 vales de S/30</strong>: cambia el vale pequeño a S/30, guarda y registra los 90 vales.</p>
+            <p className="mt-1">• Si mañana tienes <strong className="text-white">50 vales viejos de S/20</strong>: cambia el vale pequeño a S/20, guarda y registra los 50 vales.</p>
+            <p className="mt-1">• El historial mostrará cada registro con su valor correcto.</p>
           </div>
         </div>
       )}
