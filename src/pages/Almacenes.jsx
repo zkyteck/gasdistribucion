@@ -212,7 +212,6 @@ export default function Almacenes() {
               </tbody>
             </table>
           </div>
-        </div>
         </>
         )}
       </div>
