@@ -8,8 +8,8 @@ import { useAuth } from '../context/AuthContext'
 function Modal({ title, onClose, children, wide }) {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className={`bg-gray-900 border border-gray-700 rounded-2xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} shadow-2xl max-h-[90vh] overflow-y-auto`}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
+      <div className={`rounded-2xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} shadow-2xl max-h-[90vh] overflow-y-auto`} style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
+        <div className="flex items-center justify-between px-6 py-4 sticky top-0" style={{borderBottom:"1px solid var(--app-modal-header-border)", background:"var(--app-modal-bg)"}}>
           <h3 className="text-white font-semibold">{title}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
         </div>
@@ -185,7 +185,7 @@ export default function Clientes() {
         <div className="flex gap-2 mt-3">
           {[['todos','Todos'],['general','General'],['restaurante','Restaurante'],['mayorista','Mayorista']].map(([val, label]) => (
             <button key={val} onClick={() => setFiltroTipo(val)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filtroTipo === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400 hover:border-gray-500'}`}>
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${filtroTipo === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'border-[var(--app-card-border)] text-[var(--app-text-secondary)] hover:border-[var(--app-text-secondary)]'}`}>
               {label}
               <span className="ml-1.5 text-gray-500">
                 {val === 'todos' ? clientes.length : clientes.filter(c => c.tipo === val).length}
@@ -223,7 +223,7 @@ export default function Clientes() {
                 {clientesFiltrados.map(c => {
                   const deudaActiva = deudas.find(d => d.cliente_id === c.id && d.estado !== 'liquidada')
                   return (
-                    <div key={c.id} className="card border border-gray-700/50">
+                    <div key={c.id} className="card">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3 flex-1 min-w-0">
                           <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
@@ -232,7 +232,7 @@ export default function Clientes() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="text-white font-semibold text-sm">{c.nombre}</p>
-                              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${c.tipo === 'restaurante' ? 'bg-orange-900/40 text-orange-400' : c.tipo === 'mayorista' ? 'bg-purple-900/40 text-purple-400' : 'bg-gray-700 text-gray-400'}`}>
+                              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${c.tipo === 'restaurante' ? 'bg-orange-900/40 text-orange-400' : c.tipo === 'mayorista' ? 'bg-purple-900/40 text-purple-400' : ''}`} style={c.tipo !== 'restaurante' && c.tipo !== 'mayorista' ? { background: 'var(--app-card-border)', color: 'var(--app-text-secondary)' } : {}}>
                                 {tipoLabel[c.tipo] || c.tipo}
                               </span>
                               {deudaActiva && (
@@ -287,14 +287,14 @@ export default function Clientes() {
           <div className="flex gap-2">
             {[['activas','🔴 Con deuda'],['liquidadas','✅ Sin deuda'],['todas','Todas']].map(([val, label]) => (
               <button key={val} onClick={() => setFiltroEstado(val)}
-                className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all ${filtroEstado === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                className={`px-3 py-2 rounded-lg text-xs font-medium border transition-all ${filtroEstado === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'border-[var(--app-card-border)] text-[var(--app-text-secondary)]'}`}>
                 {label}
               </button>
             ))}
           </div>
 
           <div className="card p-0 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+            <div className="px-6 py-4 flex items-center justify-between" style={{borderBottom:'1px solid var(--app-card-border)'}}>
               <h3 className="text-sm font-semibold text-white">
                 {filtroEstado === 'activas' ? 'Deudas activas' : filtroEstado === 'liquidadas' ? 'Liquidadas' : 'Todas'}
               </h3>
@@ -370,7 +370,7 @@ export default function Clientes() {
               <div className="grid grid-cols-3 gap-2">
                 {[['general','👤 General'],['restaurante','🍽️ Restaurante'],['mayorista','📦 Mayorista']].map(([val, label]) => (
                   <button key={val} onClick={() => setClienteForm(f => ({...f, tipo: val}))}
-                    className={`py-2 rounded-lg border text-xs font-medium transition-all ${clienteForm.tipo === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                    className={`py-2 rounded-lg border text-xs font-medium transition-all ${clienteForm.tipo === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'border-[var(--app-card-border)] text-[var(--app-text-secondary)]'}`}>
                     {label}
                   </button>
                 ))}
@@ -398,7 +398,7 @@ export default function Clientes() {
                   <div className="flex gap-1">
                     {['5kg','10kg','45kg'].map(t => (
                       <button key={t} type="button" onClick={() => setClienteForm(f => ({...f, tipo_balon_personalizado: t}))}
-                        className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${clienteForm.tipo_balon_personalizado === t ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                        className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-all ${clienteForm.tipo_balon_personalizado === t ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'border-[var(--app-card-border)] text-[var(--app-text-secondary)]'}`}>
                         {t}
                       </button>
                     ))}
@@ -431,10 +431,10 @@ export default function Clientes() {
                 const exacto = clientes.find(c => c.nombre.toLowerCase() === deudaForm.nombre_deudor.toLowerCase())
                 if (exacto) return <div className="mt-1 text-xs text-emerald-400 px-1">✅ Cliente registrado</div>
                 return (
-                  <div className="mt-1 bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
+                  <div className="mt-1 rounded-lg overflow-hidden" style={{background:"var(--app-card-bg)",border:"1px solid var(--app-card-border)"}}>
                     {coincidencias.map(c => (
                       <button key={c.id} type="button" onClick={() => setDeudaForm(f => ({...f, nombre_deudor: c.nombre, cliente_id: c.id}))}
-                        className="w-full text-left px-3 py-2 text-sm text-white hover:bg-gray-700 transition-colors flex items-center gap-2">
+                        className="w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2" style={{color:"var(--app-text)"}}>
                         <span className="text-blue-400">👤</span> {c.nombre}
                       </button>
                     ))}
@@ -454,7 +454,7 @@ export default function Clientes() {
               <div className="grid grid-cols-3 gap-2">
                 {[['dinero','💰 Dinero'],['balones','🔵 Balones'],['vales','🎫 Vales']].map(([val, label]) => (
                   <button key={val} onClick={() => setDeudaForm(f => ({...f, tipo_deuda: val}))}
-                    className={`py-2 rounded-lg border text-xs font-medium transition-all ${deudaForm.tipo_deuda === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                    className={`py-2 rounded-lg border text-xs font-medium transition-all ${deudaForm.tipo_deuda === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'border-[var(--app-card-border)] text-[var(--app-text-secondary)]'}`}>
                     {label}
                   </button>
                 ))}
@@ -486,7 +486,7 @@ export default function Clientes() {
               <div className="grid grid-cols-3 gap-2">
                 {[['general','👤 General'],['restaurante','🍽️ Restaurante'],['mayorista','📦 Mayorista']].map(([val, label]) => (
                   <button key={val} onClick={() => setClienteForm(f => ({...f, tipo: val}))}
-                    className={`py-2 rounded-lg border text-xs font-medium transition-all ${clienteForm.tipo === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                    className={`py-2 rounded-lg border text-xs font-medium transition-all ${clienteForm.tipo === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'border-[var(--app-card-border)] text-[var(--app-text-secondary)]'}`}>
                     {label}
                   </button>
                 ))}
@@ -512,7 +512,7 @@ export default function Clientes() {
         <Modal title={`Registrar pago — ${selected.nombre_deudor}`} onClose={() => setModal(null)}>
           <div className="space-y-4">
             {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
-            <div className="bg-gray-800/50 rounded-lg p-4 grid grid-cols-2 gap-4">
+            <div className="rounded-lg p-4 grid grid-cols-2 gap-4" style={{background:"var(--app-table-hover)"}}>
               <div><p className="text-xs text-gray-500">Tipo</p><p className="text-sm font-bold text-white capitalize">{selected.tipo_deuda === 'dinero' ? '💰 Dinero' : selected.tipo_deuda === 'balones' ? '🔵 Balones' : '🎫 Vales'}</p></div>
               <div><p className="text-xs text-gray-500">Pendiente</p>
                 <p className="text-lg font-bold text-red-400">{selected.tipo_deuda === 'dinero' ? `S/ ${Number(selected.monto_pendiente).toLocaleString()}` : `${selected.cantidad_pendiente} ${selected.tipo_deuda}`}</p>
@@ -526,7 +526,7 @@ export default function Clientes() {
                   <div className="grid grid-cols-3 gap-2">
                     {[['efectivo','💵 Efectivo'],['yape','📱 Yape'],['mixto','🔀 Mixto']].map(([val, label]) => (
                       <button key={val} onClick={() => setPagoForm(f => ({...f, metodo_pago: val}))}
-                        className={`py-2 rounded-lg border text-xs font-medium ${pagoForm.metodo_pago === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-gray-800/50 border-gray-700 text-gray-400'}`}>
+                        className={`py-2 rounded-lg border text-xs font-medium ${pagoForm.metodo_pago === val ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'border-[var(--app-card-border)] text-[var(--app-text-secondary)]'}`}>
                         {label}
                       </button>
                     ))}
@@ -550,7 +550,7 @@ export default function Clientes() {
       {modal === 'historial' && selected && (
         <Modal title={`Historial — ${selected.nombre_deudor}`} onClose={() => setModal(null)} wide>
           <div className="space-y-4">
-            <div className="bg-gray-800/50 rounded-lg p-4 grid grid-cols-2 gap-4">
+            <div className="rounded-lg p-4 grid grid-cols-2 gap-4" style={{background:"var(--app-table-hover)"}}>
               <div><p className="text-xs text-gray-500">Fecha de la deuda</p><p className="text-sm font-semibold text-white">{format(new Date(selected.fecha_deuda + 'T12:00:00'), "dd 'de' MMMM yyyy", { locale: es })}</p></div>
               <div><p className="text-xs text-gray-500">Estado</p><span className={selected.estado === 'liquidada' ? 'badge-green' : selected.estado === 'pagada_parcial' ? 'badge-yellow' : 'badge-red'}>{selected.estado === 'liquidada' ? '✅ Liquidada' : selected.estado === 'pagada_parcial' ? 'Pago parcial' : 'Activa'}</span></div>
               <div><p className="text-xs text-gray-500">Deuda original</p><p className="text-lg font-bold text-white">{selected.tipo_deuda === 'dinero' ? `S/ ${Number(selected.monto_original).toLocaleString()}` : `${selected.cantidad_original} ${selected.tipo_deuda}`}</p></div>
