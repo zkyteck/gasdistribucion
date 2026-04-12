@@ -1129,9 +1129,145 @@ export default function Distribuidores() {
         </Modal>
       )}
 
-      {/* Modal historial — Rendición tipo Excel */}
+      {/* Modal historial — detecta modalidad */}
       {modal === 'historial' && selected && (() => {
-        // Agrupar ventas por día
+        const esCuentaCorriente = selected.modalidad === 'cuenta_corriente'
+
+        if (esCuentaCorriente) {
+          // ── Vista cuenta corriente (Cristian) ──
+          const totalCargado = cargasDist.reduce((s,c) => s+(c.cargados||0), 0)
+          const totalDescargado = cargasDist.reduce((s,c) => s+(c.descargados||0), 0)
+          const montoTotal = cargasDist.reduce((s,c) => s+(c.monto||0), 0)
+          const totalAbonado = abonosParciales.reduce((s,a) => s+(a.total||0), 0)
+          const saldoAnterior = cuentaActiva?.saldo_anterior || 0
+          const faltantesAnterior = cuentaActiva?.faltantes_anterior || 0
+          const faltantesBal = Math.max(0, totalCargado - totalDescargado) + faltantesAnterior
+          const montoConSaldo = montoTotal + saldoAnterior
+          const saldoPendiente = Math.max(0, montoConSaldo - totalAbonado)
+          const lotesActivos = lotesDistribuidor.filter(l => !l.cerrado && l.cantidad_restante > 0)
+          const valorCampo = lotesActivos.reduce((s,l) => s + l.cantidad_restante * l.precio_unitario, 0)
+          const loteActivo = lotesActivos[0]
+
+          return (
+          <Modal title={`📦 Cuenta corriente — ${selected.nombre}`} onClose={() => setModal(null)} wide>
+            <div className="space-y-5">
+
+              {/* Resumen */}
+              <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10}}>
+                {[
+                  {label:'🟢 Llenos en campo', value:`${selected.stock_actual} bal.`, color:'#34d399'},
+                  {label:'⚪ Vacíos devueltos', value:`${selected.balones_vacios||0} bal.`, color:'var(--app-text)'},
+                  {label:'💰 Precio FIFO actual', value: loteActivo ? `S/${loteActivo.precio_unitario}` : `S/${selected.precio_base}`, color:'#fb923c'},
+                  {label:'📦 Valor en campo', value:`S/${valorCampo.toLocaleString('es-PE')}`, color:'#60a5fa'},
+                ].map(({label,value,color}) => (
+                  <div key={label} style={{background:'var(--app-card-bg-alt)',border:'1px solid var(--app-card-border)',borderRadius:10,padding:'12px',textAlign:'center'}}>
+                    <p style={{fontSize:10,color:'var(--app-text-secondary)',margin:'0 0 4px',textTransform:'uppercase'}}>{label}</p>
+                    <p style={{fontSize:18,fontWeight:700,color,margin:0}}>{value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Pendientes de cuenta anterior */}
+              {(saldoAnterior > 0 || faltantesAnterior > 0) && (
+                <div style={{background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.25)',borderRadius:10,padding:'10px 14px'}}>
+                  <p style={{fontSize:12,color:'#f87171',fontWeight:700,margin:'0 0 4px'}}>⚠️ Pendientes de cuenta anterior:</p>
+                  <div style={{display:'flex',gap:16}}>
+                    {saldoAnterior > 0 && <span style={{fontSize:12,color:'#f87171'}}>💰 S/{saldoAnterior.toLocaleString('es-PE')} en dinero</span>}
+                    {faltantesAnterior > 0 && <span style={{fontSize:12,color:'#fb923c'}}>⚪ {faltantesAnterior} vacíos</span>}
+                  </div>
+                </div>
+              )}
+
+              {/* Tabla de cargas */}
+              <div>
+                <h4 style={{fontSize:13,fontWeight:700,color:'var(--app-text)',margin:'0 0 10px'}}>
+                  📋 Cargas de la cuenta actual
+                </h4>
+                {cargasDist.length === 0 ? (
+                  <div style={{textAlign:'center',padding:'24px',color:'var(--app-text-secondary)',fontSize:13,border:'1px solid var(--app-card-border)',borderRadius:10}}>
+                    Sin cargas registradas — usa "Registrar carga" para empezar
+                  </div>
+                ) : (
+                  <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden'}}>
+                    {/* Cabeceras */}
+                    <div style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr',background:'var(--app-accent)'}}>
+                      {['Fecha','Cargados','Descargados','Faltantes','Precio','Monto'].map(h => (
+                        <div key={h} style={{padding:'8px',fontSize:9,fontWeight:700,color:'#fff',textTransform:'uppercase',borderRight:'1px solid rgba(255,255,255,0.2)',textAlign:'center'}}>{h}</div>
+                      ))}
+                    </div>
+                    {/* Filas */}
+                    {cargasDist.map((c,i) => (
+                      <div key={c.id} style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr',borderBottom:i<cargasDist.length-1?'1px solid var(--app-card-border)':'none',background:i%2===0?'transparent':'var(--app-row-alt)'}}>
+                        <div style={{padding:'9px 8px',fontSize:12,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center',fontWeight:500}}>{c.fecha}</div>
+                        <div style={{padding:'9px 8px',fontSize:13,fontWeight:700,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{c.cargados}</div>
+                        <div style={{padding:'9px 8px',fontSize:12,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{c.descargados}</div>
+                        <div style={{padding:'9px 8px',fontSize:12,fontWeight:600,color:'#fb923c',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{Math.max(0,c.cargados-c.descargados)}</div>
+                        <div style={{padding:'9px 8px',fontSize:12,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{c.precio_unitario}</div>
+                        <div style={{padding:'9px 8px',fontSize:13,fontWeight:700,color:'#34d399',textAlign:'center'}}>S/{(c.monto||0).toLocaleString('es-PE')}</div>
+                      </div>
+                    ))}
+                    {/* Totales */}
+                    <div style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr',background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)'}}>
+                      <div style={{padding:'9px 8px',fontSize:11,fontWeight:700,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>TOTAL</div>
+                      <div style={{padding:'9px 8px',fontSize:13,fontWeight:700,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{totalCargado}</div>
+                      <div style={{padding:'9px 8px',fontSize:13,fontWeight:700,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{totalDescargado}</div>
+                      <div style={{padding:'9px 8px',fontSize:13,fontWeight:700,color:'#fb923c',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{faltantesBal}</div>
+                      <div style={{padding:'9px 8px',borderRight:'1px solid var(--app-card-border)'}}/>
+                      <div style={{padding:'9px 8px',fontSize:13,fontWeight:700,color:'#34d399',textAlign:'center'}}>S/{montoConSaldo.toLocaleString('es-PE')}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Abonos parciales */}
+              {abonosParciales.length > 0 && (
+                <div>
+                  <h4 style={{fontSize:13,fontWeight:700,color:'var(--app-text)',margin:'0 0 10px'}}>💵 Abonos parciales</h4>
+                  <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                    {abonosParciales.map(a => (
+                      <div key={a.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 12px',borderRadius:8,background:'rgba(99,102,241,0.06)',border:'1px solid rgba(99,102,241,0.2)'}}>
+                        <div>
+                          <p style={{color:'var(--app-text)',fontSize:12,fontWeight:600,margin:0}}>{a.fecha}</p>
+                          <div style={{display:'flex',gap:8,marginTop:2,flexWrap:'wrap'}}>
+                            {a.vales_20>0 && <span style={{fontSize:10,color:'#fde047'}}>{a.vales_20}×S/20=S/{a.vales_20*20}</span>}
+                            {a.vales_30>0 && <span style={{fontSize:10,color:'#fde047'}}>{a.vales_30}×S/30=S/{a.vales_30*30}</span>}
+                            {a.vales_43>0 && <span style={{fontSize:10,color:'#fde047'}}>{a.vales_43}×S/43=S/{a.vales_43*43}</span>}
+                            {a.efectivo>0 && <span style={{fontSize:10,color:'#34d399'}}>Efectivo S/{a.efectivo}</span>}
+                            {a.yape>0 && <span style={{fontSize:10,color:'#818cf8'}}>Yape S/{a.yape}</span>}
+                          </div>
+                        </div>
+                        <p style={{color:'#34d399',fontWeight:700,fontSize:14,margin:0}}>S/{(a.total||0).toLocaleString('es-PE')}</p>
+                      </div>
+                    ))}
+                    <div style={{display:'flex',justifyContent:'space-between',padding:'8px 12px',borderRadius:8,background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.25)'}}>
+                      <span style={{fontSize:12,fontWeight:700,color:'var(--app-text-secondary)'}}>Total abonado:</span>
+                      <span style={{fontSize:14,fontWeight:700,color:'#34d399'}}>S/{totalAbonado.toLocaleString('es-PE')}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Saldo pendiente */}
+              {cargasDist.length > 0 && (
+                <div style={{border:`2px solid ${saldoPendiente>0?'rgba(239,68,68,0.4)':'rgba(52,211,153,0.4)'}`,borderRadius:12,padding:'14px 16px',background:saldoPendiente>0?'rgba(239,68,68,0.06)':'rgba(52,211,153,0.06)'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <div>
+                      <p style={{fontSize:13,fontWeight:700,color:'var(--app-text)',margin:0}}>Saldo pendiente de pago</p>
+                      {faltantesBal > 0 && <p style={{fontSize:11,color:'#fb923c',margin:'4px 0 0'}}>⚪ {faltantesBal} vacíos pendientes de devolución</p>}
+                    </div>
+                    <p style={{fontSize:22,fontWeight:700,color:saldoPendiente>0?'#f87171':'#34d399',margin:0}}>
+                      S/{saldoPendiente.toLocaleString('es-PE')} {saldoPendiente<=0?'✅':'⏳'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </Modal>
+          )
+        }
+
+        // ── Vista Alazan (ventas autónomas) ──
         const ventasPorDia = {}
         ventasDistribuidor.forEach(v => {
           const dia = new Date(v.fecha).toLocaleDateString('en-CA', {timeZone:'America/Lima'})
@@ -1141,454 +1277,8 @@ export default function Distribuidores() {
           ventasPorDia[dia].ventas.push(v)
         })
         const diasOrdenados = Object.keys(ventasPorDia).sort((a,b) => b.localeCompare(a))
-
-        // Lotes activos para valor en campo
         const lotesActivos = lotesDistribuidor.filter(l => !l.cerrado && l.cantidad_restante > 0)
         const valorCampo = lotesActivos.reduce((s,l) => s + l.cantidad_restante * l.precio_unitario, 0)
-
-        return (
-        <Modal title={`📊 ${selected.nombre}`} onClose={() => setModal(null)} wide>
-          <div className="space-y-5">
-
-            {/* Resumen */}
-            <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10}}>
-              {[
-                {label:'🟢 Llenos en campo', value:`${selected.stock_actual} bal.`, color:'#34d399'},
-                {label:'⚪ Vacíos devueltos', value:`${selected.balones_vacios||0} bal.`, color:'var(--app-text)'},
-                {label:'💰 Precio actual', value:`S/${selected.precio_base}`, color:'#60a5fa'},
-                {label:'📦 Valor en campo', value:`S/${valorCampo.toLocaleString('es-PE')}`, color:'#fb923c'},
-              ].map(({label,value,color}) => (
-                <div key={label} style={{background:'var(--app-card-bg-alt)',border:'1px solid var(--app-card-border)',borderRadius:10,padding:'12px',textAlign:'center'}}>
-                  <p style={{fontSize:10,color:'var(--app-text-secondary)',margin:'0 0 4px',textTransform:'uppercase'}}>{label}</p>
-                  <p style={{fontSize:18,fontWeight:700,color,margin:0}}>{value}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* ── Tabla rendición estilo Excel ── */}
-            <div>
-              <h4 style={{fontSize:13,fontWeight:700,color:'var(--app-text)',margin:'0 0 10px'}}>
-                🧾 Rendición de ventas
-              </h4>
-              {diasOrdenados.length === 0 ? (
-                <div style={{textAlign:'center',padding:'24px',color:'var(--app-text-secondary)',fontSize:13,border:'1px solid var(--app-card-border)',borderRadius:10}}>
-                  Sin ventas registradas aún — registra ventas desde el módulo Ventas seleccionando el almacén de {selected.nombre}
-                </div>
-              ) : (
-                <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden'}}>
-                  {/* Cabeceras */}
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 0.8fr 0.8fr 0.9fr 0.7fr 0.7fr 0.7fr 1fr 0.8fr',background:'var(--app-accent)',padding:'0'}}>
-                    {['Fecha','Cant. vendidos','Precio venta','Monto total','Vales S/20','Vales S/30','Vales S/43','Monto a pagar','Estado'].map(h => (
-                      <div key={h} style={{padding:'8px 8px',fontSize:9,fontWeight:700,color:'#fff',textTransform:'uppercase',borderRight:'1px solid rgba(255,255,255,0.2)',textAlign:'center'}}>
-                        {h}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Filas por día */}
-                  {diasOrdenados.map((dia, i) => {
-                    const datos = ventasPorDia[dia]
-                    const precioPromedio = datos.cantidad > 0 ? datos.monto / datos.cantidad : selected.precio_base
-                    // Vales del día desde cuentas_distribuidor
-                    const rendDia = rendiciones.find(r => r.periodo_fin === dia)
-                    const v20 = rendDia?.vales_20_count || 0
-                    const v30 = rendDia?.vales_30_count || 0
-                    const v43 = rendDia?.vales_43_count || 0
-                    const totalVales = v20*20 + v30*30 + v43*43
-                    const totalEfectivo = rendDia?.total_adelantos || 0
-                    const saldo = datos.monto - totalVales - totalEfectivo
-                    const cancelado = saldo <= 0
-
-                    return (
-                      <div key={dia} style={{
-                        display:'grid',gridTemplateColumns:'1fr 0.8fr 0.8fr 0.9fr 0.7fr 0.7fr 0.7fr 1fr 0.8fr',
-                        borderBottom: i < diasOrdenados.length-1 ? '1px solid var(--app-card-border)' : 'none',
-                        background: i%2===0 ? 'transparent' : 'var(--app-row-alt)'
-                      }}>
-                        <div style={{padding:'10px 8px',fontSize:12,fontWeight:600,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
-                          {format(new Date(dia+'T12:00:00'),'dd/MM/yyyy',{locale:es})}
-                        </div>
-                        <div style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
-                          {datos.cantidad}
-                        </div>
-                        <div style={{padding:'10px 8px',fontSize:12,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
-                          S/{precioPromedio.toFixed(2)}
-                        </div>
-                        <div style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
-                          S/{datos.monto.toLocaleString('es-PE')}
-                        </div>
-                        {/* Vales editables */}
-                        <div style={{padding:'6px 4px',borderRight:'1px solid var(--app-card-border)'}}>
-                          <input type="number" min="0" style={{width:'100%',background:'var(--app-input-bg)',border:'1px solid var(--app-input-border)',borderRadius:4,padding:'3px 4px',fontSize:11,color:'var(--app-input-text)',textAlign:'center',outline:'none'}}
-                            placeholder="0"
-                            defaultValue={v20||''}
-                            onBlur={async e => {
-                              const val = parseInt(e.target.value)||0
-                              if (rendDia) {
-                                await supabase.from('cuentas_distribuidor').update({vales_20_count: val, total_vales: val*20+(rendDia.vales_30_count||0)*30+(rendDia.vales_43_count||0)*43}).eq('id',rendDia.id)
-                              } else if (val > 0) {
-                                await supabase.from('cuentas_distribuidor').insert({distribuidor_id:selected.id,periodo_inicio:dia,periodo_fin:dia,balones_vendidos:datos.cantidad,precio_por_balon:precioPromedio,total_esperado:datos.monto,vales_20_count:val,vales_30_count:0,vales_43_count:0,total_vales:val*20,total_adelantos:0,estado:val*20>=datos.monto?'cancelado':'por_cobrar'})
-                              }
-                              await cargarHistorial(selected.id)
-                            }} />
-                        </div>
-                        <div style={{padding:'6px 4px',borderRight:'1px solid var(--app-card-border)'}}>
-                          <input type="number" min="0" style={{width:'100%',background:'var(--app-input-bg)',border:'1px solid var(--app-input-border)',borderRadius:4,padding:'3px 4px',fontSize:11,color:'var(--app-input-text)',textAlign:'center',outline:'none'}}
-                            placeholder="0"
-                            defaultValue={v30||''}
-                            onBlur={async e => {
-                              const val = parseInt(e.target.value)||0
-                              if (rendDia) {
-                                await supabase.from('cuentas_distribuidor').update({vales_30_count: val, total_vales: (rendDia.vales_20_count||0)*20+val*30+(rendDia.vales_43_count||0)*43}).eq('id',rendDia.id)
-                                await cargarHistorial(selected.id)
-                              }
-                            }} />
-                        </div>
-                        <div style={{padding:'6px 4px',borderRight:'1px solid var(--app-card-border)'}}>
-                          <input type="number" min="0" style={{width:'100%',background:'var(--app-input-bg)',border:'1px solid var(--app-input-border)',borderRadius:4,padding:'3px 4px',fontSize:11,color:'var(--app-input-text)',textAlign:'center',outline:'none'}}
-                            placeholder="0"
-                            defaultValue={v43||''}
-                            onBlur={async e => {
-                              const val = parseInt(e.target.value)||0
-                              if (rendDia) {
-                                await supabase.from('cuentas_distribuidor').update({vales_43_count: val, total_vales: (rendDia.vales_20_count||0)*20+(rendDia.vales_30_count||0)*30+val*43}).eq('id',rendDia.id)
-                                await cargarHistorial(selected.id)
-                              }
-                            }} />
-                        </div>
-                        <div style={{padding:'10px 8px',fontSize:13,fontWeight:700,
-                          color: cancelado ? '#34d399' : '#f87171',
-                          borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
-                          S/{Math.max(0,saldo).toLocaleString('es-PE')}
-                        </div>
-                        <div style={{padding:'10px 8px',textAlign:'center',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                          <span style={{fontSize:10,fontWeight:700,padding:'3px 6px',borderRadius:4,
-                            background: cancelado ? 'rgba(52,211,153,0.15)' : 'rgba(251,146,60,0.15)',
-                            color: cancelado ? '#34d399' : '#fb923c'}}>
-                            {cancelado ? 'Cancelado' : 'Por cobrar'}
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  })}
-
-                  {/* Totales */}
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 0.8fr 0.8fr 0.9fr 0.7fr 0.7fr 0.7fr 1fr 0.8fr',background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)'}}>
-                    <div style={{padding:'10px 8px',fontSize:11,fontWeight:700,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>TOTAL</div>
-                    <div style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
-                      {ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0),0)}
-                    </div>
-                    <div style={{padding:'10px 8px',borderRight:'1px solid var(--app-card-border)'}}/>
-                    <div style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
-                      S/{ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0).toLocaleString('es-PE')}
-                    </div>
-                    <div style={{padding:'10px 8px',borderRight:'1px solid var(--app-card-border)'}}/>
-                    <div style={{padding:'10px 8px',borderRight:'1px solid var(--app-card-border)'}}/>
-                    <div style={{padding:'10px 8px',borderRight:'1px solid var(--app-card-border)'}}/>
-                    <div style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'var(--app-accent)',textAlign:'center'}}>
-                      S/{Math.max(0, ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0) - rendiciones.reduce((s,r)=>s+(r.total_vales||0)+(r.total_adelantos||0),0)).toLocaleString('es-PE')}
-                    </div>
-                    <div style={{padding:'10px 8px'}}/>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* ── Lotes FIFO ── */}
-            {lotesDistribuidor.length > 0 && (
-              <div>
-                <h4 style={{fontSize:13,fontWeight:700,color:'var(--app-text)',margin:'0 0 10px'}}>🔖 Lotes de precio (FIFO)</h4>
-                <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden'}}>
-                  <div style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',background:'var(--app-card-bg-alt)',borderBottom:'1px solid var(--app-card-border)'}}>
-                    {['Fecha','Precio/bal.','Inicial','Vendidos','Restantes','Estado'].map(h => (
-                      <div key={h} style={{padding:'8px 10px',fontSize:10,fontWeight:700,color:'var(--app-text-secondary)',textTransform:'uppercase',borderRight:'1px solid var(--app-card-border)'}}>
-                        {h}
-                      </div>
-                    ))}
-                  </div>
-                  {lotesDistribuidor.map((lote, i) => {
-                    const agotado = lote.cerrado || lote.cantidad_restante <= 0
-                    const nuevo = lote.cantidad_vendida === 0
-                    return (
-                      <div key={lote.id} style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',borderBottom:i<lotesDistribuidor.length-1?'1px solid var(--app-card-border)':'none'}}>
-                        <div style={{padding:'10px',fontSize:12,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',fontWeight:500}}>
-                          {lote.fecha}
-                          {lote.notas && <p style={{fontSize:10,color:'var(--app-text-secondary)',margin:'2px 0 0',fontStyle:'italic'}}>{lote.notas}</p>}
-                        </div>
-                        <div style={{padding:'10px',fontSize:13,fontWeight:700,color:'#fb923c',borderRight:'1px solid var(--app-card-border)'}}> S/ {lote.precio_unitario}</div>
-                        <div style={{padding:'10px',fontSize:12,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>{lote.cantidad_inicial}</div>
-                        <div style={{padding:'10px',fontSize:12,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)'}}>{lote.cantidad_vendida}</div>
-                        <div style={{padding:'10px',fontSize:13,fontWeight:700,color:agotado?'var(--app-text-secondary)':lote.cantidad_restante<10?'#f87171':'#34d399',borderRight:'1px solid var(--app-card-border)'}}>{lote.cantidad_restante}</div>
-                        <div style={{padding:'10px',display:'flex',alignItems:'center'}}>
-                          <span style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:5,background:agotado?'rgba(107,114,128,0.15)':nuevo?'rgba(52,211,153,0.15)':'rgba(251,146,60,0.15)',color:agotado?'#9ca3af':nuevo?'#34d399':'#fb923c'}}>
-                            {agotado?'Agotado':nuevo?'Sin ventas':'Activo'}
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* ── Reposiciones ── */}
-            {historial.length > 0 && (
-              <div>
-                <h4 style={{fontSize:13,fontWeight:700,color:'var(--app-text)',margin:'0 0 10px'}}>📥 Reposiciones</h4>
-                <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                  {historial.map(r => (
-                    <div key={r.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderRadius:10,background:'rgba(52,211,153,0.06)',border:'1px solid rgba(52,211,153,0.2)'}}>
-                      <div style={{display:'flex',alignItems:'center',gap:10}}>
-                        <span style={{fontSize:16}}>📥</span>
-                        <div>
-                          <p style={{color:'var(--app-text)',fontSize:13,fontWeight:600,margin:0}}>+{r.cantidad} balones</p>
-                          <p style={{color:'var(--app-text-secondary)',fontSize:11,margin:'2px 0 0'}}>{format(new Date(r.fecha),'dd/MM/yyyy HH:mm',{locale:es})}{r.notas?` · ${r.notas}`:''}</p>
-                        </div>
-                      </div>
-                      <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>{r.stock_antes_dist} → <span style={{color:'#34d399',fontWeight:700}}>{r.stock_despues_dist}</span> bal.</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-          </div>
-        </Modal>
-        )
-      })()}
-
-      {/* Modal arreglar cuentas */}
-      {abonoModal !== null && selected && (
-        <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto" style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
-            <div className="flex items-center justify-between px-6 py-4  sticky top-0">
-              <div>
-                <h3 className="text-white font-semibold">💰 {selected.nombre}</h3>
-                <p className="text-gray-500 text-xs mt-0.5">{selected.almacenes?.nombre} · S/{selected.precio_base}/bal. · {selected.stock_actual || 0} llenos en campo</p>
-              </div>
-              <button onClick={() => setAbonoModal(null)} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-
-              {/* Toggle modo */}
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => setAbonoForm(f => ({...f, modo: 'abono'}))}
-                  className={`py-3 px-3 rounded-xl border text-xs font-medium transition-all text-center ${(!abonoForm.modo || abonoForm.modo === 'abono') ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
-                  💵 Abono parcial
-                  <p className="text-gray-500 font-normal mt-0.5">Solo lo que trae ahora</p>
-                </button>
-                <button onClick={() => setAbonoForm(f => ({...f, modo: 'totalizar'}))}
-                  className={`py-3 px-3 rounded-xl border text-xs font-medium transition-all text-center ${abonoForm.modo === 'totalizar' ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300' : 'bg-transparent border-[var(--app-card-border)] text-gray-400'}`}>
-                  📊 Totalizar cuentas
-                  <p className="text-gray-500 font-normal mt-0.5">Cuántos vendió + lo que paga</p>
-                </button>
-              </div>
-
-              {/* MODO ABONO PARCIAL */}
-              {(!abonoForm.modo || abonoForm.modo === 'abono') && (
-                <div className="space-y-3">
-                  <div className="bg-transparent border border-[var(--app-card-border)] rounded-xl p-3 grid grid-cols-3 gap-3 text-center">
-                    <div><p className="text-lg font-bold text-emerald-400">{selected.stock_actual || 0}</p><p className="text-xs text-gray-500">🟢 Llenos</p></div>
-                    <div><p className="text-lg font-bold text-gray-300">{selected.balones_vacios || 0}</p><p className="text-xs text-gray-500">⚪ Vacíos</p></div>
-                    <div><p className="text-lg font-bold text-yellow-400">S/{((selected.stock_actual||0)*(selected.precio_base||0)).toLocaleString()}</p><p className="text-xs text-gray-500">💰 Debe</p></div>
-                  </div>
-                  <p className="text-xs text-gray-500">¿Qué trae ahora?</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="label">⚪ Vacíos que devuelve</label>
-                      <input type="number" min="0" className="input text-center" placeholder="0"
-                        value={abonoForm.vacios_extra || ''}
-                        onChange={e => setAbonoForm(f => ({...f, vacios_extra: e.target.value}))} />
-                    </div>
-                    <div>
-                      <label className="label">💵 Efectivo S/</label>
-                      <input type="number" min="0" step="0.50" className="input text-center" placeholder="0"
-                        value={abonoForm.efectivo}
-                        onChange={e => setAbonoForm(f => ({...f, efectivo: e.target.value}))} />
-                    </div>
-                    <div>
-                      <label className="label">🎫 Vales S/20</label>
-                      <input type="number" min="0" className="input text-center" placeholder="0"
-                        value={abonoForm.vales20}
-                        onChange={e => setAbonoForm(f => ({...f, vales20: e.target.value}))} />
-                      {(parseInt(abonoForm.vales20)||0) > 0 && <p className="text-xs text-yellow-400 text-center mt-1">= S/{((parseInt(abonoForm.vales20)||0)*20).toLocaleString()}</p>}
-                    </div>
-                    <div>
-                      <label className="label">🎫 Vales S/43</label>
-                      <input type="number" min="0" className="input text-center" placeholder="0"
-                        value={abonoForm.vales43}
-                        onChange={e => setAbonoForm(f => ({...f, vales43: e.target.value}))} />
-                      {(parseInt(abonoForm.vales43)||0) > 0 && <p className="text-xs text-yellow-400 text-center mt-1">= S/{((parseInt(abonoForm.vales43)||0)*43).toLocaleString()}</p>}
-                    </div>
-                  </div>
-                  {((parseFloat(abonoForm.efectivo)||0)+(parseInt(abonoForm.vales20)||0)*20+(parseInt(abonoForm.vales43)||0)*43+(parseInt(abonoForm.vacios_extra)||0)) > 0 && (
-                    <div className="bg-blue-900/20 border border-blue-800/40 rounded-xl p-3 space-y-1 text-sm">
-                      {(parseInt(abonoForm.vacios_extra)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">⚪ Vacíos al almacén:</span><span className="text-gray-300">+{abonoForm.vacios_extra} bal.</span></div>}
-                      {(parseInt(abonoForm.vales20)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">🎫 {abonoForm.vales20}×S/20:</span><span className="text-yellow-400">S/ {((parseInt(abonoForm.vales20)||0)*20).toLocaleString()}</span></div>}
-                      {(parseInt(abonoForm.vales43)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">🎫 {abonoForm.vales43}×S/43:</span><span className="text-yellow-400">S/ {((parseInt(abonoForm.vales43)||0)*43).toLocaleString()}</span></div>}
-                      {(parseFloat(abonoForm.efectivo)||0) > 0 && <div className="flex justify-between"><span className="text-gray-400">💵 Efectivo:</span><span className="text-emerald-400">S/ {(parseFloat(abonoForm.efectivo)||0).toLocaleString()}</span></div>}
-                      <div className="border-t border-[var(--app-card-border)] pt-1 flex justify-between font-semibold">
-                        <span className="text-gray-300">Total abono:</span>
-                        <span className="text-blue-300">S/ {((parseFloat(abonoForm.efectivo)||0)+(parseInt(abonoForm.vales20)||0)*20+(parseInt(abonoForm.vales43)||0)*43).toLocaleString()}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* MODO TOTALIZAR */}
-              {abonoForm.modo === 'totalizar' && (
-                <div className="space-y-4">
-
-                  {/* Resumen acumulado de abonos previos */}
-                  {rendiciones.length > 0 && (() => {
-                    const soloAbonos = rendiciones.filter(r => r.notas?.startsWith('Abono parcial'))
-                    const totalAbonadoPrev = soloAbonos.reduce((s, r) => s + (r.total_vales || 0) + (r.total_adelantos || 0), 0)
-                    const totalVaciosPrev = soloAbonos.reduce((s, r) => s + (r.balones_devueltos || 0), 0)
-                    if (soloAbonos.length === 0) return null
-                    return (
-                      <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-xl p-3 space-y-1.5">
-                        <p className="text-xs text-yellow-300 font-semibold uppercase">📋 Abonos previos sin rendir</p>
-                        {soloAbonos.map((r, i) => (
-                          <div key={i} className="flex justify-between text-xs">
-                            <span className="text-gray-400">{r.periodo_fin} — vales S/{(r.total_vales||0).toLocaleString()} + efectivo S/{(r.total_adelantos||0).toLocaleString()}{r.balones_devueltos > 0 ? ` + ${r.balones_devueltos} vacíos` : ''}</span>
-                            <span className="text-yellow-300 font-semibold">S/ {((r.total_vales||0)+(r.total_adelantos||0)).toLocaleString()}</span>
-                          </div>
-                        ))}
-                        <div className="border-t border-yellow-700/40 pt-1.5 flex justify-between font-semibold text-sm">
-                          <span className="text-yellow-300">Total ya abonado:</span>
-                          <span className="text-yellow-300">S/ {totalAbonadoPrev.toLocaleString('es-PE')}</span>
-                        </div>
-                        <p className="text-xs text-gray-500">Este monto se descontará automáticamente del total</p>
-                      </div>
-                    )
-                  })()}
-                  <div className="bg-transparent border border-[var(--app-card-border)] rounded-xl p-4 space-y-3">
-                    <p className="text-xs text-gray-400 font-semibold uppercase">1. Balones</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="label">🟢 Balones que vendió</label>
-                        <input type="number" min="0" className="input text-center text-lg font-bold" placeholder="0"
-                          value={abonoForm.balones_devueltos}
-                          onChange={e => setAbonoForm(f => ({...f, balones_devueltos: e.target.value}))} />
-                        <p className="text-xs text-gray-600 mt-1 text-center">Tiene {selected.stock_actual || 0} en campo</p>
-                      </div>
-                      <div>
-                        <label className="label">⚪ Vacíos que devuelve</label>
-                        <input type="number" min="0" className="input text-center text-lg font-bold" placeholder="0"
-                          value={abonoForm.vacios_extra || ''}
-                          onChange={e => setAbonoForm(f => ({...f, vacios_extra: e.target.value}))} />
-                        <p className="text-xs text-gray-600 mt-1 text-center">pueden ser menos</p>
-                      </div>
-                    </div>
-                    {(parseInt(abonoForm.balones_devueltos)||0) > 0 && (
-                      <div className="rounded-lg p-2 flex justify-between">
-                        <span className="text-gray-400 text-sm">{abonoForm.balones_devueltos} bal. × S/{selected.precio_base}</span>
-                        <span className="text-white font-bold">S/ {((parseInt(abonoForm.balones_devueltos)||0)*(selected.precio_base||0)).toLocaleString('es-PE')}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="bg-transparent border border-[var(--app-card-border)] rounded-xl p-4 space-y-3">
-                    <p className="text-xs text-gray-400 font-semibold uppercase">2. Lo que entrega</p>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <label className="label">🎫 Vales S/20</label>
-                        <input type="number" min="0" className="input text-center" placeholder="0"
-                          value={abonoForm.vales20} onChange={e => setAbonoForm(f => ({...f, vales20: e.target.value}))} />
-                        {(parseInt(abonoForm.vales20)||0) > 0 && <p className="text-xs text-yellow-400 text-center mt-1">= S/{((parseInt(abonoForm.vales20)||0)*20).toLocaleString()}</p>}
-                      </div>
-                      <div>
-                        <label className="label">🎫 Vales S/43</label>
-                        <input type="number" min="0" className="input text-center" placeholder="0"
-                          value={abonoForm.vales43} onChange={e => setAbonoForm(f => ({...f, vales43: e.target.value}))} />
-                        {(parseInt(abonoForm.vales43)||0) > 0 && <p className="text-xs text-yellow-400 text-center mt-1">= S/{((parseInt(abonoForm.vales43)||0)*43).toLocaleString()}</p>}
-                      </div>
-                      <div>
-                        <label className="label">💵 Efectivo S/</label>
-                        <input type="number" min="0" step="0.50" className="input text-center" placeholder="0"
-                          value={abonoForm.efectivo} onChange={e => setAbonoForm(f => ({...f, efectivo: e.target.value}))} />
-                      </div>
-                    </div>
-                  </div>
-                  {(parseInt(abonoForm.balones_devueltos)||0) > 0 && (() => {
-                    const vendidos = parseInt(abonoForm.balones_devueltos) || 0
-                    const vaciosDevueltos = parseInt(abonoForm.vacios_extra) || 0
-                    const precio = selected.precio_base || 0
-                    const v20 = parseInt(abonoForm.vales20) || 0
-                    const v43 = parseInt(abonoForm.vales43) || 0
-                    const efectivo = parseFloat(abonoForm.efectivo) || 0
-                    const totalBruto = vendidos * precio
-                    // Sumar abonos previos
-                    const soloAbonos = rendiciones.filter(r => r.notas?.startsWith('Abono parcial'))
-                    const abonadoPrev = soloAbonos.reduce((s, r) => s + (r.total_vales || 0) + (r.total_adelantos || 0), 0)
-                    const totalDescuentos = v20*20 + v43*43 + efectivo + abonadoPrev
-                    const saldo = totalBruto - totalDescuentos
-                    const llenosRestantes = Math.max(0, (selected.stock_actual||0) - vaciosDevueltos)
-                    const cancelado = saldo <= 0
-                    return (
-                      <div className="border border-gray-600 rounded-xl overflow-hidden">
-                        <div style={{background:"var(--app-card-bg)"}} className="px-4 py-2"><p className="text-xs text-gray-400 font-semibold uppercase">3. Resultado</p></div>
-                        <div className="px-4 py-3 space-y-2 text-sm">
-                          <div className="flex justify-between"><span className="text-gray-400">{vendidos} bal. × S/{precio}</span><span className="text-white font-semibold">S/ {totalBruto.toLocaleString('es-PE')}</span></div>
-                          {abonadoPrev > 0 && <div className="flex justify-between"><span className="text-yellow-300">📋 Abonos previos</span><span className="text-yellow-400">− S/ {abonadoPrev.toLocaleString()}</span></div>}
-                          {v20 > 0 && <div className="flex justify-between"><span className="text-gray-400">{v20} vales S/20</span><span className="text-yellow-400">− S/ {(v20*20).toLocaleString()}</span></div>}
-                          {v43 > 0 && <div className="flex justify-between"><span className="text-gray-400">{v43} vales S/43</span><span className="text-yellow-400">− S/ {(v43*43).toLocaleString()}</span></div>}
-                          {efectivo > 0 && <div className="flex justify-between"><span className="text-gray-400">Efectivo hoy</span><span className="text-yellow-400">− S/ {efectivo.toLocaleString()}</span></div>}
-                          <div className="border-t border-gray-600 pt-2 flex justify-between items-center">
-                            <span className="text-white font-bold">Saldo final</span>
-                            <span className={`font-bold text-xl ${cancelado ? 'text-emerald-400' : 'text-red-400'}`}>S/ {Math.abs(saldo).toLocaleString('es-PE')} {cancelado ? '✅' : '⏳'}</span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-                            <div className="bg-emerald-900/20 rounded-lg p-2 text-center">
-                              <p className="text-emerald-400 font-bold text-base">{llenosRestantes}</p>
-                              <p className="text-gray-500">🟢 Llenos restantes</p>
-                            </div>
-                            <div className="bg-gray-700/30 rounded-lg p-2 text-center">
-                              <p className="text-gray-300 font-bold text-base">+{vaciosDevueltos}</p>
-                              <p className="text-gray-500">⚪ Vacíos al almacén</p>
-                            </div>
-                          </div>
-                          {cancelado ? (
-                            <div className="bg-emerald-900/30 border border-emerald-700/40 rounded-lg p-2 text-center">
-                              <p className="text-emerald-300 font-bold">✅ CANCELADO</p>
-                              {saldo < 0 && <p className="text-xs text-gray-400 mt-0.5">Adelanto S/{Math.abs(saldo).toLocaleString()} para próxima</p>}
-                            </div>
-                          ) : (
-                            <div className="bg-red-900/20 border border-red-800/40 rounded-lg p-2 text-center">
-                              <p className="text-red-300 font-bold">⏳ Queda debiendo S/ {saldo.toLocaleString('es-PE')}</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })()}
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Fecha</label>
-                  <input type="date" className="input"
-                    value={abonoForm.fecha || hoyPeru()}
-                    onChange={e => setAbonoForm(f => ({...f, fecha: e.target.value}))} />
-                </div>
-                <div>
-                  <label className="label">Notas (opcional)</label>
-                  <input className="input" placeholder="Ej: Próxima semana el resto..."
-                    value={abonoForm.notas} onChange={e => setAbonoForm(f => ({...f, notas: e.target.value}))} />
-                </div>
-              </div>
-              <div className="flex gap-3 pt-1">
-                <button onClick={() => setAbonoModal(null)} className="btn-secondary flex-1">Cancelar</button>
-                <button onClick={guardarAbono} disabled={savingAbono} className="btn-primary flex-1 justify-center">
-                  {savingAbono ? 'Guardando...' : '✓ Registrar'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ── Modal Registrar Carga (Cristian) ── */}
       {cargaModal && selected && (
         <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
