@@ -241,7 +241,8 @@ export default function Ventas() {
         cliente_id: form.cliente_id || null, almacen_id: form.almacen_id,
         precio_tipo_id: form.precio_tipo_id || null, tipo_balon: form.tipo_balon,
         fecha: (form.fecha || hoyPeru()) + 'T12:00:00-05:00',
-        cantidad: cant, precio_unitario: precioGas, metodo_pago: form.metodo_pago,
+        cantidad: cant, precio_unitario: precioGas,
+        metodo_pago: form.es_credito ? 'credito' : form.metodo_pago,
         notas: form.notas, usuario_id: perfil?.id || null
       })
       if (e) { setError(e.message); setSaving(false); return }
@@ -269,7 +270,8 @@ export default function Ventas() {
         cliente_id: form.cliente_id || null, almacen_id: form.almacen_id,
         precio_tipo_id: form.precio_tipo_id || null, tipo_balon: form.tipo_balon,
         fecha: (form.fecha || hoyPeru()) + 'T12:00:00-05:00',
-        cantidad: cant, precio_unitario: precioTotal, metodo_pago: form.metodo_pago,
+        cantidad: cant, precio_unitario: precioTotal,
+        metodo_pago: form.es_credito ? 'credito' : form.metodo_pago,
         notas: `Gas+Balón (gas:S/${precioGas} bal:S/${precioBajon})${form.notas ? ' — ' + form.notas : ''}`,
         usuario_id: perfil?.id || null
       })
@@ -352,7 +354,10 @@ export default function Ventas() {
   const ventasFiltradas = ventas.filter(v =>
     !busqueda || v.clientes?.nombre?.toLowerCase().includes(busqueda.toLowerCase())
   )
-  const totalDia = ventas.reduce((s, v) => s + (v.cantidad * v.precio_unitario), 0)
+  const ventasCobradas = ventas.filter(v => v.metodo_pago !== 'credito')
+  const ventasCredito = ventas.filter(v => v.metodo_pago === 'credito')
+  const totalDia = ventasCobradas.reduce((s, v) => s + (v.cantidad * v.precio_unitario), 0)
+  const totalCredito = ventasCredito.reduce((s, v) => s + (v.cantidad * v.precio_unitario), 0)
   const totalBalones = ventas.reduce((s, v) => s + v.cantidad, 0)
 
   return (
@@ -369,7 +374,10 @@ export default function Ventas() {
           <button onClick={() => setFiltroFecha(new Date(new Date().setDate(new Date().getDate()-1)).toISOString().split('T')[0])} className="btn-secondary py-2 text-xs">⬅ Ayer</button>
         </div>
         <div className="stat-card border border-blue-500/20"><p className="text-2xl font-bold text-white">{totalBalones}</p><p className="text-xs text-gray-500">Balones vendidos</p></div>
-        <div className="stat-card border border-emerald-500/20"><p className="text-2xl font-bold text-emerald-400">S/ {totalDia.toLocaleString('es-PE')}</p><p className="text-xs text-gray-500">Ingresos del día</p></div>
+        <div className="stat-card border border-emerald-500/20"><p className="text-2xl font-bold text-emerald-400">S/ {totalDia.toLocaleString('es-PE')}</p><p className="text-xs text-gray-500">Ingresos cobrados</p></div>
+        {totalCredito > 0 && (
+          <div className="stat-card border border-orange-500/20"><p className="text-2xl font-bold text-orange-400">S/ {totalCredito.toLocaleString('es-PE')}</p><p className="text-xs text-gray-500">Por cobrar (crédito)</p></div>
+        )}
       </div>
 
       <div className="relative max-w-xs">
@@ -400,7 +408,7 @@ export default function Ventas() {
                     </div>
                     <div style={{textAlign:'right'}}>
                       <p style={{color:'#34d399', fontWeight:700, fontSize:16, margin:0}}>S/{(v.cantidad * v.precio_unitario).toLocaleString()}</p>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${v.metodo_pago==='efectivo'?'bg-emerald-900/40 text-emerald-400':v.metodo_pago==='yape'?'bg-blue-900/40 text-blue-400':v.metodo_pago==='vale'?'bg-yellow-900/40 text-yellow-400':'bg-purple-900/40 text-purple-400'}`}>{v.metodo_pago}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${v.metodo_pago==='efectivo'?'bg-emerald-900/40 text-emerald-400':v.metodo_pago==='yape'?'bg-blue-900/40 text-blue-400':v.metodo_pago==='vale'?'bg-yellow-900/40 text-yellow-400':v.metodo_pago==='credito'?'bg-orange-900/40 text-orange-400':'bg-purple-900/40 text-purple-400'}`}>{v.metodo_pago==='credito'?'⏳ crédito':v.metodo_pago}</span>
                     </div>
                   </div>
                   <div style={{display:'flex', gap:6, flexWrap:'wrap', alignItems:'center'}}>
@@ -434,7 +442,7 @@ export default function Ventas() {
                       <td className="px-4 py-3 text-blue-400 font-bold">{v.cantidad}</td>
                       <td className="px-4 py-3 text-gray-400 text-sm">S/{v.precio_unitario}</td>
                       <td className="px-4 py-3 text-emerald-400 font-bold">S/{(v.cantidad * v.precio_unitario).toLocaleString()}</td>
-                      <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${v.metodo_pago === 'efectivo' ? 'bg-emerald-900/40 text-emerald-400' : v.metodo_pago === 'yape' ? 'bg-blue-900/40 text-blue-400' : v.metodo_pago === 'vale' ? 'bg-yellow-900/40 text-yellow-400' : 'bg-purple-900/40 text-purple-400'}`}>{v.metodo_pago}</span></td>
+                      <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${v.metodo_pago === 'efectivo' ? 'bg-emerald-900/40 text-emerald-400' : v.metodo_pago === 'yape' ? 'bg-blue-900/40 text-blue-400' : v.metodo_pago === 'vale' ? 'bg-yellow-900/40 text-yellow-400' : v.metodo_pago === 'credito' ? 'bg-orange-900/40 text-orange-400' : 'bg-purple-900/40 text-purple-400'}`}>{v.metodo_pago==='credito'?'⏳ crédito':v.metodo_pago}</span></td>
                       <td className="px-4 py-3 text-gray-400 text-xs max-w-32 truncate" title={v.notas || ''}>{v.notas || <span className="text-gray-700">—</span>}</td>
                       <td className="px-4 py-3">
                         <button onClick={() => eliminarVenta(v)}

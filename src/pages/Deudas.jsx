@@ -153,26 +153,42 @@ export default function Deudas() {
 
     // Descontar llenos del almacén si hay balones prestados
     let almacenId = perfil?.almacen_id || null
-    if (balones > 0) {
-      const { data: alms } = await supabase.from('almacenes').select('id, nombre, stock_actual').eq('activo', true)
-      const almPerfil = almacenId ? alms?.find(a => a.id === almacenId) : null
-      const tienda = almPerfil || alms?.find(a => a.nombre?.toLowerCase().includes('tienda')) || alms?.[0]
-      if (tienda) {
-        almacenId = tienda.id
-        const campoVacios = tipoBalonDeuda === '5kg' ? 'vacios_5kg' : tipoBalonDeuda === '45kg' ? 'vacios_45kg' : 'vacios_10kg'
-        const { data: almFresco } = await supabase.from('almacenes').select('stock_actual, balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg').eq('id', tienda.id).single()
-        if (almFresco) {
-          await supabase.from('almacenes').update({
-            stock_actual: Math.max(0, (almFresco.stock_actual || 0) - balones),
-            updated_at: new Date().toISOString()
-          }).eq('id', tienda.id)
-          // Actualizar stock_por_tipo
-          const { data: spt } = await supabase.from('stock_por_tipo').select('stock_actual').eq('almacen_id', tienda.id).eq('tipo_balon', tipoBalonDeuda).single()
-          if (spt) {
-            await supabase.from('stock_por_tipo').update({ stock_actual: Math.max(0, spt.stock_actual - balones) }).eq('almacen_id', tienda.id).eq('tipo_balon', tipoBalonDeuda)
-          }
+    // Obtener almacén de la tienda principal
+    const { data: almsDeuda } = await supabase.from('almacenes').select('id, nombre, stock_actual').eq('activo', true)
+    const almPerfilD = almacenId ? almsDeuda?.find(a => a.id === almacenId) : null
+    const tiendaDeuda = almPerfilD || almsDeuda?.find(a => a.nombre?.toLowerCase().includes('tienda')) || almsDeuda?.[0]
+    if (tiendaDeuda) almacenId = tiendaDeuda.id
+    if (balones > 0 && tiendaDeuda) {
+      const { data: almFrescoD } = await supabase.from('almacenes')
+        .select('stock_actual, balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg')
+        .eq('id', tiendaDeuda.id).single()
+      if (almFrescoD) {
+        await supabase.from('almacenes').update({
+          stock_actual: Math.max(0, (almFrescoD.stock_actual || 0) - balones),
+          updated_at: new Date().toISOString()
+        }).eq('id', tiendaDeuda.id)
+        const { data: sptD } = await supabase.from('stock_por_tipo')
+          .select('stock_actual').eq('almacen_id', tiendaDeuda.id).eq('tipo_balon', tipoBalonDeuda).single()
+        if (sptD) {
+          await supabase.from('stock_por_tipo')
+            .update({ stock_actual: Math.max(0, sptD.stock_actual - balones) })
+            .eq('almacen_id', tiendaDeuda.id).eq('tipo_balon', tipoBalonDeuda)
         }
       }
+    }
+    // Registrar en ventas como crédito pendiente (para reportes)
+    const montoTotalDeuda = monto + (vales20 * 20) + (vales43 * 43)
+    if (montoTotalDeuda > 0 && tiendaDeuda) {
+      await supabase.from('ventas').insert({
+        almacen_id: tiendaDeuda.id,
+        tipo_balon: tipoBalonDeuda,
+        fecha: new Date().toISOString(),
+        cantidad: balones || 1,
+        precio_unitario: balones > 0 ? (monto / balones) : monto,
+        metodo_pago: 'credito',
+        notas: `Deuda registrada — ${deudaForm.nombre_deudor.trim()}`,
+        usuario_id: perfil?.id || null
+      })
     }
 
     const { error: e } = await supabase.from('deudas').insert({
@@ -277,12 +293,12 @@ export default function Deudas() {
       if (almacenIngreso) {
         await supabase.from('ventas').insert({
           almacen_id: almacenIngreso,
-          tipo_balon: '10kg',
+          tipo_balon: selected.historial?.[0]?.tipo_balon || '10kg',
           fecha: new Date().toISOString(),
-          cantidad: balones || 0,
-          precio_unitario: balones > 0 ? montoIngreso / balones : montoIngreso,
-          metodo_pago: metodo === 'vale' ? 'cobro_credito' : pagoForm.metodo_pago || 'efectivo',
-          notas: `Cobro deuda — ${selected.nombre_deudor}`,
+          cantidad: 1,
+          precio_unitario: montoIngreso,
+          metodo_pago: 'cobro_credito',
+          notas: `Cobro deuda — ${selected.nombre_deudor}${balones > 0 ? ` (${balones} balón${balones>1?'es':''} devuelto${balones>1?'s':''})` : ''}`,
           usuario_id: perfil?.id || null
         })
       }
