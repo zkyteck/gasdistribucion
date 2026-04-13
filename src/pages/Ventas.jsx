@@ -218,7 +218,6 @@ export default function Ventas() {
     const precioBajon = parseFloat(form.precio_balon) || 0
     const precioGas = parseFloat(form.precio_unitario) || 0
 
-    // Validaciones según tipo de venta
     if (form.tipo_venta === 'gas' || form.tipo_venta === 'gas_balon') {
       if (!form.almacen_id || !cant || !precioGas) { setError('Completa todos los campos'); return }
       const stockDisp = getStock(form.almacen_id, form.tipo_balon)
@@ -234,51 +233,70 @@ export default function Ventas() {
       .select('stock_actual, balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg')
       .eq('id', form.almacen_id).single()
 
+    // ── Determinar comportamiento según tipo de crédito ──────────────────
+    const esCred = form.es_credito
+    const credTipo = form.credito_tipo // 'dinero' | 'balon' | 'ambos'
+    // debeBalon: se llevó el balón sin devolver vacío → NO suma vacío
+    const debeBalon = esCred && (credTipo === 'balon' || credTipo === 'ambos')
+    // debeDinero: no pagó el gas → NO registra ingreso
+    const debeDinero = esCred && (credTipo === 'dinero' || credTipo === 'ambos')
+
     if (form.tipo_venta === 'gas') {
-      // Venta normal — solo gas, cliente trae su vacío
       const stockDisp = getStock(form.almacen_id, form.tipo_balon)
+      // Determinar metodo_pago:
+      // - Solo debe balón → pagó dinero → ingreso real → metodo_pago normal
+      // - Debe dinero → no pagó → metodo_pago = 'credito'
+      const metodoPago = debeDinero ? 'credito' : form.metodo_pago
+
       const { error: e } = await supabase.from('ventas').insert({
         cliente_id: form.cliente_id || null, almacen_id: form.almacen_id,
         precio_tipo_id: form.precio_tipo_id || null, tipo_balon: form.tipo_balon,
         fecha: (form.fecha || hoyPeru()) + 'T12:00:00-05:00',
         cantidad: cant, precio_unitario: precioGas,
-        metodo_pago: form.es_credito ? 'credito' : form.metodo_pago,
+        metodo_pago: metodoPago,
         notas: form.notas, usuario_id: perfil?.id || null
       })
       if (e) { setError(e.message); setSaving(false); return }
+
       await supabase.from('stock_por_tipo')
-        .update({ stock_actual: stockDisp - cant }).eq('almacen_id', form.almacen_id).eq('tipo_balon', form.tipo_balon)
+        .update({ stock_actual: stockDisp - cant })
+        .eq('almacen_id', form.almacen_id).eq('tipo_balon', form.tipo_balon)
+
       if (almFresco) {
-        const debeBalon = form.es_credito && (form.credito_tipo === 'balon' || form.credito_tipo === 'ambos')
         const updateData = { stock_actual: Math.max(0, (almFresco.stock_actual || 0) - cant) }
+        // Suma vacío SOLO si el cliente dejó su envase (no debe balón)
         if (!debeBalon) {
           updateData.balones_vacios = (almFresco.balones_vacios || 0) + cant
           updateData[campoVacios] = (almFresco[campoVacios] || 0) + cant
         }
         await supabase.from('almacenes').update(updateData).eq('id', form.almacen_id)
       }
-      // Si es almacén de distribuidor → descontar lotes FIFO
+
       if (form.es_distribuidor && form.distribuidor_id) {
         await aplicarFIFO(form.distribuidor_id, form.tipo_balon, cant)
       }
 
     } else if (form.tipo_venta === 'gas_balon') {
-      // Venta gas + balón — precio total = gas + balón
       const precioTotal = precioGas + precioBajon
       const stockDisp = getStock(form.almacen_id, form.tipo_balon)
+      const metodoPago = debeDinero ? 'credito' : form.metodo_pago
+
       const { error: e } = await supabase.from('ventas').insert({
         cliente_id: form.cliente_id || null, almacen_id: form.almacen_id,
         precio_tipo_id: form.precio_tipo_id || null, tipo_balon: form.tipo_balon,
         fecha: (form.fecha || hoyPeru()) + 'T12:00:00-05:00',
         cantidad: cant, precio_unitario: precioTotal,
-        metodo_pago: form.es_credito ? 'credito' : form.metodo_pago,
+        metodo_pago: metodoPago,
         notas: `Gas+Balón (gas:S/${precioGas} bal:S/${precioBajon})${form.notas ? ' — ' + form.notas : ''}`,
         usuario_id: perfil?.id || null
       })
       if (e) { setError(e.message); setSaving(false); return }
+
       await supabase.from('stock_por_tipo')
-        .update({ stock_actual: stockDisp - cant }).eq('almacen_id', form.almacen_id).eq('tipo_balon', form.tipo_balon)
-      // Descuenta lleno, NO suma vacío (el balón se fue con el cliente)
+        .update({ stock_actual: stockDisp - cant })
+        .eq('almacen_id', form.almacen_id).eq('tipo_balon', form.tipo_balon)
+
+      // Gas+Balón: siempre descuenta lleno, nunca suma vacío (balón se fue)
       if (almFresco) {
         await supabase.from('almacenes').update({
           stock_actual: Math.max(0, (almFresco.stock_actual || 0) - cant)
@@ -286,7 +304,6 @@ export default function Ventas() {
       }
 
     } else if (form.tipo_venta === 'balon_vacio') {
-      // Venta de balón vacío — sale del stock de vacíos
       const { error: e } = await supabase.from('ventas').insert({
         cliente_id: form.cliente_id || null, almacen_id: form.almacen_id,
         tipo_balon: form.tipo_balon,
@@ -296,7 +313,6 @@ export default function Ventas() {
         usuario_id: perfil?.id || null
       })
       if (e) { setError(e.message); setSaving(false); return }
-      // Descontar vacíos del stock
       if (almFresco) {
         await supabase.from('almacenes').update({
           balones_vacios: Math.max(0, (almFresco.balones_vacios || 0) - cant),
@@ -304,38 +320,42 @@ export default function Ventas() {
         }).eq('id', form.almacen_id)
       }
     }
-    // Si es venta al crédito → crear o sumar a deuda existente
-    if (form.es_credito) {
-      const totalDeuda = parseInt(form.cantidad) * parseFloat(form.precio_unitario)
-      const debeDinero = form.credito_tipo === 'dinero' || form.credito_tipo === 'ambos'
-      const debeBalon = form.credito_tipo === 'balon' || form.credito_tipo === 'ambos'
-      const montoDeuda = debeDinero ? totalDeuda : 0
-      const balonesDeuda = debeBalon ? cant : 0
 
-      // Buscar deuda activa del mismo cliente
+    // ── Crear/acumular deuda si es venta al crédito ──────────────────────
+    if (esCred) {
+      const montoDeuda = debeDinero ? cant * precioGas : 0
+      const balonesDeuda = debeBalon ? cant : 0
+      const nombreCliente = (form.cliente_nombre || 'Cliente Varios').trim()
+
       const { data: deudaExistente } = await supabase.from('deudas')
         .select('*').in('estado', ['activa', 'pagada_parcial'])
-        .ilike('nombre_deudor', (form.cliente_nombre || 'Cliente Varios').trim())
+        .ilike('nombre_deudor', nombreCliente)
         .limit(1).single()
 
+      const entrada = {
+        tipo: 'deuda',
+        fecha: form.fecha || hoyPeru(),
+        monto: montoDeuda,
+        balones: balonesDeuda,
+        tipo_balon: form.tipo_balon,
+        notas: `Venta al crédito${form.notas ? ' — ' + form.notas : ''}`
+      }
+
       if (deudaExistente) {
-        // Sumar a deuda existente
-        const historialAnterior = deudaExistente.historial || []
         await supabase.from('deudas').update({
           monto_pendiente: (parseFloat(deudaExistente.monto_pendiente) || 0) + montoDeuda,
           monto_original: (parseFloat(deudaExistente.monto_original) || 0) + montoDeuda,
           balones_pendiente: (parseInt(deudaExistente.balones_pendiente) || 0) + balonesDeuda,
           cantidad_pendiente: (parseInt(deudaExistente.cantidad_pendiente) || 0) + balonesDeuda,
           estado: 'activa',
-          historial: [...historialAnterior, { tipo: 'deuda', fecha: form.fecha || hoyPeru(), monto: montoDeuda, balones: balonesDeuda, tipo_balon: form.tipo_balon, notas: 'Venta al crédito' }],
+          historial: [...(deudaExistente.historial || []), entrada],
           updated_at: new Date().toISOString()
         }).eq('id', deudaExistente.id)
       } else {
-        // Crear nueva deuda
         await supabase.from('deudas').insert({
           cliente_id: form.cliente_id || null,
-          nombre_deudor: (form.cliente_nombre || 'Cliente Varios').trim(),
-          tipo_deuda: 'mixto',
+          nombre_deudor: nombreCliente,
+          tipo_deuda: credTipo,
           monto_original: montoDeuda, monto_pendiente: montoDeuda,
           cantidad_original: balonesDeuda, cantidad_pendiente: balonesDeuda,
           balones_pendiente: balonesDeuda,
@@ -344,10 +364,11 @@ export default function Ventas() {
           notas: `Venta al crédito${form.notas ? ' — ' + form.notas : ''}`,
           almacen_id: form.almacen_id,
           usuario_id: perfil?.id || null,
-          historial: [{ tipo: 'deuda', fecha: form.fecha || hoyPeru(), monto: montoDeuda, balones: balonesDeuda, tipo_balon: form.tipo_balon, notas: 'Venta al crédito' }]
+          historial: [entrada]
         })
       }
     }
+
     setSaving(false); setModal(false); cargar()
   }
 
