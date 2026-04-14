@@ -604,21 +604,6 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
                   <p class="sub">Centro Gas Paucara · Generado el ${new Date().toLocaleDateString('es-PE', {day:'2-digit',month:'long',year:'numeric'})}</p>
 
                   <div class="seccion">
-                    <h2>Resumen de pagos</h2>
-                    <div class="resumen">
-                      <div class="res-item"><div class="label">Total balones</div><div class="valor">${totalCant}</div></div>
-                      <div class="res-item"><div class="label">Monto total</div><div class="valor">S/${totalMonto.toLocaleString('es-PE')}</div></div>
-                      <div class="res-item" style="border-color:${tSaldo<=0?'green':'red'}"><div class="label" style="color:${tSaldo<=0?'green':'red'}">${tSaldo<=0?'✅ Cancelado':'⏳ Saldo pendiente'}</div><div class="valor" style="color:${tSaldo<=0?'green':'red'}">S/${Math.max(0,tSaldo).toLocaleString('es-PE')}</div></div>
-                      <div class="res-item"><div class="label">Vales S/20 × ${tv20}</div><div class="valor">S/${(tv20*20).toLocaleString('es-PE')}</div></div>
-                      <div class="res-item"><div class="label">Vales S/30 × ${tv30}</div><div class="valor">S/${(tv30*30).toLocaleString('es-PE')}</div></div>
-                      <div class="res-item"><div class="label">Vales S/43 × ${tv43}</div><div class="valor">S/${(tv43*43).toLocaleString('es-PE')}</div></div>
-                      <div class="res-item"><div class="label">Efectivo</div><div class="valor">S/${tEf.toLocaleString('es-PE')}</div></div>
-                      <div class="res-item"><div class="label">Total vales</div><div class="valor">S/${tVales.toLocaleString('es-PE')}</div></div>
-                      <div class="res-item" style="background:#f0f0f0"><div class="label">Total pagado</div><div class="valor">S/${(tVales+tEf).toLocaleString('es-PE')}</div></div>
-                    </div>
-                  </div>
-
-                  <div class="seccion">
                     <h2>Detalle de ventas por día</h2>
                     <table>
                       <thead><tr>
