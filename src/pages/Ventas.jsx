@@ -99,6 +99,13 @@ export default function Ventas() {
   }
 
   function getStock(almacenId, tipoBalon) {
+    // Si es almacén de distribuidor → stock viene de lotes FIFO
+    const dist = getDistribuidor(almacenId)
+    if (dist) {
+      return lotesDistribuidor
+        .filter(l => l.distribuidor_id === dist.id && l.tipo_balon === tipoBalon && !l.cerrado && l.cantidad_restante > 0)
+        .reduce((s, l) => s + l.cantidad_restante, 0)
+    }
     const s = stockPorTipo.find(s => s.almacen_id === almacenId && s.tipo_balon === tipoBalon)
     return s?.stock_actual || 0
   }
@@ -218,6 +225,7 @@ export default function Ventas() {
     const precioBajon = parseFloat(form.precio_balon) || 0
     const precioGas = parseFloat(form.precio_unitario) || 0
 
+    // Validaciones según tipo de venta
     if (form.tipo_venta === 'gas' || form.tipo_venta === 'gas_balon') {
       if (!form.almacen_id || !cant || !precioGas) { setError('Completa todos los campos'); return }
       const stockDisp = getStock(form.almacen_id, form.tipo_balon)
@@ -233,77 +241,77 @@ export default function Ventas() {
       .select('stock_actual, balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg')
       .eq('id', form.almacen_id).single()
 
-    // ── Determinar comportamiento según tipo de crédito ──────────────────
+    // Determinar comportamiento según tipo de crédito
     const esCred = form.es_credito
-    const credTipo = form.credito_tipo // 'dinero' | 'balon' | 'ambos'
-    // debeBalon: se llevó el balón sin devolver vacío → NO suma vacío
+    const credTipo = form.credito_tipo
     const debeBalon = esCred && (credTipo === 'balon' || credTipo === 'ambos')
-    // debeDinero: no pagó el gas → NO registra ingreso
     const debeDinero = esCred && (credTipo === 'dinero' || credTipo === 'ambos')
 
     if (form.tipo_venta === 'gas') {
+      // Venta normal — solo gas, cliente trae su vacío
       const stockDisp = getStock(form.almacen_id, form.tipo_balon)
-      // Determinar metodo_pago:
-      // - Solo debe balón → pagó dinero → ingreso real → metodo_pago normal
-      // - Debe dinero → no pagó → metodo_pago = 'credito'
-      const metodoPago = debeDinero ? 'credito' : form.metodo_pago
-
       const { error: e } = await supabase.from('ventas').insert({
         cliente_id: form.cliente_id || null, almacen_id: form.almacen_id,
         precio_tipo_id: form.precio_tipo_id || null, tipo_balon: form.tipo_balon,
         fecha: (form.fecha || hoyPeru()) + 'T12:00:00-05:00',
         cantidad: cant, precio_unitario: precioGas,
-        metodo_pago: metodoPago,
+        metodo_pago: debeDinero ? 'credito' : form.metodo_pago,
         notas: form.notas, usuario_id: perfil?.id || null
       })
       if (e) { setError(e.message); setSaving(false); return }
-
-      await supabase.from('stock_por_tipo')
-        .update({ stock_actual: stockDisp - cant })
-        .eq('almacen_id', form.almacen_id).eq('tipo_balon', form.tipo_balon)
-
-      if (almFresco) {
-        const updateData = { stock_actual: Math.max(0, (almFresco.stock_actual || 0) - cant) }
-        // Suma vacío SOLO si el cliente dejó su envase (no debe balón)
-        if (!debeBalon) {
-          updateData.balones_vacios = (almFresco.balones_vacios || 0) + cant
-          updateData[campoVacios] = (almFresco[campoVacios] || 0) + cant
+      // Solo actualizar stock_por_tipo para almacenes normales
+      if (!form.es_distribuidor) {
+        await supabase.from('stock_por_tipo')
+          .update({ stock_actual: Math.max(0, stockDisp - cant) })
+          .eq('almacen_id', form.almacen_id).eq('tipo_balon', form.tipo_balon)
+      }
+      // Leer fresco para evitar sobreescritura
+      const { data: almActual } = await supabase.from('almacenes')
+        .select('stock_actual, balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg')
+        .eq('id', form.almacen_id).single()
+      if (almActual) {
+        const updateData = { stock_actual: Math.max(0, (almActual.stock_actual || 0) - cant) }
+        // Vacíos: solo para almacén normal y si cliente no debe el balón
+        if (!debeBalon && !form.es_distribuidor) {
+          updateData.balones_vacios = (almActual.balones_vacios || 0) + cant
+          updateData[campoVacios] = (almActual[campoVacios] || 0) + cant
         }
         await supabase.from('almacenes').update(updateData).eq('id', form.almacen_id)
       }
-
+      // Si es almacén de distribuidor → descontar lotes FIFO
       if (form.es_distribuidor && form.distribuidor_id) {
         await aplicarFIFO(form.distribuidor_id, form.tipo_balon, cant)
       }
 
     } else if (form.tipo_venta === 'gas_balon') {
+      // Venta gas + balón — precio total = gas + balón
       const precioTotal = precioGas + precioBajon
       const stockDisp = getStock(form.almacen_id, form.tipo_balon)
-      const metodoPago = debeDinero ? 'credito' : form.metodo_pago
-
       const { error: e } = await supabase.from('ventas').insert({
         cliente_id: form.cliente_id || null, almacen_id: form.almacen_id,
         precio_tipo_id: form.precio_tipo_id || null, tipo_balon: form.tipo_balon,
         fecha: (form.fecha || hoyPeru()) + 'T12:00:00-05:00',
-        cantidad: cant, precio_unitario: precioTotal,
-        metodo_pago: metodoPago,
+        cantidad: cant, precio_unitario: precioTotal, metodo_pago: form.metodo_pago,
         notas: `Gas+Balón (gas:S/${precioGas} bal:S/${precioBajon})${form.notas ? ' — ' + form.notas : ''}`,
         usuario_id: perfil?.id || null
       })
       if (e) { setError(e.message); setSaving(false); return }
-
-      await supabase.from('stock_por_tipo')
-        .update({ stock_actual: stockDisp - cant })
-        .eq('almacen_id', form.almacen_id).eq('tipo_balon', form.tipo_balon)
-
-      // Gas+Balón: siempre descuenta lleno, nunca suma vacío (balón se fue)
-      if (almFresco) {
+      if (!form.es_distribuidor) {
+        await supabase.from('stock_por_tipo')
+          .update({ stock_actual: Math.max(0, stockDisp - cant) })
+          .eq('almacen_id', form.almacen_id).eq('tipo_balon', form.tipo_balon)
+      }
+      // Descuenta lleno, NO suma vacío (el balón se fue con el cliente)
+      const { data: almActualGB } = await supabase.from('almacenes')
+        .select('stock_actual').eq('id', form.almacen_id).single()
+      if (almActualGB) {
         await supabase.from('almacenes').update({
-          stock_actual: Math.max(0, (almFresco.stock_actual || 0) - cant)
+          stock_actual: Math.max(0, (almActualGB.stock_actual || 0) - cant)
         }).eq('id', form.almacen_id)
       }
 
     } else if (form.tipo_venta === 'balon_vacio') {
+      // Venta de balón vacío — sale del stock de vacíos
       const { error: e } = await supabase.from('ventas').insert({
         cliente_id: form.cliente_id || null, almacen_id: form.almacen_id,
         tipo_balon: form.tipo_balon,
@@ -313,6 +321,7 @@ export default function Ventas() {
         usuario_id: perfil?.id || null
       })
       if (e) { setError(e.message); setSaving(false); return }
+      // Descontar vacíos del stock
       if (almFresco) {
         await supabase.from('almacenes').update({
           balones_vacios: Math.max(0, (almFresco.balones_vacios || 0) - cant),
@@ -320,42 +329,36 @@ export default function Ventas() {
         }).eq('id', form.almacen_id)
       }
     }
-
-    // ── Crear/acumular deuda si es venta al crédito ──────────────────────
+    // Si es venta al crédito → crear o sumar a deuda existente
     if (esCred) {
-      const montoDeuda = debeDinero ? cant * precioGas : 0
+      const totalDeuda = cant * parseFloat(form.precio_unitario)
+      const montoDeuda = debeDinero ? totalDeuda : 0
       const balonesDeuda = debeBalon ? cant : 0
-      const nombreCliente = (form.cliente_nombre || 'Cliente Varios').trim()
 
+      // Buscar deuda activa del mismo cliente
       const { data: deudaExistente } = await supabase.from('deudas')
         .select('*').in('estado', ['activa', 'pagada_parcial'])
-        .ilike('nombre_deudor', nombreCliente)
+        .ilike('nombre_deudor', (form.cliente_nombre || 'Cliente Varios').trim())
         .limit(1).single()
 
-      const entrada = {
-        tipo: 'deuda',
-        fecha: form.fecha || hoyPeru(),
-        monto: montoDeuda,
-        balones: balonesDeuda,
-        tipo_balon: form.tipo_balon,
-        notas: `Venta al crédito${form.notas ? ' — ' + form.notas : ''}`
-      }
-
       if (deudaExistente) {
+        // Sumar a deuda existente
+        const historialAnterior = deudaExistente.historial || []
         await supabase.from('deudas').update({
           monto_pendiente: (parseFloat(deudaExistente.monto_pendiente) || 0) + montoDeuda,
           monto_original: (parseFloat(deudaExistente.monto_original) || 0) + montoDeuda,
           balones_pendiente: (parseInt(deudaExistente.balones_pendiente) || 0) + balonesDeuda,
           cantidad_pendiente: (parseInt(deudaExistente.cantidad_pendiente) || 0) + balonesDeuda,
           estado: 'activa',
-          historial: [...(deudaExistente.historial || []), entrada],
+          historial: [...historialAnterior, { tipo: 'deuda', fecha: form.fecha || hoyPeru(), monto: montoDeuda, balones: balonesDeuda, tipo_balon: form.tipo_balon, notas: 'Venta al crédito' }],
           updated_at: new Date().toISOString()
         }).eq('id', deudaExistente.id)
       } else {
+        // Crear nueva deuda
         await supabase.from('deudas').insert({
           cliente_id: form.cliente_id || null,
-          nombre_deudor: nombreCliente,
-          tipo_deuda: credTipo,
+          nombre_deudor: (form.cliente_nombre || 'Cliente Varios').trim(),
+          tipo_deuda: 'mixto',
           monto_original: montoDeuda, monto_pendiente: montoDeuda,
           cantidad_original: balonesDeuda, cantidad_pendiente: balonesDeuda,
           balones_pendiente: balonesDeuda,
@@ -364,21 +367,17 @@ export default function Ventas() {
           notas: `Venta al crédito${form.notas ? ' — ' + form.notas : ''}`,
           almacen_id: form.almacen_id,
           usuario_id: perfil?.id || null,
-          historial: [entrada]
+          historial: [{ tipo: 'deuda', fecha: form.fecha || hoyPeru(), monto: montoDeuda, balones: balonesDeuda, tipo_balon: form.tipo_balon, notas: 'Venta al crédito' }]
         })
       }
     }
-
     setSaving(false); setModal(false); cargar()
   }
 
   const ventasFiltradas = ventas.filter(v =>
     !busqueda || v.clientes?.nombre?.toLowerCase().includes(busqueda.toLowerCase())
   )
-  const ventasCobradas = ventas.filter(v => v.metodo_pago !== 'credito')
-  const ventasCredito = ventas.filter(v => v.metodo_pago === 'credito')
-  const totalDia = ventasCobradas.reduce((s, v) => s + (v.cantidad * v.precio_unitario), 0)
-  const totalCredito = ventasCredito.reduce((s, v) => s + (v.cantidad * v.precio_unitario), 0)
+  const totalDia = ventas.reduce((s, v) => s + (v.cantidad * v.precio_unitario), 0)
   const totalBalones = ventas.reduce((s, v) => s + v.cantidad, 0)
 
   return (
@@ -395,10 +394,7 @@ export default function Ventas() {
           <button onClick={() => setFiltroFecha(new Date(new Date().setDate(new Date().getDate()-1)).toISOString().split('T')[0])} className="btn-secondary py-2 text-xs">⬅ Ayer</button>
         </div>
         <div className="stat-card border border-blue-500/20"><p className="text-2xl font-bold text-white">{totalBalones}</p><p className="text-xs text-gray-500">Balones vendidos</p></div>
-        <div className="stat-card border border-emerald-500/20"><p className="text-2xl font-bold text-emerald-400">S/ {totalDia.toLocaleString('es-PE')}</p><p className="text-xs text-gray-500">Ingresos cobrados</p></div>
-        {totalCredito > 0 && (
-          <div className="stat-card border border-orange-500/20"><p className="text-2xl font-bold text-orange-400">S/ {totalCredito.toLocaleString('es-PE')}</p><p className="text-xs text-gray-500">Por cobrar (crédito)</p></div>
-        )}
+        <div className="stat-card border border-emerald-500/20"><p className="text-2xl font-bold text-emerald-400">S/ {totalDia.toLocaleString('es-PE')}</p><p className="text-xs text-gray-500">Ingresos del día</p></div>
       </div>
 
       <div className="relative max-w-xs">
@@ -429,7 +425,7 @@ export default function Ventas() {
                     </div>
                     <div style={{textAlign:'right'}}>
                       <p style={{color:'#34d399', fontWeight:700, fontSize:16, margin:0}}>S/{(v.cantidad * v.precio_unitario).toLocaleString()}</p>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${v.metodo_pago==='efectivo'?'bg-emerald-900/40 text-emerald-400':v.metodo_pago==='yape'?'bg-blue-900/40 text-blue-400':v.metodo_pago==='vale'?'bg-yellow-900/40 text-yellow-400':v.metodo_pago==='credito'?'bg-orange-900/40 text-orange-400':'bg-purple-900/40 text-purple-400'}`}>{v.metodo_pago==='credito'?'⏳ crédito':v.metodo_pago}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${v.metodo_pago==='efectivo'?'bg-emerald-900/40 text-emerald-400':v.metodo_pago==='yape'?'bg-blue-900/40 text-blue-400':v.metodo_pago==='vale'?'bg-yellow-900/40 text-yellow-400':'bg-purple-900/40 text-purple-400'}`}>{v.metodo_pago}</span>
                     </div>
                   </div>
                   <div style={{display:'flex', gap:6, flexWrap:'wrap', alignItems:'center'}}>
@@ -463,7 +459,7 @@ export default function Ventas() {
                       <td className="px-4 py-3 text-blue-400 font-bold">{v.cantidad}</td>
                       <td className="px-4 py-3 text-gray-400 text-sm">S/{v.precio_unitario}</td>
                       <td className="px-4 py-3 text-emerald-400 font-bold">S/{(v.cantidad * v.precio_unitario).toLocaleString()}</td>
-                      <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${v.metodo_pago === 'efectivo' ? 'bg-emerald-900/40 text-emerald-400' : v.metodo_pago === 'yape' ? 'bg-blue-900/40 text-blue-400' : v.metodo_pago === 'vale' ? 'bg-yellow-900/40 text-yellow-400' : v.metodo_pago === 'credito' ? 'bg-orange-900/40 text-orange-400' : 'bg-purple-900/40 text-purple-400'}`}>{v.metodo_pago==='credito'?'⏳ crédito':v.metodo_pago}</span></td>
+                      <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${v.metodo_pago === 'efectivo' ? 'bg-emerald-900/40 text-emerald-400' : v.metodo_pago === 'yape' ? 'bg-blue-900/40 text-blue-400' : v.metodo_pago === 'vale' ? 'bg-yellow-900/40 text-yellow-400' : 'bg-purple-900/40 text-purple-400'}`}>{v.metodo_pago}</span></td>
                       <td className="px-4 py-3 text-gray-400 text-xs max-w-32 truncate" title={v.notas || ''}>{v.notas || <span className="text-gray-700">—</span>}</td>
                       <td className="px-4 py-3">
                         <button onClick={() => eliminarVenta(v)}
