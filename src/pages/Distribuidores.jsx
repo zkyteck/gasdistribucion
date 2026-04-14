@@ -382,9 +382,13 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
   const ventasPorDia = {}
   ventasDistribuidor.forEach(v => {
     const dia = new Date(v.fecha).toLocaleDateString('en-CA', {timeZone:'America/Lima'})
-    if (!ventasPorDia[dia]) ventasPorDia[dia] = { cantidad: 0, monto: 0 }
+    if (!ventasPorDia[dia]) ventasPorDia[dia] = { cantidad: 0, monto: 0, v20: 0, v30: 0, v43: 0, efectivo: 0 }
     ventasPorDia[dia].cantidad += v.cantidad || 0
     ventasPorDia[dia].monto += (v.cantidad||0) * (v.precio_unitario||0)
+    ventasPorDia[dia].v20 += v.vales_20 || 0
+    ventasPorDia[dia].v30 += v.vales_30 || 0
+    ventasPorDia[dia].v43 += v.vales_43 || 0
+    ventasPorDia[dia].efectivo += v.efectivo_dist || 0
   })
   const diasOrdenados = Object.keys(ventasPorDia).sort((a,b) => b.localeCompare(a))
   const lotesActivos = lotesDistribuidor.filter(l => !l.cerrado && l.cantidad_restante > 0)
@@ -422,28 +426,72 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
                 Sin ventas registradas — registra ventas desde Ventas seleccionando el almacén de {selected.nombre}
               </div>
             ) : (
-              <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden'}}>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 0.8fr 0.8fr 0.9fr',background:'var(--app-accent)'}}>
-                  {['Fecha','Cant. vendidos','Precio','Monto total'].map(h => (
-                    <div key={h} style={{padding:'8px',fontSize:9,fontWeight:700,color:'#fff',textTransform:'uppercase',borderRight:'1px solid rgba(255,255,255,0.2)',textAlign:'center'}}>{h}</div>
+              <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden',overflowX:'auto'}}>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 0.7fr 0.9fr 0.6fr 0.6fr 0.6fr 0.9fr 0.8fr',background:'var(--app-accent)',minWidth:720}}>
+                  {['Fecha','Cant.','Precio','Monto total','V.S/20','V.S/30','V.S/43','Saldo/Efectivo','Estado'].map(h => (
+                    <div key={h} style={{padding:'7px 5px',fontSize:9,fontWeight:700,color:'#fff',textTransform:'uppercase',borderRight:'1px solid rgba(255,255,255,0.2)',textAlign:'center'}}>{h}</div>
                   ))}
                 </div>
                 {diasOrdenados.map((dia,i) => {
                   const d = ventasPorDia[dia]
                   const precio = d.cantidad > 0 ? d.monto/d.cantidad : 0
+                  const totalVales = d.v20*20 + d.v30*30 + d.v43*43
+                  const totalPagado = totalVales + d.efectivo
+                  const saldo = d.monto - totalPagado
+                  const cancelado = saldo <= 0
                   return (
-                    <div key={dia} style={{display:'grid',gridTemplateColumns:'1fr 0.8fr 0.8fr 0.9fr',borderBottom:i<diasOrdenados.length-1?'1px solid var(--app-card-border)':'none'}}>
-                      <div style={{padding:'9px 8px',fontSize:12,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{dia}</div>
-                      <div style={{padding:'9px 8px',fontSize:13,fontWeight:700,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.cantidad}</div>
-                      <div style={{padding:'9px 8px',fontSize:12,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{precio.toFixed(2)}</div>
-                      <div style={{padding:'9px 8px',fontSize:13,fontWeight:700,color:'#34d399',textAlign:'center'}}>S/{d.monto.toLocaleString('es-PE')}</div>
+                    <div key={dia} style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 0.7fr 0.9fr 0.6fr 0.6fr 0.6fr 0.9fr 0.8fr',borderBottom:i<diasOrdenados.length-1?'1px solid var(--app-card-border)':'none',minWidth:720,background:i%2===0?'transparent':'var(--app-row-alt)'}}>
+                      <div style={{padding:'8px 5px',fontSize:11,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center',fontWeight:500}}>{dia}</div>
+                      <div style={{padding:'8px 5px',fontSize:12,fontWeight:700,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.cantidad}</div>
+                      <div style={{padding:'8px 5px',fontSize:11,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{precio.toFixed(2)}</div>
+                      <div style={{padding:'8px 5px',fontSize:12,fontWeight:700,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{d.monto.toLocaleString('es-PE')}</div>
+                      <div style={{padding:'8px 5px',fontSize:11,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.v20>0?d.v20:'—'}</div>
+                      <div style={{padding:'8px 5px',fontSize:11,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.v30>0?d.v30:'—'}</div>
+                      <div style={{padding:'8px 5px',fontSize:11,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.v43>0?d.v43:'—'}</div>
+                      <div style={{padding:'8px 5px',fontSize:11,borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
+                        {cancelado
+                          ? <span style={{color:'#34d399',fontWeight:700}}>✅ Pagado</span>
+                          : <span style={{color:'#f87171',fontWeight:700}}>S/{saldo.toLocaleString('es-PE')}</span>
+                        }
+                        {d.efectivo > 0 && <p style={{fontSize:9,color:'#34d399',margin:'2px 0 0'}}>ef. S/{d.efectivo}</p>}
+                      </div>
+                      <div style={{padding:'8px 5px',textAlign:'center',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                        <span style={{fontSize:9,fontWeight:700,padding:'2px 5px',borderRadius:4,background:cancelado?'rgba(52,211,153,0.15)':'rgba(251,146,60,0.15)',color:cancelado?'#34d399':'#fb923c'}}>
+                          {cancelado?'Pagado':'Pendiente'}
+                        </span>
+                      </div>
                     </div>
                   )
                 })}
+                {/* Fila totales */}
+                {diasOrdenados.length > 1 && (() => {
+                  const tCant = ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0),0)
+                  const tMonto = ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)
+                  const tv20 = ventasDistribuidor.reduce((s,v)=>s+(v.vales_20||0),0)
+                  const tv30 = ventasDistribuidor.reduce((s,v)=>s+(v.vales_30||0),0)
+                  const tv43 = ventasDistribuidor.reduce((s,v)=>s+(v.vales_43||0),0)
+                  const tEf = ventasDistribuidor.reduce((s,v)=>s+(v.efectivo_dist||0),0)
+                  const tVales = tv20*20+tv30*30+tv43*43
+                  const tSaldo = tMonto - tVales - tEf
+                  return (
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 0.7fr 0.9fr 0.6fr 0.6fr 0.6fr 0.9fr 0.8fr',background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)',minWidth:720}}>
+                      <div style={{padding:'8px 5px',fontSize:10,fontWeight:700,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>TOTAL</div>
+                      <div style={{padding:'8px 5px',fontSize:12,fontWeight:700,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tCant}</div>
+                      <div style={{padding:'8px 5px',borderRight:'1px solid var(--app-card-border)'}}/>
+                      <div style={{padding:'8px 5px',fontSize:12,fontWeight:700,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{tMonto.toLocaleString('es-PE')}</div>
+                      <div style={{padding:'8px 5px',fontSize:11,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tv20||'—'}</div>
+                      <div style={{padding:'8px 5px',fontSize:11,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tv30||'—'}</div>
+                      <div style={{padding:'8px 5px',fontSize:11,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tv43||'—'}</div>
+                      <div style={{padding:'8px 5px',fontSize:12,fontWeight:700,color:tSaldo<=0?'#34d399':'#f87171',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
+                        {tSaldo<=0?'✅':'S/'+tSaldo.toLocaleString('es-PE')}
+                      </div>
+                      <div style={{padding:'8px 5px'}}/>
+                    </div>
+                  )
+                })()}
               </div>
             )}
           </div>
-
           {/* Lotes FIFO */}
           {lotesDistribuidor.length > 0 && (
             <div>
