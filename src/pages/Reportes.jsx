@@ -84,6 +84,7 @@ export default function Reportes() {
       const [
         { data: ventas },
         { data: cuentasDist },
+        { data: ventasDist },
         { data: costosCfg },
         { data: almacenes },
         { data: distribuidores },
@@ -91,8 +92,9 @@ export default function Reportes() {
         { data: deudas },
         { data: stockPorTipo },
       ] = await Promise.all([
-        supabase.from('ventas').select('*, clientes(nombre), almacenes(nombre)').gte('fecha', desdeDate + 'T00:00:00-05:00').lte('fecha', hastaDate + 'T23:59:59-05:00'),
+        supabase.from('ventas').select('*, clientes(nombre), almacenes(nombre)').gte('fecha', desdeDate + 'T00:00:00-05:00').lte('fecha', hastaDate + 'T23:59:59-05:00').neq('metodo_pago', 'credito'),
         supabase.from('cuentas_distribuidor').select('*, distribuidores(nombre)').gte('periodo_fin', desdeDate).lte('periodo_fin', hastaDate),
+        supabase.from('ventas').select('*, almacenes(nombre)').gte('fecha', desdeDate + 'T00:00:00-05:00').lte('fecha', hastaDate + 'T23:59:59-05:00').not('almacen_id', 'is', null).in('metodo_pago', ['efectivo','yape','vale','mixto','arreglo_distribuidor']),
         supabase.from('configuracion').select('clave, valor').in('clave', ['costo_5kg', 'costo_10kg', 'costo_45kg']),
         supabase.from('almacenes').select('*').eq('activo', true).order('nombre'),
         supabase.from('distribuidores').select('*').eq('activo', true).order('nombre'),
@@ -151,22 +153,42 @@ export default function Reportes() {
       })
       const topClientes = Object.entries(porCliente).sort((a, b) => b[1].total - a[1].total).slice(0, 5)
 
-      // DISTRIBUIDORES
-      const ingDist = cuentasDist?.reduce((s, c) => s + (c.total_esperado || 0), 0) || 0
-      const balDist = cuentasDist?.reduce((s, c) => s + (c.balones_vendidos || 0), 0) || 0
-      // Para distribuidores usar costo del 10kg (tipo más común)
+      // DISTRIBUIDORES — usando ventas nuevas con vales desglosados
+      // Obtener almacen_ids de distribuidores
+      const distAlmacenMap = {}
+      ;(distribuidores || []).forEach(d => {
+        if (d.almacen_id) distAlmacenMap[d.almacen_id] = d.nombre
+      })
+      const distAlmacenIds = Object.keys(distAlmacenMap)
+      // Agrupar ventas por distribuidor (solo ventas de almacenes de distribuidores)
+      const porDist = {}
+      ;(ventasDist || []).filter(v => distAlmacenIds.includes(v.almacen_id)).forEach(v => {
+        const distNombre = distAlmacenMap[v.almacen_id] || v.almacenes?.nombre || 'Sin nombre'
+        if (!porDist[distNombre]) porDist[distNombre] = {
+          ingreso: 0, balones: 0, ganancia: 0,
+          vales20: 0, vales30: 0, vales43: 0, efectivo: 0, saldo: 0
+        }
+        const monto = (v.cantidad||0) * (v.precio_unitario||0)
+        const costo = (v.cantidad||0) * (costos[v.tipo_balon||'10kg'] || costoPromedio)
+        const v20 = v.vales_20 || 0
+        const v30 = v.vales_30 || 0
+        const v43 = v.vales_43 || 0
+        const ef = v.efectivo_dist || 0
+        const totalVales = v20*20 + v30*30 + v43*43
+        porDist[distNombre].ingreso += monto
+        porDist[distNombre].balones += v.cantidad || 0
+        porDist[distNombre].ganancia += monto - costo
+        porDist[distNombre].vales20 += v20
+        porDist[distNombre].vales30 += v30
+        porDist[distNombre].vales43 += v43
+        porDist[distNombre].efectivo += ef
+        porDist[distNombre].saldo += monto - totalVales - ef
+      })
+
+      const ingDist = Object.values(porDist).reduce((s,d) => s + d.ingreso, 0)
+      const balDist = Object.values(porDist).reduce((s,d) => s + d.balones, 0)
       const costoDist = balDist * (costos['10kg'] || costoPromedio)
       const ganDist = ingDist - costoDist
-
-      const porDist = {}
-      cuentasDist?.forEach(c => {
-        const n = c.distribuidores?.nombre || 'Sin nombre'
-        if (!porDist[n]) porDist[n] = { ingreso: 0, balones: 0, rendiciones: 0, ganancia: 0 }
-        porDist[n].ingreso += c.total_esperado || 0
-        porDist[n].balones += c.balones_vendidos || 0
-        porDist[n].rendiciones++
-        porDist[n].ganancia += (c.total_esperado || 0) - (c.balones_vendidos || 0) * (costos['10kg'] || costoPromedio)
-      })
 
       // STOCK ACTUAL
       const stockActual = almacenes?.map(a => {
@@ -426,21 +448,40 @@ export default function Reportes() {
                   </div>
                 )}
 
-                {/* Por distribuidor */}
+                {/* Por distribuidor — desglose vales */}
                 {filtroVista !== 'tienda' && Object.keys(data.porDist).length > 0 && (
                   <div className="card">
                     <h3 className="text-sm font-semibold text-white mb-4">🚛 Por distribuidor</h3>
-                    <div className="space-y-3">
-                      {Object.entries(data.porDist).map(([nombre, d], i) => {
-                        const max = Math.max(...Object.values(data.porDist).map(x => x.ingreso))
+                    <div className="space-y-4">
+                      {Object.entries(data.porDist).map(([nombre, d]) => {
+                        const totalVales = d.vales20*20 + d.vales30*30 + d.vales43*43
+                        const saldoPend = d.ingreso - totalVales - d.efectivo
                         return (
-                          <div key={nombre}>
-                            <div className="flex justify-between text-sm mb-1">
-                              <span className="text-gray-300">{nombre}</span>
-                              <span className="text-white font-semibold">S/ {d.ingreso.toLocaleString()} <span className="text-gray-500 text-xs">({d.balones} bal.)</span></span>
+                          <div key={nombre} style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden'}}>
+                            {/* Header */}
+                            <div style={{background:'var(--app-card-bg-alt)',padding:'10px 14px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                              <span style={{color:'var(--app-text)',fontWeight:700,fontSize:14}}>🚛 {nombre}</span>
+                              <div style={{textAlign:'right'}}>
+                                <p style={{color:'#34d399',fontWeight:700,fontSize:15,margin:0}}>S/{d.ingreso.toLocaleString('es-PE')}</p>
+                                <p style={{color:'var(--app-text-secondary)',fontSize:11,margin:0}}>{d.balones} balones · gan. S/{d.ganancia.toLocaleString('es-PE')}</p>
+                              </div>
                             </div>
-                            <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-                              <div className="h-full bg-orange-500 rounded-full" style={{ width: `${(d.ingreso / max) * 100}%` }} />
+                            {/* Desglose pagos */}
+                            <div style={{padding:'10px 14px',display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8}}>
+                              {[
+                                {label:'🎫 Vales S/20', valor: d.vales20, monto: d.vales20*20, color:'#fde047'},
+                                {label:'🎫 Vales S/30', valor: d.vales30, monto: d.vales30*30, color:'#fde047'},
+                                {label:'🎫 Vales S/43', valor: d.vales43, monto: d.vales43*43, color:'#fde047'},
+                                {label:'💵 Efectivo', valor: null, monto: d.efectivo, color:'#34d399'},
+                                {label:'⏳ Saldo pend.', valor: null, monto: Math.max(0,saldoPend), color: saldoPend>0?'#f87171':'#34d399'},
+                                {label:'📦 Total vales', valor: null, monto: totalVales, color:'#fb923c'},
+                              ].map(({label, valor, monto, color}) => (
+                                <div key={label} style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:8,padding:'8px',textAlign:'center'}}>
+                                  <p style={{fontSize:10,color:'var(--app-text-secondary)',margin:'0 0 3px',textTransform:'uppercase'}}>{label}</p>
+                                  {valor !== null && <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 2px'}}>{valor} unid.</p>}
+                                  <p style={{fontSize:13,fontWeight:700,color,margin:0}}>S/{(monto||0).toLocaleString('es-PE')}</p>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         )
@@ -529,29 +570,83 @@ export default function Reportes() {
               {/* Distribuidores */}
               {filtroVista !== 'tienda' && Object.keys(data.porDist).length > 0 && (
                 <div className="card">
-                  <h3 className="text-sm font-semibold text-white mb-4">🚛 Ganancia por distribuidor</h3>
-                  <div className="space-y-3">
-                    {Object.entries(data.porDist).map(([nombre, d]) => (
-                      <div key={nombre} className="bg-gray-800/40 rounded-xl p-4">
-                        <div className="flex items-center justify-between flex-wrap gap-2">
-                          <p className="text-white font-semibold">{nombre}</p>
-                          <div className="flex gap-4 text-right">
-                            <div><p className="text-gray-400 text-xs">Rendido</p><p className="text-orange-400 font-bold">S/ {d.ingreso.toLocaleString()}</p></div>
-                            <div><p className="text-gray-400 text-xs">Ganancia est.</p><p className="text-emerald-400 font-bold">S/ {d.ganancia.toLocaleString()}</p></div>
-                            <div><p className="text-gray-400 text-xs">Balones</p><p className="text-gray-300 font-bold">{d.balones}</p></div>
-                            <div><p className="text-gray-400 text-xs">Rendiciones</p><p className="text-gray-300 font-bold">{d.rendiciones}</p></div>
+                  <h3 className="text-sm font-semibold text-white mb-4">🚛 Distribuidores — desglose</h3>
+                  <div className="space-y-4">
+                    {Object.entries(data.porDist).map(([nombre, d]) => {
+                      const totalVales = (d.v20||0)*20 + (d.v30||0)*30 + (d.v43||0)*43
+                      const totalEfectivo = d.efectivo || 0
+                      const totalPagado = totalVales + totalEfectivo
+                      const saldo = d.ingreso - totalPagado
+                      return (
+                        <div key={nombre} className="bg-gray-800/40 rounded-xl p-4 space-y-3">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <p className="text-white font-semibold text-base">{nombre}</p>
+                            <div className="flex gap-4 text-right">
+                              <div><p className="text-gray-400 text-xs">Total vendido</p><p className="text-blue-400 font-bold">S/ {d.ingreso.toLocaleString()}</p></div>
+                              <div><p className="text-gray-400 text-xs">Ganancia est.</p><p className="text-emerald-400 font-bold">S/ {(d.ganancia||0).toLocaleString()}</p></div>
+                              <div><p className="text-gray-400 text-xs">Balones</p><p className="text-gray-300 font-bold">{d.balones}</p></div>
+                            </div>
                           </div>
+                          {/* Desglose de pago */}
+                          {(totalVales > 0 || totalEfectivo > 0) && (
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-gray-900/50 rounded-lg p-3">
+                              <div className="text-center">
+                                <p className="text-xs text-gray-500">🎫 V.S/20</p>
+                                <p className="text-yellow-400 font-bold">{d.v20||0}</p>
+                                <p className="text-xs text-gray-600">S/{(d.v20||0)*20}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-xs text-gray-500">🎫 V.S/30</p>
+                                <p className="text-yellow-400 font-bold">{d.v30||0}</p>
+                                <p className="text-xs text-gray-600">S/{(d.v30||0)*30}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-xs text-gray-500">🎫 V.S/43</p>
+                                <p className="text-yellow-400 font-bold">{d.v43||0}</p>
+                                <p className="text-xs text-gray-600">S/{(d.v43||0)*43}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-xs text-gray-500">💵 Efectivo</p>
+                                <p className="text-green-400 font-bold">S/{totalEfectivo.toLocaleString()}</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-xs text-gray-500">{saldo <= 0 ? '✅ Saldo' : '⏳ Pendiente'}</p>
+                                <p className={`font-bold ${saldo <= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                  S/{Math.abs(saldo).toLocaleString()}
+                                </p>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
-                    <div className="border-t border-gray-700 pt-3 flex justify-between">
+                      )
+                    })}
+                    <div className="border-t border-gray-700 pt-3 flex justify-between items-center">
                       <span className="text-white font-semibold">Total distribuidores</span>
                       <div className="flex gap-6 text-right">
-                        <div><p className="text-orange-400 font-bold">S/ {data.ingDist.toLocaleString()}</p><p className="text-gray-600 text-xs">recaudado</p></div>
+                        <div><p className="text-blue-400 font-bold">S/ {data.ingDist.toLocaleString()}</p><p className="text-gray-600 text-xs">vendido</p></div>
+                        <div><p className="text-yellow-400 font-bold">S/ {data.valesDistMonto.toLocaleString()}</p><p className="text-gray-600 text-xs">en vales</p></div>
+                        <div><p className="text-green-400 font-bold">S/ {data.efectivoDistVentas.toLocaleString()}</p><p className="text-gray-600 text-xs">efectivo</p></div>
                         <div><p className="text-emerald-400 font-bold">S/ {data.ganDist.toLocaleString()}</p><p className="text-gray-600 text-xs">ganancia</p></div>
                       </div>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* Créditos pendientes */}
+              {data.ingCredito > 0 && filtroVista !== 'distribuidores' && (
+                <div className="card border border-orange-800/30">
+                  <h3 className="text-sm font-semibold text-orange-300 mb-3">⏳ Ventas a crédito pendientes</h3>
+                  <div className="flex justify-between items-center">
+                    <p className="text-gray-400 text-sm">Monto por cobrar de ventas al crédito</p>
+                    <p className="text-orange-400 font-bold text-xl">S/ {data.ingCredito.toLocaleString()}</p>
+                  </div>
+                  {data.ingCobroCredito > 0 && (
+                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-700">
+                      <p className="text-gray-400 text-sm">✅ Cobrado en el período</p>
+                      <p className="text-emerald-400 font-bold">S/ {data.ingCobroCredito.toLocaleString()}</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
