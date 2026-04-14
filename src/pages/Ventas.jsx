@@ -271,16 +271,21 @@ export default function Ventas() {
       }
       if (form.es_distribuidor && form.distribuidor_id) {
         // Distribuidor: solo descontar lotes FIFO
-        // almacenes.stock_actual se sincroniza con lotes restantes
         await aplicarFIFO(form.distribuidor_id, form.tipo_balon, cant)
-        // Actualizar stock_actual del almacén = suma de lotes restantes
+        // Sincronizar stock_actual con lotes restantes + sumar vacíos
         const { data: lotesActivos } = await supabase.from('lotes_distribuidor')
           .select('cantidad_restante')
           .eq('distribuidor_id', form.distribuidor_id)
           .eq('cerrado', false)
         const totalRestante = (lotesActivos || []).reduce((s,l) => s + (l.cantidad_restante||0), 0)
-        await supabase.from('almacenes').update({ stock_actual: totalRestante })
-          .eq('id', form.almacen_id)
+        const { data: almDist } = await supabase.from('almacenes')
+          .select('balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg')
+          .eq('id', form.almacen_id).single()
+        await supabase.from('almacenes').update({
+          stock_actual: totalRestante,
+          balones_vacios: (almDist?.balones_vacios || 0) + cant,
+          [campoVacios]: (almDist?.[campoVacios] || 0) + cant
+        }).eq('id', form.almacen_id)
       } else {
         // Almacén normal: descontar stock_actual y sumar vacíos
         const { data: almActual } = await supabase.from('almacenes')
