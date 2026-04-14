@@ -121,7 +121,7 @@ export default function Ventas() {
       almacen_id: almacenDefault?.id || '', precio_tipo_id: primerTipo?.id || '',
       tipo_balon: '10kg', cantidad: '',
       precio_unitario: getPrecio(primerTipo?.id, '10kg') || primerTipo?.precio || '',
-      metodo_pago: 'efectivo', notas: '', es_credito: false, credito_tipo: 'dinero', vales20: '', vales30: '', vales43: '',
+      metodo_pago: 'efectivo', notas: '', es_credito: false, credito_tipo: 'dinero', vales20: '', vales30: '', vales43: '', efectivoDist: '',
       tipo_venta: 'gas', precio_balon: '100'
     })
     setError(''); setModal(true); setBusquedaCliente(''); setSubModal(null)
@@ -259,7 +259,8 @@ export default function Ventas() {
         notas: form.notas, usuario_id: perfil?.id || null,
         vales_20: form.es_distribuidor ? (parseInt(form.vales20)||0) : null,
         vales_30: form.es_distribuidor ? (parseInt(form.vales30)||0) : null,
-        vales_43: form.es_distribuidor ? (parseInt(form.vales43)||0) : null
+        vales_43: form.es_distribuidor ? (parseInt(form.vales43)||0) : null,
+        efectivo_dist: form.es_distribuidor ? (parseFloat(form.efectivoDist)||0) : null
       })
       if (e) { setError(e.message); setSaving(false); return }
       // Solo actualizar stock_por_tipo para almacenes normales
@@ -776,17 +777,33 @@ export default function Ventas() {
                       {v43>0 && <p style={{fontSize:10,color:'#fde047',textAlign:'center',marginTop:2}}>= S/{v43*43}</p>}
                     </div>
                   </div>
-                  {totalVales > 0 && (
-                    <div style={{display:'flex',justifyContent:'space-between',padding:'8px 12px',borderRadius:8,background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.2)'}}>
-                      <div>
-                        <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>Total vales: <span style={{color:'#fde047',fontWeight:700}}>S/{totalVales.toLocaleString('es-PE')}</span></p>
-                        <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Saldo efectivo: <span style={{color:saldo>0?'#f87171':'#34d399',fontWeight:700}}>S/{saldo.toLocaleString('es-PE')}</span></p>
-                      </div>
-                      <p style={{fontSize:14,fontWeight:700,color:saldo<=0?'#34d399':'#fb923c',margin:0,alignSelf:'center'}}>
-                        {saldo<=0?'✅ Pagado':'⏳ Falta S/'+saldo.toLocaleString('es-PE')}
-                      </p>
+                  {/* Efectivo adicional si hay saldo */}
+                  {saldo > 0 && (
+                    <div style={{marginTop:8}}>
+                      <label className="label" style={{fontSize:10}}>💵 Efectivo S/ (saldo restante)</label>
+                      <input type="number" min="0" step="0.50" className="input text-center"
+                        placeholder={`S/${saldo.toLocaleString('es-PE')}`}
+                        value={form.efectivoDist || ''}
+                        onChange={e => setForm(f => ({...f, efectivoDist: e.target.value}))} />
                     </div>
                   )}
+                  {totalVales > 0 && (() => {
+                    const efectivo = parseFloat(form.efectivoDist) || 0
+                    const totalPagado = totalVales + efectivo
+                    const saldoFinal = totalVenta - totalPagado
+                    return (
+                      <div style={{display:'flex',justifyContent:'space-between',padding:'8px 12px',borderRadius:8,background:saldoFinal<=0?'rgba(52,211,153,0.08)':'rgba(251,146,60,0.08)',border:`1px solid ${saldoFinal<=0?'rgba(52,211,153,0.2)':'rgba(251,146,60,0.2)'}`,marginTop:8}}>
+                        <div>
+                          <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>Vales: <span style={{color:'#fde047',fontWeight:700}}>S/{totalVales.toLocaleString('es-PE')}</span></p>
+                          {efectivo > 0 && <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Efectivo: <span style={{color:'#34d399',fontWeight:700}}>S/{efectivo.toLocaleString('es-PE')}</span></p>}
+                          <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Saldo pendiente: <span style={{color:saldoFinal>0?'#f87171':'#34d399',fontWeight:700}}>S/{Math.max(0,saldoFinal).toLocaleString('es-PE')}</span></p>
+                        </div>
+                        <p style={{fontSize:14,fontWeight:700,color:saldoFinal<=0?'#34d399':'#f87171',margin:0,alignSelf:'center'}}>
+                          {saldoFinal<=0?'✅ Pagado':'⏳ Debe S/'+saldoFinal.toLocaleString('es-PE')}
+                        </p>
+                      </div>
+                    )
+                  })()}
                 </div>
               )
             })()}
