@@ -523,6 +523,111 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
             </div>
           )}
 
+          {/* Botón imprimir Alazan */}
+          {ventasDistribuidor.length > 0 && (
+            <button
+              onClick={() => {
+                const totalCant = ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0),0)
+                const totalMonto = ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)
+                const tv20 = ventasDistribuidor.reduce((s,v)=>s+(v.vales_20||0),0)
+                const tv30 = ventasDistribuidor.reduce((s,v)=>s+(v.vales_30||0),0)
+                const tv43 = ventasDistribuidor.reduce((s,v)=>s+(v.vales_43||0),0)
+                const tEf = ventasDistribuidor.reduce((s,v)=>s+(v.efectivo_dist||0),0)
+                const tVales = tv20*20+tv30*30+tv43*43
+                const tSaldo = totalMonto - tVales - tEf
+
+                // Agrupar por día para la tabla
+                const porDia = {}
+                ventasDistribuidor.forEach(v => {
+                  const dia = new Date(v.fecha).toLocaleDateString('en-CA', {timeZone:'America/Lima'})
+                  if (!porDia[dia]) porDia[dia] = { cantidad:0, monto:0, v20:0, v30:0, v43:0, ef:0 }
+                  porDia[dia].cantidad += v.cantidad||0
+                  porDia[dia].monto += (v.cantidad||0)*(v.precio_unitario||0)
+                  porDia[dia].v20 += v.vales_20||0
+                  porDia[dia].v30 += v.vales_30||0
+                  porDia[dia].v43 += v.vales_43||0
+                  porDia[dia].ef += v.efectivo_dist||0
+                })
+
+                const filas = Object.entries(porDia).sort((a,b)=>a[0].localeCompare(b[0])).map(([dia,d]) => {
+                  const vales = d.v20*20+d.v30*30+d.v43*43
+                  const saldo = d.monto - vales - d.ef
+                  return `<tr>
+                    <td>${dia}</td><td class="center">${d.cantidad}</td>
+                    <td class="right">S/${d.monto.toLocaleString('es-PE')}</td>
+                    <td class="center">${d.v20||'—'}</td><td class="center">${d.v30||'—'}</td><td class="center">${d.v43||'—'}</td>
+                    <td class="right">${d.ef>0?'S/'+d.ef.toLocaleString('es-PE'):'—'}</td>
+                    <td class="right" style="color:${saldo<=0?'green':'red'}">${saldo<=0?'✅ Pagado':'S/'+saldo.toLocaleString('es-PE')}</td>
+                  </tr>`
+                }).join('')
+
+                const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+                  <title>Rendición ${selected.nombre}</title>
+                  <style>
+                    body{font-family:Arial,sans-serif;font-size:12px;padding:20px}
+                    h1{text-align:center;font-size:16px;margin-bottom:4px}
+                    .sub{text-align:center;color:#666;font-size:11px;margin-bottom:16px}
+                    table{width:100%;border-collapse:collapse;margin-bottom:12px}
+                    th{background:#333;color:#fff;padding:7px 8px;font-size:10px;text-transform:uppercase}
+                    td{padding:6px 8px;border-bottom:1px solid #ddd}
+                    .center{text-align:center}.right{text-align:right}
+                    tr:nth-child(even){background:#f9f9f9}
+                    .total-row{background:#eee;font-weight:bold}
+                    .resumen{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+                    .res-item{border:1px solid #ddd;border-radius:4px;padding:8px;text-align:center}
+                    .res-item .label{font-size:10px;color:#666;text-transform:uppercase}
+                    .res-item .valor{font-size:14px;font-weight:bold;margin-top:2px}
+                    .firma-area{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px}
+                    .firma{border-top:1px solid #000;padding-top:6px;text-align:center;font-size:10px;color:#555}
+                    @media print{button{display:none}}
+                  </style></head><body>
+                  <button onclick="window.print()" style="position:fixed;top:10px;right:10px;padding:8px 16px;background:#333;color:#fff;border:none;border-radius:6px;cursor:pointer">🖨️ Imprimir</button>
+                  <h1>RENDICIÓN DE VENTAS — ${selected.nombre.toUpperCase()}</h1>
+                  <p class="sub">Generado el ${new Date().toLocaleDateString('es-PE')} · Lote activo: S/${selected.precio_base}/bal.</p>
+                  <div class="resumen">
+                    <div class="res-item"><div class="label">Total balones</div><div class="valor">${totalCant}</div></div>
+                    <div class="res-item"><div class="label">Monto total</div><div class="valor">S/${totalMonto.toLocaleString('es-PE')}</div></div>
+                    <div class="res-item"><div class="label" style="color:${tSaldo<=0?'green':'red'}">${tSaldo<=0?'✅ Cancelado':'⏳ Saldo pendiente'}</div><div class="valor" style="color:${tSaldo<=0?'green':'red'}">S/${Math.max(0,tSaldo).toLocaleString('es-PE')}</div></div>
+                    <div class="res-item"><div class="label">Vales S/20 (${tv20})</div><div class="valor">S/${(tv20*20).toLocaleString('es-PE')}</div></div>
+                    <div class="res-item"><div class="label">Vales S/30 (${tv30})</div><div class="valor">S/${(tv30*30).toLocaleString('es-PE')}</div></div>
+                    <div class="res-item"><div class="label">Vales S/43 (${tv43})</div><div class="valor">S/${(tv43*43).toLocaleString('es-PE')}</div></div>
+                    <div class="res-item"><div class="label">Efectivo</div><div class="valor">S/${tEf.toLocaleString('es-PE')}</div></div>
+                    <div class="res-item"><div class="label">Total vales</div><div class="valor">S/${tVales.toLocaleString('es-PE')}</div></div>
+                    <div class="res-item"><div class="label">Total pagado</div><div class="valor">S/${(tVales+tEf).toLocaleString('es-PE')}</div></div>
+                  </div>
+                  <table>
+                    <thead><tr>
+                      <th>Fecha</th><th class="center">Cant.</th><th class="right">Monto</th>
+                      <th class="center">V.S/20</th><th class="center">V.S/30</th><th class="center">V.S/43</th>
+                      <th class="right">Efectivo</th><th class="right">Saldo</th>
+                    </tr></thead>
+                    <tbody>${filas}
+                      <tr class="total-row">
+                        <td>TOTAL</td><td class="center">${totalCant}</td>
+                        <td class="right">S/${totalMonto.toLocaleString('es-PE')}</td>
+                        <td class="center">${tv20||'—'}</td><td class="center">${tv30||'—'}</td><td class="center">${tv43||'—'}</td>
+                        <td class="right">${tEf>0?'S/'+tEf.toLocaleString('es-PE'):'—'}</td>
+                        <td class="right" style="color:${tSaldo<=0?'green':'red'}">${tSaldo<=0?'✅':'S/'+tSaldo.toLocaleString('es-PE')}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div class="firma-area">
+                    <div class="firma">Firma del distribuidor</div>
+                    <div class="firma">Firma del administrador</div>
+                  </div>
+                  <p style="text-align:center;margin-top:20px;font-size:10px;color:#999">Centro Gas Paucara</p>
+                </body></html>`
+
+                const ventana = window.open('', '_blank', 'width=900,height=700')
+                ventana.document.write(html)
+                ventana.document.close()
+                ventana.focus()
+              }}
+              style={{width:'100%',padding:'10px',borderRadius:8,border:'1px solid var(--app-card-border)',background:'var(--app-card-bg-alt)',color:'var(--app-text-secondary)',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6,fontWeight:500,marginTop:8}}>
+              🖨️ Imprimir rendición
+            </button>
+          )}
+
         </div>
       </div>
     </div>
