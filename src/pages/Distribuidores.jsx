@@ -211,7 +211,7 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
 
     return (
       <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-2xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
+        <div className="w-full max-w-3xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
           style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
           <div className="flex items-center justify-between px-6 py-4" style={{borderBottom:'1px solid var(--app-card-border)'}}>
             <h3 style={{color:'var(--app-text)',fontWeight:700,fontSize:16,margin:0}}>
@@ -397,7 +397,7 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
+      <div className="w-full max-w-5xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
         style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
         <div className="flex items-center justify-between px-6 py-4" style={{borderBottom:'1px solid var(--app-card-border)'}}>
           <h3 style={{color:'var(--app-text)',fontWeight:700,fontSize:16,margin:0}}>📊 {selected.nombre}</h3>
