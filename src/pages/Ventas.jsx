@@ -269,22 +269,31 @@ export default function Ventas() {
           .update({ stock_actual: Math.max(0, stockDisp - cant) })
           .eq('almacen_id', form.almacen_id).eq('tipo_balon', form.tipo_balon)
       }
-      // Leer fresco para evitar sobreescritura
-      const { data: almActual } = await supabase.from('almacenes')
-        .select('stock_actual, balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg')
-        .eq('id', form.almacen_id).single()
-      if (almActual) {
-        const updateData = { stock_actual: Math.max(0, (almActual.stock_actual || 0) - cant) }
-        // Vacíos: solo para almacén normal y si cliente no debe el balón
-        if (!debeBalon && !form.es_distribuidor) {
-          updateData.balones_vacios = (almActual.balones_vacios || 0) + cant
-          updateData[campoVacios] = (almActual[campoVacios] || 0) + cant
-        }
-        await supabase.from('almacenes').update(updateData).eq('id', form.almacen_id)
-      }
-      // Si es almacén de distribuidor → descontar lotes FIFO
       if (form.es_distribuidor && form.distribuidor_id) {
+        // Distribuidor: solo descontar lotes FIFO
+        // almacenes.stock_actual se sincroniza con lotes restantes
         await aplicarFIFO(form.distribuidor_id, form.tipo_balon, cant)
+        // Actualizar stock_actual del almacén = suma de lotes restantes
+        const { data: lotesActivos } = await supabase.from('lotes_distribuidor')
+          .select('cantidad_restante')
+          .eq('distribuidor_id', form.distribuidor_id)
+          .eq('cerrado', false)
+        const totalRestante = (lotesActivos || []).reduce((s,l) => s + (l.cantidad_restante||0), 0)
+        await supabase.from('almacenes').update({ stock_actual: totalRestante })
+          .eq('id', form.almacen_id)
+      } else {
+        // Almacén normal: descontar stock_actual y sumar vacíos
+        const { data: almActual } = await supabase.from('almacenes')
+          .select('stock_actual, balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg')
+          .eq('id', form.almacen_id).single()
+        if (almActual) {
+          const updateData = { stock_actual: Math.max(0, (almActual.stock_actual || 0) - cant) }
+          if (!debeBalon) {
+            updateData.balones_vacios = (almActual.balones_vacios || 0) + cant
+            updateData[campoVacios] = (almActual[campoVacios] || 0) + cant
+          }
+          await supabase.from('almacenes').update(updateData).eq('id', form.almacen_id)
+        }
       }
 
     } else if (form.tipo_venta === 'gas_balon') {
