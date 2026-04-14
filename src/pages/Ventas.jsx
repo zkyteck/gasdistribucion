@@ -121,7 +121,7 @@ export default function Ventas() {
       almacen_id: almacenDefault?.id || '', precio_tipo_id: primerTipo?.id || '',
       tipo_balon: '10kg', cantidad: '',
       precio_unitario: getPrecio(primerTipo?.id, '10kg') || primerTipo?.precio || '',
-      metodo_pago: 'efectivo', notas: '', es_credito: false, credito_tipo: 'dinero',
+      metodo_pago: 'efectivo', notas: '', es_credito: false, credito_tipo: 'dinero', vales20: '', vales30: '', vales43: '',
       tipo_venta: 'gas', precio_balon: '100'
     })
     setError(''); setModal(true); setBusquedaCliente(''); setSubModal(null)
@@ -256,7 +256,10 @@ export default function Ventas() {
         fecha: (form.fecha || hoyPeru()) + 'T12:00:00-05:00',
         cantidad: cant, precio_unitario: precioGas,
         metodo_pago: debeDinero ? 'credito' : form.metodo_pago,
-        notas: form.notas, usuario_id: perfil?.id || null
+        notas: form.notas, usuario_id: perfil?.id || null,
+        vales_20: form.es_distribuidor ? (parseInt(form.vales20)||0) : null,
+        vales_30: form.es_distribuidor ? (parseInt(form.vales30)||0) : null,
+        vales_43: form.es_distribuidor ? (parseInt(form.vales43)||0) : null
       })
       if (e) { setError(e.message); setSaving(false); return }
       // Solo actualizar stock_por_tipo para almacenes normales
@@ -478,9 +481,12 @@ export default function Ventas() {
       </div>
 
       {modal && (
-        <Modal title="Registrar venta" onClose={() => setModal(false)}>
+        <Modal title="Registrar venta" onClose={() => setModal(false)} wide>
           <div className="space-y-4">
             {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
+            <div className="lg:grid lg:grid-cols-2 lg:gap-6 space-y-4 lg:space-y-0">
+            {/* ── Columna izquierda ── */}
+            <div className="space-y-4">
             <div className="relative">
               <label className="label">Cliente</label>
               <input className="input" placeholder="Buscar cliente por nombre..."
@@ -634,6 +640,10 @@ export default function Ventas() {
               </div>
             )}
 
+            </div>{/* fin col izquierda */}
+
+            {/* ── Columna derecha ── */}
+            <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="label">Cantidad</label>
@@ -730,6 +740,60 @@ export default function Ventas() {
                 </div>
               </div>
             )}
+            {/* Vales para almacén distribuidor */}
+            {form.es_distribuidor && (() => {
+              const cant = parseInt(form.cantidad) || 0
+              const precio = parseFloat(form.precio_unitario) || 0
+              const totalVenta = cant * precio
+              const v20 = parseInt(form.vales20) || 0
+              const v30 = parseInt(form.vales30) || 0
+              const v43 = parseInt(form.vales43) || 0
+              const totalVales = v20*20 + v30*30 + v43*43
+              const saldo = totalVenta - totalVales
+              return (
+                <div style={{background:'rgba(99,102,241,0.08)',border:'1px solid rgba(99,102,241,0.3)',borderRadius:12,padding:'12px 14px'}}>
+                  <p style={{fontSize:12,fontWeight:700,color:'#818cf8',margin:'0 0 10px'}}>🎫 Vales entregados</p>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:10}}>
+                    <div>
+                      <label className="label" style={{fontSize:10}}>Vales S/20</label>
+                      <input type="number" min="0" className="input text-center"
+                        placeholder="0" value={form.vales20}
+                        onChange={e => setForm(f => ({...f, vales20: e.target.value}))} />
+                      {v20>0 && <p style={{fontSize:10,color:'#fde047',textAlign:'center',marginTop:2}}>= S/{v20*20}</p>}
+                    </div>
+                    <div>
+                      <label className="label" style={{fontSize:10}}>Vales S/30</label>
+                      <input type="number" min="0" className="input text-center"
+                        placeholder="0" value={form.vales30}
+                        onChange={e => setForm(f => ({...f, vales30: e.target.value}))} />
+                      {v30>0 && <p style={{fontSize:10,color:'#fde047',textAlign:'center',marginTop:2}}>= S/{v30*30}</p>}
+                    </div>
+                    <div>
+                      <label className="label" style={{fontSize:10}}>Vales S/43</label>
+                      <input type="number" min="0" className="input text-center"
+                        placeholder="0" value={form.vales43}
+                        onChange={e => setForm(f => ({...f, vales43: e.target.value}))} />
+                      {v43>0 && <p style={{fontSize:10,color:'#fde047',textAlign:'center',marginTop:2}}>= S/{v43*43}</p>}
+                    </div>
+                  </div>
+                  {totalVales > 0 && (
+                    <div style={{display:'flex',justifyContent:'space-between',padding:'8px 12px',borderRadius:8,background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.2)'}}>
+                      <div>
+                        <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>Total vales: <span style={{color:'#fde047',fontWeight:700}}>S/{totalVales.toLocaleString('es-PE')}</span></p>
+                        <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Saldo efectivo: <span style={{color:saldo>0?'#f87171':'#34d399',fontWeight:700}}>S/{saldo.toLocaleString('es-PE')}</span></p>
+                      </div>
+                      <p style={{fontSize:14,fontWeight:700,color:saldo<=0?'#34d399':'#fb923c',margin:0,alignSelf:'center'}}>
+                        {saldo<=0?'✅ Pagado':'⏳ Falta S/'+saldo.toLocaleString('es-PE')}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            </div>{/* fin col derecha */}
+            </div>{/* fin grid */}
+
             <div className="flex gap-3 pt-2">
               <button onClick={() => setModal(false)} className="btn-secondary flex-1">Cancelar</button>
               <button onClick={guardar} disabled={saving} className="btn-primary flex-1 justify-center">{saving ? 'Guardando...' : '✓ Registrar venta'}</button>
