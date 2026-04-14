@@ -561,61 +561,101 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
                   </tr>`
                 }).join('')
 
+                // Filas de lotes FIFO
+                const filasLotes = lotesDistribuidor.map(l => {
+                  const ag = l.cerrado || l.cantidad_restante <= 0
+                  return `<tr>
+                    <td>${l.fecha}</td>
+                    <td class="center">S/${l.precio_unitario}</td>
+                    <td class="center">${l.cantidad_inicial}</td>
+                    <td class="center">${l.cantidad_vendida}</td>
+                    <td class="center"><b>${l.cantidad_restante}</b></td>
+                    <td class="center" style="color:${ag?'#999':'green'}">${ag?'Agotado':l.cantidad_vendida===0?'Sin ventas':'Activo'}</td>
+                    <td class="right">S/${(l.cantidad_restante * l.precio_unitario).toLocaleString('es-PE')}</td>
+                  </tr>`
+                }).join('')
+
                 const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
                   <title>Rendición ${selected.nombre}</title>
                   <style>
-                    body{font-family:Arial,sans-serif;font-size:12px;padding:20px}
-                    h1{text-align:center;font-size:16px;margin-bottom:4px}
-                    .sub{text-align:center;color:#666;font-size:11px;margin-bottom:16px}
-                    table{width:100%;border-collapse:collapse;margin-bottom:12px}
-                    th{background:#333;color:#fff;padding:7px 8px;font-size:10px;text-transform:uppercase}
-                    td{padding:6px 8px;border-bottom:1px solid #ddd}
+                    *{margin:0;padding:0;box-sizing:border-box}
+                    body{font-family:Arial,sans-serif;font-size:12px;padding:24px;color:#000}
+                    h1{text-align:center;font-size:18px;font-weight:900;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px}
+                    .sub{text-align:center;color:#555;font-size:11px;margin-bottom:20px}
+                    .seccion{margin-bottom:20px}
+                    .seccion h2{font-size:13px;font-weight:700;text-transform:uppercase;border-bottom:2px solid #333;padding-bottom:4px;margin-bottom:10px}
+                    table{width:100%;border-collapse:collapse;margin-bottom:4px;border:1px solid #999}
+                    th{background:#222;color:#fff;padding:8px 10px;font-size:11px;text-transform:uppercase;border:1px solid #444;text-align:left}
+                    td{padding:7px 10px;border:1px solid #ccc;font-size:12px}
                     .center{text-align:center}.right{text-align:right}
-                    tr:nth-child(even){background:#f9f9f9}
-                    .total-row{background:#eee;font-weight:bold}
-                    .resumen{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
-                    .res-item{border:1px solid #ddd;border-radius:4px;padding:8px;text-align:center}
-                    .res-item .label{font-size:10px;color:#666;text-transform:uppercase}
-                    .res-item .valor{font-size:14px;font-weight:bold;margin-top:2px}
-                    .firma-area{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px}
-                    .firma{border-top:1px solid #000;padding-top:6px;text-align:center;font-size:10px;color:#555}
-                    @media print{button{display:none}}
+                    tr:nth-child(even){background:#f5f5f5}
+                    .total-row{background:#ddd !important;font-weight:900;font-size:13px}
+                    .resumen{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+                    .res-item{border:2px solid #333;border-radius:6px;padding:10px;text-align:center}
+                    .res-item .label{font-size:10px;color:#555;text-transform:uppercase;font-weight:600;margin-bottom:4px}
+                    .res-item .valor{font-size:16px;font-weight:900}
+                    .firma-area{display:grid;grid-template-columns:1fr 1fr;gap:60px;margin-top:50px}
+                    .firma{border-top:2px solid #000;padding-top:8px;text-align:center;font-size:11px;color:#333;font-weight:600}
+                    @media print{button{display:none}body{padding:10px}}
                   </style></head><body>
-                  <button onclick="window.print()" style="position:fixed;top:10px;right:10px;padding:8px 16px;background:#333;color:#fff;border:none;border-radius:6px;cursor:pointer">🖨️ Imprimir</button>
-                  <h1>RENDICIÓN DE VENTAS — ${selected.nombre.toUpperCase()}</h1>
-                  <p class="sub">Generado el ${new Date().toLocaleDateString('es-PE')} · Lote activo: S/${selected.precio_base}/bal.</p>
-                  <div class="resumen">
-                    <div class="res-item"><div class="label">Total balones</div><div class="valor">${totalCant}</div></div>
-                    <div class="res-item"><div class="label">Monto total</div><div class="valor">S/${totalMonto.toLocaleString('es-PE')}</div></div>
-                    <div class="res-item"><div class="label" style="color:${tSaldo<=0?'green':'red'}">${tSaldo<=0?'✅ Cancelado':'⏳ Saldo pendiente'}</div><div class="valor" style="color:${tSaldo<=0?'green':'red'}">S/${Math.max(0,tSaldo).toLocaleString('es-PE')}</div></div>
-                    <div class="res-item"><div class="label">Vales S/20 (${tv20})</div><div class="valor">S/${(tv20*20).toLocaleString('es-PE')}</div></div>
-                    <div class="res-item"><div class="label">Vales S/30 (${tv30})</div><div class="valor">S/${(tv30*30).toLocaleString('es-PE')}</div></div>
-                    <div class="res-item"><div class="label">Vales S/43 (${tv43})</div><div class="valor">S/${(tv43*43).toLocaleString('es-PE')}</div></div>
-                    <div class="res-item"><div class="label">Efectivo</div><div class="valor">S/${tEf.toLocaleString('es-PE')}</div></div>
-                    <div class="res-item"><div class="label">Total vales</div><div class="valor">S/${tVales.toLocaleString('es-PE')}</div></div>
-                    <div class="res-item"><div class="label">Total pagado</div><div class="valor">S/${(tVales+tEf).toLocaleString('es-PE')}</div></div>
+                  <button onclick="window.print()" style="position:fixed;top:10px;right:10px;padding:8px 16px;background:#222;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">🖨️ Imprimir</button>
+
+                  <h1>Rendición de ventas — ${selected.nombre}</h1>
+                  <p class="sub">Centro Gas Paucara · Generado el ${new Date().toLocaleDateString('es-PE', {day:'2-digit',month:'long',year:'numeric'})}</p>
+
+                  <div class="seccion">
+                    <h2>Resumen de pagos</h2>
+                    <div class="resumen">
+                      <div class="res-item"><div class="label">Total balones</div><div class="valor">${totalCant}</div></div>
+                      <div class="res-item"><div class="label">Monto total</div><div class="valor">S/${totalMonto.toLocaleString('es-PE')}</div></div>
+                      <div class="res-item" style="border-color:${tSaldo<=0?'green':'red'}"><div class="label" style="color:${tSaldo<=0?'green':'red'}">${tSaldo<=0?'✅ Cancelado':'⏳ Saldo pendiente'}</div><div class="valor" style="color:${tSaldo<=0?'green':'red'}">S/${Math.max(0,tSaldo).toLocaleString('es-PE')}</div></div>
+                      <div class="res-item"><div class="label">Vales S/20 × ${tv20}</div><div class="valor">S/${(tv20*20).toLocaleString('es-PE')}</div></div>
+                      <div class="res-item"><div class="label">Vales S/30 × ${tv30}</div><div class="valor">S/${(tv30*30).toLocaleString('es-PE')}</div></div>
+                      <div class="res-item"><div class="label">Vales S/43 × ${tv43}</div><div class="valor">S/${(tv43*43).toLocaleString('es-PE')}</div></div>
+                      <div class="res-item"><div class="label">Efectivo</div><div class="valor">S/${tEf.toLocaleString('es-PE')}</div></div>
+                      <div class="res-item"><div class="label">Total vales</div><div class="valor">S/${tVales.toLocaleString('es-PE')}</div></div>
+                      <div class="res-item" style="background:#f0f0f0"><div class="label">Total pagado</div><div class="valor">S/${(tVales+tEf).toLocaleString('es-PE')}</div></div>
+                    </div>
                   </div>
-                  <table>
-                    <thead><tr>
-                      <th>Fecha</th><th class="center">Cant.</th><th class="right">Monto</th>
-                      <th class="center">V.S/20</th><th class="center">V.S/30</th><th class="center">V.S/43</th>
-                      <th class="right">Efectivo</th><th class="right">Saldo</th>
-                    </tr></thead>
-                    <tbody>${filas}
-                      <tr class="total-row">
-                        <td>TOTAL</td><td class="center">${totalCant}</td>
-                        <td class="right">S/${totalMonto.toLocaleString('es-PE')}</td>
-                        <td class="center">${tv20||'—'}</td><td class="center">${tv30||'—'}</td><td class="center">${tv43||'—'}</td>
-                        <td class="right">${tEf>0?'S/'+tEf.toLocaleString('es-PE'):'—'}</td>
-                        <td class="right" style="color:${tSaldo<=0?'green':'red'}">${tSaldo<=0?'✅':'S/'+tSaldo.toLocaleString('es-PE')}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+
+                  <div class="seccion">
+                    <h2>Detalle de ventas por día</h2>
+                    <table>
+                      <thead><tr>
+                        <th>Fecha</th><th class="center">Cant.</th><th class="right">Monto</th>
+                        <th class="center">V.S/20</th><th class="center">V.S/30</th><th class="center">V.S/43</th>
+                        <th class="right">Efectivo</th><th class="right">Saldo día</th>
+                      </tr></thead>
+                      <tbody>${filas}
+                        <tr class="total-row">
+                          <td>TOTAL</td><td class="center">${totalCant}</td>
+                          <td class="right">S/${totalMonto.toLocaleString('es-PE')}</td>
+                          <td class="center">${tv20||'—'}</td><td class="center">${tv30||'—'}</td><td class="center">${tv43||'—'}</td>
+                          <td class="right">${tEf>0?'S/'+tEf.toLocaleString('es-PE'):'—'}</td>
+                          <td class="right" style="color:${tSaldo<=0?'green':'red'}">${tSaldo<=0?'✅ Pagado':'S/'+tSaldo.toLocaleString('es-PE')}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div class="seccion">
+                    <h2>Lotes de precio (FIFO)</h2>
+                    <table>
+                      <thead><tr>
+                        <th>Fecha lote</th><th class="center">Precio/bal.</th>
+                        <th class="center">Inicial</th><th class="center">Vendidos</th>
+                        <th class="center">Restantes</th><th class="center">Estado</th>
+                        <th class="right">Valor restante</th>
+                      </tr></thead>
+                      <tbody>${filasLotes}</tbody>
+                    </table>
+                  </div>
+
                   <div class="firma-area">
                     <div class="firma">Firma del distribuidor</div>
                     <div class="firma">Firma del administrador</div>
                   </div>
-                  <p style="text-align:center;margin-top:20px;font-size:10px;color:#999">Centro Gas Paucara</p>
+                  <p style="text-align:center;margin-top:24px;font-size:10px;color:#777">Centro Gas Paucara — ${new Date().toLocaleDateString('es-PE')}</p>
                 </body></html>`
 
                 const ventana = window.open('', '_blank', 'width=900,height=700')
