@@ -230,8 +230,8 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
                 {label:'📦 Valor campo', value:`S/${valorCampo.toLocaleString('es-PE')}`, color:'#60a5fa'},
               ].map(({label,value,color}) => (
                 <div key={label} style={{background:'var(--app-card-bg-alt)',border:'1px solid var(--app-card-border)',borderRadius:10,padding:'10px',textAlign:'center'}}>
-                  <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 6px',textTransform:'uppercase'}}>{label}</p>
-                  <p style={{fontSize:20,fontWeight:700,color,margin:0}}>{value}</p>
+                  <p style={{fontSize:12,color:'var(--app-text-secondary)',margin:'0 0 6px',textTransform:'uppercase'}}>{label}</p>
+                  <p style={{fontSize:22,fontWeight:800,color,margin:0}}>{value}</p>
                 </div>
               ))}
             </div>
@@ -499,20 +499,20 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
               <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden'}}>
                 <div style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',background:'var(--app-card-bg-alt)',borderBottom:'1px solid var(--app-card-border)'}}>
                   {['Fecha','Precio','Inicial','Vendidos','Restantes','Estado'].map(h => (
-                    <div key={h} style={{padding:'10px 10px',fontSize:11,fontWeight:700,color:'var(--app-text-secondary)',textTransform:'uppercase',borderRight:'1px solid var(--app-card-border)'}}>{h}</div>
+                    <div key={h} style={{padding:'13px 12px',fontSize:14,fontWeight:800,color:'var(--app-text-secondary)',textTransform:'uppercase',borderRight:'1px solid var(--app-card-border)'}}>{h}</div>
                   ))}
                 </div>
                 {lotesDistribuidor.map((lote,i) => {
                   const ag = lote.cerrado||lote.cantidad_restante<=0
                   return (
                     <div key={lote.id} style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',borderBottom:i<lotesDistribuidor.length-1?'1px solid var(--app-card-border)':'none'}}>
-                      <div style={{padding:'11px 10px',fontSize:13,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)'}}>{lote.fecha}</div>
-                      <div style={{padding:'11px 10px',fontSize:14,fontWeight:700,color:'#fb923c',borderRight:'1px solid var(--app-card-border)'}}>{lote.precio_unitario}</div>
-                      <div style={{padding:'8px',fontSize:11,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{lote.cantidad_inicial}</div>
-                      <div style={{padding:'8px',fontSize:11,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{lote.cantidad_vendida}</div>
-                      <div style={{padding:'8px',fontSize:12,fontWeight:700,color:ag?'#9ca3af':'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{lote.cantidad_restante}</div>
+                      <div style={{padding:'13px 12px',fontSize:15,fontWeight:600,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)'}}>{lote.fecha}</div>
+                      <div style={{padding:'13px 12px',fontSize:17,fontWeight:800,color:'#fb923c',borderRight:'1px solid var(--app-card-border)'}}>{lote.precio_unitario}</div>
+                      <div style={{padding:'13px 12px',fontSize:16,fontWeight:600,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{lote.cantidad_inicial}</div>
+                      <div style={{padding:'13px 12px',fontSize:17,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{lote.cantidad_vendida}</div>
+                      <div style={{padding:'13px 12px',fontSize:19,fontWeight:800,color:ag?'#9ca3af':'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{lote.cantidad_restante}</div>
                       <div style={{padding:'8px',textAlign:'center'}}>
-                        <span style={{fontSize:9,fontWeight:700,padding:'2px 6px',borderRadius:4,background:ag?'rgba(107,114,128,0.15)':'rgba(52,211,153,0.15)',color:ag?'#9ca3af':'#34d399'}}>
+                        <span style={{fontSize:13,fontWeight:700,padding:'5px 12px',borderRadius:5,background:ag?'rgba(107,114,128,0.15)':'rgba(52,211,153,0.15)',color:ag?'#9ca3af':'#34d399'}}>
                           {ag?'Agotado':lote.cantidad_vendida===0?'Nuevo':'Activo'}
                         </span>
                       </div>
