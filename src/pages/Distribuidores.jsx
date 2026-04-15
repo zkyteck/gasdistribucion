@@ -698,8 +698,10 @@ export default function Distribuidores() {
   const [savingAcuenta, setSavingAcuenta] = useState(false)
   const [loadingAcuenta, setLoadingAcuenta] = useState(false)
   const [acuentaEntregados, setAcuentaEntregados] = useState([])
-  const [entregaModal, setEntregaModal] = useState(null) // registro a entregar
+  const [entregaModal, setEntregaModal] = useState(null)
   const [entregaForm, setEntregaForm] = useState({ v20: '', v30: '', v43: '', notas: '', fecha: hoyPeru() })
+  const [tabAcuenta, setTabAcuenta] = useState('pendientes')
+  const [busquedaAcuenta, setBusquedaAcuenta] = useState('')
   const [clientes, setClientes] = useState([])
   const [valeForm, setValeForm] = useState({ nombre_cliente: '', cliente_id: '', tipo_vale: '20', fecha: hoyPeru(), notas: '' })
   const [clienteRapidoForm, setClienteRapidoForm] = useState({ nombre: '', telefono: '' })
