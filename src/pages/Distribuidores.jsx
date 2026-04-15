@@ -1827,7 +1827,7 @@ export default function Distribuidores() {
                     value={acuentaForm.nombre_cliente}
                     onChange={e => setAcuentaForm(f => ({...f, nombre_cliente: e.target.value}))} />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className="label">🎫 Vales S/20</label>
                     <input type="number" min="0" className="input text-center" placeholder="0"
@@ -1846,12 +1846,12 @@ export default function Distribuidores() {
                       value={acuentaForm.vales_43}
                       onChange={e => setAcuentaForm(f => ({...f, vales_43: e.target.value}))} />
                   </div>
-                  <div>
-                    <label className="label">🔵 Balones</label>
-                    <input type="number" min="0" className="input text-center" placeholder="0"
-                      value={acuentaForm.balones}
-                      onChange={e => setAcuentaForm(f => ({...f, balones: e.target.value}))} />
-                  </div>
+                </div>
+                <div>
+                  <label className="label">Fecha</label>
+                  <input type="date" className="input"
+                    value={acuentaForm.fecha}
+                    onChange={e => setAcuentaForm(f => ({...f, fecha: e.target.value}))} />
                 </div>
                 <div>
                   <label className="label">Notas (opcional)</label>
