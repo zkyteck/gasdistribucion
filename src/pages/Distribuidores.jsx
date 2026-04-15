@@ -694,7 +694,7 @@ export default function Distribuidores() {
   const [abonosParciales, setAbonosParciales] = useState([])
   const [acuentaDist, setAcuentaDist] = useState([]) // registros a cuenta del distribuidor seleccionado
   const [acuentaModal, setAcuentaModal] = useState(false)
-  const [acuentaForm, setAcuentaForm] = useState({ nombre_cliente: '', vales_20: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() })
+  const [acuentaForm, setAcuentaForm] = useState({ nombre_cliente: '', vales_20: '', vales_30: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() })
   const [savingAcuenta, setSavingAcuenta] = useState(false)
   const [loadingAcuenta, setLoadingAcuenta] = useState(false)
   const [clientes, setClientes] = useState([])
@@ -1344,6 +1344,7 @@ export default function Distribuidores() {
   async function guardarAcuentaDist() {
     if (!selected || !acuentaForm.nombre_cliente.trim()) return
     const v20 = parseInt(acuentaForm.vales_20) || 0
+    const v30 = parseInt(acuentaForm.vales_30) || 0
     const v43 = parseInt(acuentaForm.vales_43) || 0
     const bal = parseInt(acuentaForm.balones) || 0
     if (!v20 && !v43 && !bal) return
@@ -1356,10 +1357,10 @@ export default function Distribuidores() {
       estado: 'pendiente', numero: (count || 0) + 1,
       distribuidor_id: selected.id,
       notas: acuentaForm.notas || null,
-      historial_cambios: [{ tipo: 'deposito', fecha: acuentaForm.fecha || hoyPeru(), vales_20: v20, vales_43: v43, balones: bal }]
+      historial_cambios: [{ tipo: 'deposito', fecha: acuentaForm.fecha || hoyPeru(), vales_20: v20, vales_30: v30, vales_43: v43, balones: bal }]
     })
     setSavingAcuenta(false)
-    setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() })
+    setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_30: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() })
     cargarAcuentaDist(selected.id)
   }
 
@@ -1478,7 +1479,7 @@ export default function Distribuidores() {
                     </button>
                   </>
                 ) : (
-                  <button onClick={() => { setSelected(d); setAcuentaModal(true); setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() }); cargarAcuentaDist(d.id) }}
+                  <button onClick={() => { setSelected(d); setAcuentaModal(true); setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_30: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() }); cargarAcuentaDist(d.id) }}
                     className="col-span-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/30 text-yellow-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
                     <ClipboardList className="w-3 h-3" />📋 A Cuenta ({d.vales_pendientes || 0} pendientes)
                   </button>
@@ -1826,12 +1827,18 @@ export default function Distribuidores() {
                     value={acuentaForm.nombre_cliente}
                     onChange={e => setAcuentaForm(f => ({...f, nombre_cliente: e.target.value}))} />
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="label">🎫 Vales S/20</label>
                     <input type="number" min="0" className="input text-center" placeholder="0"
                       value={acuentaForm.vales_20}
                       onChange={e => setAcuentaForm(f => ({...f, vales_20: e.target.value}))} />
+                  </div>
+                  <div>
+                    <label className="label">🎫 Vales S/30</label>
+                    <input type="number" min="0" className="input text-center" placeholder="0"
+                      value={acuentaForm.vales_30}
+                      onChange={e => setAcuentaForm(f => ({...f, vales_30: e.target.value}))} />
                   </div>
                   <div>
                     <label className="label">🎫 Vales S/43</label>
