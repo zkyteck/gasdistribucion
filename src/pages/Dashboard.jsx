@@ -182,6 +182,30 @@ export default function Dashboard() {
         </button>
       </div>
 
+      {/* Quick actions */}
+      <div className="card">
+        <h3 className="text-sm font-semibold text-white mb-4">Acciones rápidas</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: 'Nueva venta',      icon: ShoppingCart, color: 'text-blue-400',    bg: 'bg-blue-500/10',    href: '/ventas' },
+            { label: 'Registrar vale',   icon: Ticket,       color: 'text-yellow-400',  bg: 'bg-yellow-500/10',  href: '/vales' },
+            { label: 'Ver deudas',       icon: AlertCircle,  color: 'text-red-400',     bg: 'bg-red-500/10',     href: '/clientes' },
+            { label: 'Ver stock',        icon: Package,      color: 'text-emerald-400', bg: 'bg-emerald-500/10', href: '/inventario' },
+          ].map(({ label, icon: Icon, color, bg, href }) => (
+            <a
+              key={label}
+              href={href}
+              style={{background:"var(--app-card-bg)",border:"1px solid var(--app-card-border)"}} className="flex flex-col items-center gap-2 p-4 rounded-xl transition-all group"
+            >
+              <div className={`w-10 h-10 ${bg} rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                <Icon className={`w-5 h-5 ${color}`} />
+              </div>
+              <span className="text-xs text-gray-400 font-medium text-center">{label}</span>
+            </a>
+          ))}
+        </div>
+      </div>
+
       {/* Stats grid */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         <StatCard icon={ShoppingCart}  label="Ventas hoy"          value={stats.ventasHoy}                                          color="blue"   />
@@ -218,30 +242,6 @@ export default function Dashboard() {
               <p className="text-xs text-gray-500">En deuda (calle)</p>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Quick actions */}
-      <div className="card">
-        <h3 className="text-sm font-semibold text-white mb-4">Acciones rápidas</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: 'Nueva venta',      icon: ShoppingCart, color: 'text-blue-400',    bg: 'bg-blue-500/10',    href: '/ventas' },
-            { label: 'Registrar vale',   icon: Ticket,       color: 'text-yellow-400',  bg: 'bg-yellow-500/10',  href: '/vales' },
-            { label: 'Ver deudas',       icon: AlertCircle,  color: 'text-red-400',     bg: 'bg-red-500/10',     href: '/clientes' },
-            { label: 'Ver stock',        icon: Package,      color: 'text-emerald-400', bg: 'bg-emerald-500/10', href: '/inventario' },
-          ].map(({ label, icon: Icon, color, bg, href }) => (
-            <a
-              key={label}
-              href={href}
-              style={{background:"var(--app-card-bg)",border:"1px solid var(--app-card-border)"}} className="flex flex-col items-center gap-2 p-4 rounded-xl transition-all group"
-            >
-              <div className={`w-10 h-10 ${bg} rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                <Icon className={`w-5 h-5 ${color}`} />
-              </div>
-              <span className="text-xs text-gray-400 font-medium text-center">{label}</span>
-            </a>
-          ))}
         </div>
       </div>
 
