@@ -2082,11 +2082,24 @@ export default function Distribuidores() {
 
               {tabAcuenta === 'entregados' && (
                 <div>
-                  {acuentaEntregados.length === 0 ? (
+                  <div style={{position:'relative',marginBottom:8}}>
+                    <input className="input" placeholder="🔍 Buscar por nombre..."
+                      value={busquedaAcuenta}
+                      onChange={e => setBusquedaAcuenta(e.target.value)} />
+                    {busquedaAcuenta && (
+                      <button onClick={() => setBusquedaAcuenta('')}
+                        style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--app-text-secondary)'}}>✕</button>
+                    )}
+                  </div>
+                  {(() => {
+                    const filtradosEntr = busquedaAcuenta
+                      ? acuentaEntregados.filter(r => r.nombre_cliente?.toLowerCase().includes(busquedaAcuenta.toLowerCase()))
+                      : acuentaEntregados
+                    return filtradosEntr.length === 0 ? (
                     <p className="text-center text-gray-600 text-sm py-4">Sin entregas registradas</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {acuentaEntregados.map(r => {
+                    ) : (
+                      <div className="space-y-2">
+                        {filtradosEntr.map(r => {
                         const entregas = (r.historial_cambios||[]).filter(h=>h.tipo==='entrega')
                         return (
                           <div key={r.id} style={{background:'rgba(52,211,153,0.05)',border:'1px solid rgba(52,211,153,0.25)',borderRadius:10,padding:'10px 14px'}}>
@@ -2134,9 +2147,10 @@ export default function Distribuidores() {
                             })()}
                           </div>
                         )
-                      })}
-                    </div>
-                  )}
+                        })}
+                      </div>
+                    )
+                  })()}
                 </div>
               )}
 
