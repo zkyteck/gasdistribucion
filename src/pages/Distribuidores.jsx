@@ -1346,18 +1346,17 @@ export default function Distribuidores() {
     const v20 = parseInt(acuentaForm.vales_20) || 0
     const v30 = parseInt(acuentaForm.vales_30) || 0
     const v43 = parseInt(acuentaForm.vales_43) || 0
-    const bal = parseInt(acuentaForm.balones) || 0
-    if (!v20 && !v43 && !bal) return
+    if (!v20 && !v30 && !v43) return
     setSavingAcuenta(true)
     const { count } = await supabase.from('a_cuenta').select('*', { count: 'exact', head: true })
     await supabase.from('a_cuenta').insert({
       nombre_cliente: acuentaForm.nombre_cliente.trim(),
       fecha: acuentaForm.fecha || hoyPeru(),
-      vales_20: v20, vales_43: v43, balones: bal, dinero: 0,
+      vales_20: v20, vales_43: v43, balones: 0, dinero: 0,
       estado: 'pendiente', numero: (count || 0) + 1,
       distribuidor_id: selected.id,
       notas: acuentaForm.notas || null,
-      historial_cambios: [{ tipo: 'deposito', fecha: acuentaForm.fecha || hoyPeru(), vales_20: v20, vales_30: v30, vales_43: v43, balones: bal }]
+      historial_cambios: [{ tipo: 'deposito', fecha: acuentaForm.fecha || hoyPeru(), vales_20: v20, vales_30: v30, vales_43: v43, balones: 0 }]
     })
     setSavingAcuenta(false)
     setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_30: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() })
