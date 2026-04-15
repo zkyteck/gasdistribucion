@@ -1339,12 +1339,17 @@ export default function Distribuidores() {
 
   async function cargarAcuentaDist(distId) {
     setLoadingAcuenta(true)
-    const [{ data: pend }, { data: entr }] = await Promise.all([
-      supabase.from('a_cuenta').select('*').eq('distribuidor_id', distId).eq('estado', 'pendiente').order('created_at', { ascending: false }),
-      supabase.from('a_cuenta').select('*').eq('distribuidor_id', distId).eq('estado', 'entregado').order('fecha_entrega', { ascending: false }).limit(10)
-    ])
+    const { data: todos } = await supabase.from('a_cuenta')
+      .select('*').eq('distribuidor_id', distId)
+      .order('created_at', { ascending: false })
+    const pend = (todos||[]).filter(r => r.estado === 'pendiente')
+    // Entregados: estado='entregado' O registros con historial de entregas parciales
+    const conEntregas = (todos||[]).filter(r =>
+      r.estado === 'entregado' ||
+      (r.historial_cambios||[]).some(h => h.tipo === 'entrega')
+    )
     setAcuentaDist(pend || [])
-    setAcuentaEntregados(entr || [])
+    setAcuentaEntregados(conEntregas || [])
     setLoadingAcuenta(false)
   }
 
@@ -2088,7 +2093,9 @@ export default function Distribuidores() {
                             <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
                               <div>
                                 <p style={{color:'var(--app-text)',fontWeight:700,fontSize:13,margin:0}}>{r.nombre_cliente}</p>
-                                <p style={{color:'#34d399',fontSize:11,margin:'2px 0'}}>✅ Entregado el {r.fecha_entrega}</p>
+                                <p style={{fontSize:11,margin:'2px 0',color:r.estado==='entregado'?'#34d399':'#fb923c'}}>
+                                  {r.estado==='entregado'?'✅ Completado':'⏳ Parcial — aún pendiente'}
+                                </p>
                               </div>
                               <button onClick={() => borrarAcuentaDist(r.id)}
                                 style={{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#f87171',borderRadius:6,padding:'3px 8px',fontSize:11,cursor:'pointer'}}>
@@ -2096,16 +2103,35 @@ export default function Distribuidores() {
                               </button>
                             </div>
                             {entregas.map((e,i) => (
-                              <div key={i} style={{marginTop:8,padding:'6px 10px',background:'rgba(52,211,153,0.05)',borderRadius:6,border:'1px solid rgba(52,211,153,0.15)'}}>
-                                <p style={{fontSize:10,color:'var(--app-text-secondary)',margin:'0 0 4px',textTransform:'uppercase',fontWeight:600}}>Entrega {entregas.length>1?i+1:''} — {e.fecha}</p>
+                              <div key={i} style={{marginTop:8,padding:'8px 10px',background:'rgba(52,211,153,0.05)',borderRadius:6,border:'1px solid rgba(52,211,153,0.2)'}}>
+                                <p style={{fontSize:11,color:'#34d399',fontWeight:600,margin:'0 0 6px'}}>
+                                  ✓ Entrega {entregas.length>1?`#${i+1} `:''} — {e.fecha}
+                                </p>
                                 <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                                  {e.vales_20>0 && <span style={{fontSize:11,background:'rgba(253,224,71,0.15)',border:'1px solid rgba(253,224,71,0.3)',borderRadius:6,padding:'2px 8px',color:'#fde047'}}>{e.vales_20} × S/20 = S/{e.vales_20*20}</span>}
-                                  {e.vales_30>0 && <span style={{fontSize:11,background:'rgba(253,224,71,0.15)',border:'1px solid rgba(253,224,71,0.3)',borderRadius:6,padding:'2px 8px',color:'#fde047'}}>{e.vales_30} × S/30 = S/{e.vales_30*30}</span>}
-                                  {e.vales_43>0 && <span style={{fontSize:11,background:'rgba(253,224,71,0.15)',border:'1px solid rgba(253,224,71,0.3)',borderRadius:6,padding:'2px 8px',color:'#fde047'}}>{e.vales_43} × S/43 = S/{e.vales_43*43}</span>}
-                                  {e.notas && <span style={{fontSize:10,color:'var(--app-text-secondary)',fontStyle:'italic',alignSelf:'center'}}>— {e.notas}</span>}
+                                  {e.vales_20>0 && <span style={{fontSize:12,background:'rgba(253,224,71,0.15)',border:'1px solid rgba(253,224,71,0.3)',borderRadius:6,padding:'3px 10px',color:'#fde047',fontWeight:600}}>{e.vales_20} × S/20 = S/{e.vales_20*20}</span>}
+                                  {e.vales_30>0 && <span style={{fontSize:12,background:'rgba(253,224,71,0.15)',border:'1px solid rgba(253,224,71,0.3)',borderRadius:6,padding:'3px 10px',color:'#fde047',fontWeight:600}}>{e.vales_30} × S/30 = S/{e.vales_30*30}</span>}
+                                  {e.vales_43>0 && <span style={{fontSize:12,background:'rgba(253,224,71,0.15)',border:'1px solid rgba(253,224,71,0.3)',borderRadius:6,padding:'3px 10px',color:'#fde047',fontWeight:600}}>{e.vales_43} × S/43 = S/{e.vales_43*43}</span>}
                                 </div>
+                                {e.notas && <p style={{fontSize:10,color:'var(--app-text-secondary)',fontStyle:'italic',marginTop:4}}>📝 {e.notas}</p>}
                               </div>
                             ))}
+                            {r.estado==='pendiente' && (() => {
+                              const dep = r.historial_cambios?.find(h=>h.tipo==='deposito')
+                              const v20p = dep?.vales_20||r.vales_20||0
+                              const v30p = dep?.vales_30||0
+                              const v43p = dep?.vales_43||r.vales_43||0
+                              if (!v20p && !v30p && !v43p) return null
+                              return (
+                                <div style={{marginTop:6,padding:'6px 10px',background:'rgba(251,146,60,0.06)',borderRadius:6,border:'1px solid rgba(251,146,60,0.2)'}}>
+                                  <p style={{fontSize:10,color:'#fb923c',fontWeight:600,margin:'0 0 4px'}}>⏳ Aún pendiente de recoger:</p>
+                                  <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                                    {v20p>0 && <span style={{fontSize:11,color:'#fde047'}}>{v20p}×S/20</span>}
+                                    {v30p>0 && <span style={{fontSize:11,color:'#fde047'}}>{v30p}×S/30</span>}
+                                    {v43p>0 && <span style={{fontSize:11,color:'#fde047'}}>{v43p}×S/43</span>}
+                                  </div>
+                                </div>
+                              )
+                            })()}
                           </div>
                         )
                       })}
