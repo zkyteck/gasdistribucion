@@ -697,6 +697,9 @@ export default function Distribuidores() {
   const [acuentaForm, setAcuentaForm] = useState({ nombre_cliente: '', vales_20: '', vales_30: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru(), fecha_recojo: '' })
   const [savingAcuenta, setSavingAcuenta] = useState(false)
   const [loadingAcuenta, setLoadingAcuenta] = useState(false)
+  const [acuentaEntregados, setAcuentaEntregados] = useState([])
+  const [entregaModal, setEntregaModal] = useState(null) // registro a entregar
+  const [entregaForm, setEntregaForm] = useState({ v20: '', v30: '', v43: '', notas: '', fecha: hoyPeru() })
   const [clientes, setClientes] = useState([])
   const [valeForm, setValeForm] = useState({ nombre_cliente: '', cliente_id: '', tipo_vale: '20', fecha: hoyPeru(), notas: '' })
   const [clienteRapidoForm, setClienteRapidoForm] = useState({ nombre: '', telefono: '' })
@@ -1334,10 +1337,12 @@ export default function Distribuidores() {
 
   async function cargarAcuentaDist(distId) {
     setLoadingAcuenta(true)
-    const { data } = await supabase.from('a_cuenta')
-      .select('*').eq('distribuidor_id', distId).eq('estado', 'pendiente')
-      .order('created_at', { ascending: false })
-    setAcuentaDist(data || [])
+    const [{ data: pend }, { data: entr }] = await Promise.all([
+      supabase.from('a_cuenta').select('*').eq('distribuidor_id', distId).eq('estado', 'pendiente').order('created_at', { ascending: false }),
+      supabase.from('a_cuenta').select('*').eq('distribuidor_id', distId).eq('estado', 'entregado').order('fecha_entrega', { ascending: false }).limit(10)
+    ])
+    setAcuentaDist(pend || [])
+    setAcuentaEntregados(entr || [])
     setLoadingAcuenta(false)
   }
 
@@ -1365,10 +1370,45 @@ export default function Distribuidores() {
   }
 
   async function entregarAcuentaDist(registro) {
-    if (!confirm(`Marcar como entregado a ${registro.nombre_cliente}?`)) return
+    setEntregaModal(registro)
+    const v30hist = registro.historial_cambios?.[0]?.vales_30 || 0
+    setEntregaForm({
+      v20: registro.vales_20 || '',
+      v30: v30hist || '',
+      v43: registro.vales_43 || '',
+      notas: '',
+      fecha: hoyPeru()
+    })
+  }
+
+  async function confirmarEntrega() {
+    if (!entregaModal) return
+    const v20e = parseInt(entregaForm.v20) || 0
+    const v30e = parseInt(entregaForm.v30) || 0
+    const v43e = parseInt(entregaForm.v43) || 0
+    const v20orig = entregaModal.vales_20 || 0
+    const v30orig = entregaModal.historial_cambios?.[0]?.vales_30 || 0
+    const v43orig = entregaModal.vales_43 || 0
+    const v20rest = v20orig - v20e
+    const v30rest = v30orig - v30e
+    const v43rest = v43orig - v43e
+    const hayResto = v20rest > 0 || v30rest > 0 || v43rest > 0
+
+    // Marcar como entregado (o parcialmente)
     await supabase.from('a_cuenta').update({
-      estado: 'entregado', fecha_entrega: hoyPeru(), updated_at: new Date().toISOString()
-    }).eq('id', registro.id)
+      estado: hayResto ? 'pendiente' : 'entregado',
+      fecha_entrega: hayResto ? null : entregaForm.fecha,
+      vales_20: v20rest,
+      vales_43: v43rest,
+      historial_cambios: [...(entregaModal.historial_cambios||[]), {
+        tipo: 'entrega', fecha: entregaForm.fecha,
+        vales_20: v20e, vales_30: v30e, vales_43: v43e,
+        notas: entregaForm.notas || null
+      }],
+      updated_at: new Date().toISOString()
+    }).eq('id', entregaModal.id)
+
+    setEntregaModal(null)
     cargarAcuentaDist(selected.id)
   }
 
@@ -1805,6 +1845,85 @@ export default function Distribuidores() {
       )}
 
 
+      {/* Modal Entrega Parcial */}
+      {entregaModal && (
+        <div className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl shadow-2xl" style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
+            <div className="flex items-center justify-between px-6 py-4" style={{borderBottom:'1px solid var(--app-card-border)'}}>
+              <div>
+                <h3 style={{color:'var(--app-text)',fontWeight:700,fontSize:15,margin:0}}>✓ Registrar entrega</h3>
+                <p style={{color:'var(--app-text-secondary)',fontSize:11,margin:'2px 0 0'}}>{entregaModal.nombre_cliente}</p>
+              </div>
+              <button onClick={() => setEntregaModal(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--app-text-secondary)'}}>✕</button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <p style={{fontSize:12,color:'var(--app-text-secondary)',margin:0}}>Ingresa cuántos vales recoge hoy (puede ser parcial):</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="label">🎫 Vales S/20</label>
+                  <input type="number" min="0" max={entregaModal.vales_20||0} className="input text-center"
+                    value={entregaForm.v20}
+                    onChange={e => setEntregaForm(f=>({...f, v20:e.target.value}))} />
+                  <p style={{fontSize:9,color:'var(--app-text-secondary)',textAlign:'center',marginTop:2}}>Máx: {entregaModal.vales_20||0}</p>
+                </div>
+                <div>
+                  <label className="label">🎫 Vales S/30</label>
+                  <input type="number" min="0" max={entregaModal.historial_cambios?.[0]?.vales_30||0} className="input text-center"
+                    value={entregaForm.v30}
+                    onChange={e => setEntregaForm(f=>({...f, v30:e.target.value}))} />
+                  <p style={{fontSize:9,color:'var(--app-text-secondary)',textAlign:'center',marginTop:2}}>Máx: {entregaModal.historial_cambios?.[0]?.vales_30||0}</p>
+                </div>
+                <div>
+                  <label className="label">🎫 Vales S/43</label>
+                  <input type="number" min="0" max={entregaModal.vales_43||0} className="input text-center"
+                    value={entregaForm.v43}
+                    onChange={e => setEntregaForm(f=>({...f, v43:e.target.value}))} />
+                  <p style={{fontSize:9,color:'var(--app-text-secondary)',textAlign:'center',marginTop:2}}>Máx: {entregaModal.vales_43||0}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Fecha entrega</label>
+                  <input type="date" className="input" value={entregaForm.fecha}
+                    onChange={e => setEntregaForm(f=>({...f, fecha:e.target.value}))} />
+                </div>
+                <div>
+                  <label className="label">Nota (opcional)</label>
+                  <input className="input" placeholder="Ej: dejó 2 para mañana..."
+                    value={entregaForm.notas}
+                    onChange={e => setEntregaForm(f=>({...f, notas:e.target.value}))} />
+                </div>
+              </div>
+              {(() => {
+                const v20e=parseInt(entregaForm.v20)||0, v30e=parseInt(entregaForm.v30)||0, v43e=parseInt(entregaForm.v43)||0
+                const v20r=(entregaModal.vales_20||0)-v20e
+                const v30r=(entregaModal.historial_cambios?.[0]?.vales_30||0)-v30e
+                const v43r=(entregaModal.vales_43||0)-v43e
+                const hayResto = v20r>0||v30r>0||v43r>0
+                return hayResto ? (
+                  <div style={{background:'rgba(251,146,60,0.08)',border:'1px solid rgba(251,146,60,0.3)',borderRadius:8,padding:'8px 12px'}}>
+                    <p style={{fontSize:11,color:'#fb923c',margin:0,fontWeight:600}}>⚠️ Quedará pendiente:</p>
+                    <div style={{display:'flex',gap:8,marginTop:4}}>
+                      {v20r>0 && <span style={{fontSize:11,color:'#fde047'}}>{v20r}×S/20</span>}
+                      {v30r>0 && <span style={{fontSize:11,color:'#fde047'}}>{v30r}×S/30</span>}
+                      {v43r>0 && <span style={{fontSize:11,color:'#fde047'}}>{v43r}×S/43</span>}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.3)',borderRadius:8,padding:'8px 12px'}}>
+                    <p style={{fontSize:11,color:'#34d399',margin:0}}>✅ Entrega completa</p>
+                  </div>
+                )
+              })()}
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setEntregaModal(null)} className="btn-secondary flex-1">Cancelar</button>
+                <button onClick={confirmarEntrega} className="btn-primary flex-1 justify-center">✓ Confirmar entrega</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal A Cuenta del distribuidor */}
       {acuentaModal && selected && (
         <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
@@ -1903,7 +2022,7 @@ export default function Distribuidores() {
                           <div className="flex gap-2 flex-shrink-0">
                             <button onClick={() => entregarAcuentaDist(r)}
                               className="text-xs bg-emerald-600/20 border border-emerald-600/30 text-emerald-400 px-2 py-1 rounded-lg">
-                              ✓ Entregado
+                              ✓ Entregar
                             </button>
                             <button onClick={() => borrarAcuentaDist(r.id)}
                               className="text-xs bg-red-600/20 border border-red-600/30 text-red-400 px-2 py-1 rounded-lg">
@@ -1916,6 +2035,36 @@ export default function Distribuidores() {
                   </div>
                 )}
               </div>
+
+              {/* Sección entregados */}
+              {acuentaEntregados.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Entregados recientes</p>
+                  <div className="space-y-2">
+                    {acuentaEntregados.map(r => {
+                      const entregas = (r.historial_cambios||[]).filter(h=>h.tipo==='entrega')
+                      return (
+                        <div key={r.id} style={{background:'rgba(52,211,153,0.05)',border:'1px solid rgba(52,211,153,0.2)',borderRadius:8,padding:'10px 12px'}}>
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p style={{color:'var(--app-text)',fontWeight:600,fontSize:13,margin:0}}>{r.nombre_cliente}</p>
+                              <p style={{color:'#34d399',fontSize:11,margin:'2px 0 0'}}>✅ Entregado el {r.fecha_entrega}</p>
+                              {entregas.map((e,i) => (
+                                <div key={i} style={{marginTop:4,display:'flex',gap:6,flexWrap:'wrap'}}>
+                                  {e.vales_20>0 && <span style={{fontSize:10,color:'#fde047'}}>{e.vales_20}×S/20</span>}
+                                  {e.vales_30>0 && <span style={{fontSize:10,color:'#fde047'}}>{e.vales_30}×S/30</span>}
+                                  {e.vales_43>0 && <span style={{fontSize:10,color:'#fde047'}}>{e.vales_43}×S/43</span>}
+                                  {e.notas && <span style={{fontSize:10,color:'var(--app-text-secondary)',fontStyle:'italic'}}>— {e.notas}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
 
               <button onClick={() => setAcuentaModal(false)} className="btn-secondary w-full">Cerrar</button>
             </div>
