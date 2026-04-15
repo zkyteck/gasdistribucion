@@ -429,7 +429,7 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
               <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden',overflowX:'auto'}}>
                 <div style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 0.7fr 0.9fr 0.6fr 0.6fr 0.6fr 0.9fr 0.8fr',background:'var(--app-accent)',minWidth:900}}>
                   {['Fecha','Cant.','Precio','Monto total','V.S/20','V.S/30','V.S/43','Saldo/Efectivo','Estado'].map(h => (
-                    <div key={h} style={{padding:'7px 5px',fontSize:9,fontWeight:700,color:'#fff',textTransform:'uppercase',borderRight:'1px solid rgba(255,255,255,0.2)',textAlign:'center'}}>{h}</div>
+                    <div key={h} style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#fff',textTransform:'uppercase',borderRight:'1px solid rgba(255,255,255,0.2)',textAlign:'center'}}>{h}</div>
                   ))}
                 </div>
                 {diasOrdenados.map((dia,i) => {
@@ -453,7 +453,7 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
                           ? <span style={{color:'#34d399',fontWeight:700}}>✅ Pagado</span>
                           : <span style={{color:'#f87171',fontWeight:700}}>S/{saldo.toLocaleString('es-PE')}</span>
                         }
-                        {d.efectivo > 0 && <p style={{fontSize:9,color:'#34d399',margin:'2px 0 0'}}>ef. S/{d.efectivo}</p>}
+                        {d.efectivo > 0 && <p style={{fontSize:13,color:'#34d399',margin:'2px 0 0'}}>ef. S/{d.efectivo}</p>}
                       </div>
                       <div style={{padding:'8px 5px',textAlign:'center',display:'flex',alignItems:'center',justifyContent:'center'}}>
                         <span style={{fontSize:13,fontWeight:700,padding:'5px 12px',borderRadius:5,background:cancelado?'rgba(52,211,153,0.15)':'rgba(251,146,60,0.15)',color:cancelado?'#34d399':'#fb923c'}}>
