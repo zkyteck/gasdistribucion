@@ -334,8 +334,8 @@ export default function Apariencia() {
     setTimeout(() => setGuardado(false), 2000)
   }
 
-  const empresariales = ['neon', 'corporate_blue', 'navy_red', 'terminal'].map(id => TEMAS[id])
-  const alternativos  = ['light_indigo', 'carbon_orange', 'ultra_dark'].map(id => TEMAS[id])
+  const empresariales = ['terminal', 'light_indigo'].map(id => TEMAS[id])
+  const alternativos  = []
   const temaInfo = TEMAS[temaActual]
 
   return (
@@ -381,22 +381,10 @@ export default function Apariencia() {
       {/* Temas empresariales */}
       <div>
         <p style={{ fontSize: 13, color: 'var(--app-text-secondary)', marginBottom: 12, fontWeight: 500 }}>
-          Temas empresariales
+          Temas disponibles
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
           {empresariales.map(tema => (
-            <TemaPreview key={tema.id} tema={tema} seleccionado={temaActual === tema.id} onSeleccionar={seleccionarTema} />
-          ))}
-        </div>
-      </div>
-
-      {/* Temas alternativos */}
-      <div>
-        <p style={{ fontSize: 13, color: 'var(--app-text-secondary)', marginBottom: 12, fontWeight: 500 }}>
-          Temas alternativos
-        </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
-          {alternativos.map(tema => (
             <TemaPreview key={tema.id} tema={tema} seleccionado={temaActual === tema.id} onSeleccionar={seleccionarTema} />
           ))}
         </div>
