@@ -694,7 +694,7 @@ export default function Distribuidores() {
   const [abonosParciales, setAbonosParciales] = useState([])
   const [acuentaDist, setAcuentaDist] = useState([]) // registros a cuenta del distribuidor seleccionado
   const [acuentaModal, setAcuentaModal] = useState(false)
-  const [acuentaForm, setAcuentaForm] = useState({ nombre_cliente: '', vales_20: '', vales_30: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() })
+  const [acuentaForm, setAcuentaForm] = useState({ nombre_cliente: '', vales_20: '', vales_30: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru(), fecha_recojo: '' })
   const [savingAcuenta, setSavingAcuenta] = useState(false)
   const [loadingAcuenta, setLoadingAcuenta] = useState(false)
   const [clientes, setClientes] = useState([])
@@ -1352,6 +1352,7 @@ export default function Distribuidores() {
     await supabase.from('a_cuenta').insert({
       nombre_cliente: acuentaForm.nombre_cliente.trim(),
       fecha: acuentaForm.fecha || hoyPeru(),
+      fecha_recojo: acuentaForm.fecha_recojo || null,
       vales_20: v20, vales_43: v43, balones: 0, dinero: 0,
       estado: 'pendiente', numero: (count || 0) + 1,
       distribuidor_id: selected.id,
@@ -1359,7 +1360,7 @@ export default function Distribuidores() {
       historial_cambios: [{ tipo: 'deposito', fecha: acuentaForm.fecha || hoyPeru(), vales_20: v20, vales_30: v30, vales_43: v43, balones: 0 }]
     })
     setSavingAcuenta(false)
-    setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_30: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() })
+    setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_30: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru(), fecha_recojo: '' })
     cargarAcuentaDist(selected.id)
   }
 
@@ -1478,7 +1479,7 @@ export default function Distribuidores() {
                     </button>
                   </>
                 ) : (
-                  <button onClick={() => { setSelected(d); setAcuentaModal(true); setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_30: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru() }); cargarAcuentaDist(d.id) }}
+                  <button onClick={() => { setSelected(d); setAcuentaModal(true); setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_30: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru(), fecha_recojo: '' }); cargarAcuentaDist(d.id) }}
                     className="col-span-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/30 text-yellow-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
                     <ClipboardList className="w-3 h-3" />📋 A Cuenta ({d.vales_pendientes || 0} pendientes)
                   </button>
@@ -1807,7 +1808,7 @@ export default function Distribuidores() {
       {/* Modal A Cuenta del distribuidor */}
       {acuentaModal && selected && (
         <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
-          <div className="w-full max-w-lg rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto" style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
+          <div className="w-full max-w-2xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto" style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
             <div className="flex items-center justify-between px-6 py-4  sticky top-0">
               <div>
                 <h3 className="text-white font-semibold">📋 A Cuenta — {selected.nombre}</h3>
@@ -1846,11 +1847,19 @@ export default function Distribuidores() {
                       onChange={e => setAcuentaForm(f => ({...f, vales_43: e.target.value}))} />
                   </div>
                 </div>
-                <div>
-                  <label className="label">Fecha</label>
-                  <input type="date" className="input"
-                    value={acuentaForm.fecha}
-                    onChange={e => setAcuentaForm(f => ({...f, fecha: e.target.value}))} />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">📅 Fecha depósito</label>
+                    <input type="date" className="input"
+                      value={acuentaForm.fecha}
+                      onChange={e => setAcuentaForm(f => ({...f, fecha: e.target.value}))} />
+                  </div>
+                  <div>
+                    <label className="label">📦 Fecha de recojo</label>
+                    <input type="date" className="input"
+                      value={acuentaForm.fecha_recojo}
+                      onChange={e => setAcuentaForm(f => ({...f, fecha_recojo: e.target.value}))} />
+                  </div>
                 </div>
                 <div>
                   <label className="label">Notas (opcional)</label>
@@ -1880,10 +1889,14 @@ export default function Distribuidores() {
                         <div className="flex items-start justify-between">
                           <div>
                             <p className="text-white font-semibold text-sm">{r.nombre_cliente}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              📅 Depósito: {r.fecha}
+                              {r.fecha_recojo && <span className="ml-2 text-blue-400">📦 Recojo: {r.fecha_recojo}</span>}
+                            </p>
                             <div className="flex gap-2 mt-1 flex-wrap">
-                              {r.vales_20 > 0 && <span className="text-xs bg-yellow-900/40 text-yellow-300 px-2 py-0.5 rounded-lg">{r.vales_20}×S/20</span>}
-                              {r.vales_43 > 0 && <span className="text-xs bg-yellow-900/40 text-yellow-300 px-2 py-0.5 rounded-lg">{r.vales_43}×S/43</span>}
-                              {r.balones > 0 && <span className="text-xs bg-blue-900/40 text-blue-300 px-2 py-0.5 rounded-lg">{r.balones} bal.</span>}
+                              {r.vales_20 > 0 && <span className="text-xs bg-yellow-900/40 text-yellow-300 px-2 py-0.5 rounded-lg">{r.vales_20}×S/20=S/{r.vales_20*20}</span>}
+                              {(r.historial_cambios?.[0]?.vales_30||0) > 0 && <span className="text-xs bg-yellow-900/40 text-yellow-300 px-2 py-0.5 rounded-lg">{r.historial_cambios[0].vales_30}×S/30=S/{r.historial_cambios[0].vales_30*30}</span>}
+                              {r.vales_43 > 0 && <span className="text-xs bg-yellow-900/40 text-yellow-300 px-2 py-0.5 rounded-lg">{r.vales_43}×S/43=S/{r.vales_43*43}</span>}
                             </div>
                             {r.notas && <p className="text-xs text-gray-500 mt-1 italic">{r.notas}</p>}
                           </div>
