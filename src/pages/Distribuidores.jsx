@@ -1396,17 +1396,26 @@ export default function Distribuidores() {
     const v43rest = v43orig - v43e
     const hayResto = v20rest > 0 || v30rest > 0 || v43rest > 0
 
-    // Marcar como entregado (o parcialmente)
+    // Actualizar historial: el depósito original queda con los restantes
+    const histAnterior = entregaModal.historial_cambios || []
+    const depositoIdx = histAnterior.findIndex(h => h.tipo === 'deposito')
+    const nuevoHist = [...histAnterior]
+    if (depositoIdx >= 0) {
+      nuevoHist[depositoIdx] = {
+        ...nuevoHist[depositoIdx],
+        vales_20: v20rest,
+        vales_30: v30rest,
+        vales_43: v43rest
+      }
+    }
+    nuevoHist.push({ tipo: 'entrega', fecha: entregaForm.fecha, vales_20: v20e, vales_30: v30e, vales_43: v43e, notas: entregaForm.notas || null })
+
     await supabase.from('a_cuenta').update({
       estado: hayResto ? 'pendiente' : 'entregado',
       fecha_entrega: hayResto ? null : entregaForm.fecha,
       vales_20: v20rest,
       vales_43: v43rest,
-      historial_cambios: [...(entregaModal.historial_cambios||[]), {
-        tipo: 'entrega', fecha: entregaForm.fecha,
-        vales_20: v20e, vales_30: v30e, vales_43: v43e,
-        notas: entregaForm.notas || null
-      }],
+      historial_cambios: nuevoHist,
       updated_at: new Date().toISOString()
     }).eq('id', entregaModal.id)
 
@@ -1415,7 +1424,7 @@ export default function Distribuidores() {
   }
 
   async function borrarAcuentaDist(id) {
-    if (!confirm('Borrar este registro?')) return
+    if (!confirm('¿Borrar este registro?')) return
     await supabase.from('a_cuenta').delete().eq('id', id)
     cargarAcuentaDist(selected.id)
   }
@@ -2047,14 +2056,14 @@ export default function Distribuidores() {
                                 </div>
                                 {r.notas && <p className="text-xs text-gray-500 mt-1 italic">{r.notas}</p>}
                               </div>
-                              <div className="flex gap-2 flex-shrink-0">
+                              <div style={{display:'flex',flexDirection:'column',gap:4,flexShrink:0}}>
                                 <button onClick={() => entregarAcuentaDist(r)}
-                                  className="text-xs bg-emerald-600/20 border border-emerald-600/30 text-emerald-400 px-2 py-1 rounded-lg">
+                                  style={{background:'rgba(52,211,153,0.15)',border:'1px solid rgba(52,211,153,0.35)',color:'#34d399',borderRadius:6,padding:'4px 10px',fontSize:11,cursor:'pointer',fontWeight:600}}>
                                   ✓ Entregar
                                 </button>
                                 <button onClick={() => borrarAcuentaDist(r.id)}
-                                  className="text-xs bg-red-600/20 border border-red-600/30 text-red-400 px-2 py-1 rounded-lg">
-                                  🗑️
+                                  style={{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#f87171',borderRadius:6,padding:'4px 10px',fontSize:11,cursor:'pointer'}}>
+                                  🗑️ Borrar
                                 </button>
                               </div>
                             </div>
@@ -2081,6 +2090,10 @@ export default function Distribuidores() {
                                 <p style={{color:'var(--app-text)',fontWeight:700,fontSize:13,margin:0}}>{r.nombre_cliente}</p>
                                 <p style={{color:'#34d399',fontSize:11,margin:'2px 0'}}>✅ Entregado el {r.fecha_entrega}</p>
                               </div>
+                              <button onClick={() => borrarAcuentaDist(r.id)}
+                                style={{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#f87171',borderRadius:6,padding:'3px 8px',fontSize:11,cursor:'pointer'}}>
+                                🗑️
+                              </button>
                             </div>
                             {entregas.map((e,i) => (
                               <div key={i} style={{marginTop:8,padding:'6px 10px',background:'rgba(52,211,153,0.05)',borderRadius:6,border:'1px solid rgba(52,211,153,0.15)'}}>
