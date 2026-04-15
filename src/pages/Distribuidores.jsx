@@ -1992,77 +1992,110 @@ export default function Distribuidores() {
                 </button>
               </div>
 
-              {/* Lista pendientes */}
-              <div>
-                <p className="text-xs text-gray-400 font-semibold uppercase mb-2">
-                  Pendientes ({acuentaDist.length})
-                </p>
-                {loadingAcuenta ? (
-                  <p className="text-center text-gray-600 text-sm py-4">Cargando...</p>
-                ) : acuentaDist.length === 0 ? (
-                  <p className="text-center text-gray-600 text-sm py-4">Sin registros pendientes</p>
-                ) : (
-                  <div className="space-y-2">
-                    {acuentaDist.map(r => (
-                      <div key={r.id} className="bg-transparent border border-[var(--app-card-border)] rounded-xl p-3">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <p className="text-white font-semibold text-sm">{r.nombre_cliente}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              📅 Depósito: {r.fecha}
-                              {r.fecha_recojo && <span className="ml-2 text-blue-400">📦 Recojo: {r.fecha_recojo}</span>}
-                            </p>
-                            <div className="flex gap-2 mt-1 flex-wrap">
-                              {r.vales_20 > 0 && <span className="text-xs bg-yellow-900/40 text-yellow-300 px-2 py-0.5 rounded-lg">{r.vales_20}×S/20=S/{r.vales_20*20}</span>}
-                              {(r.historial_cambios?.[0]?.vales_30||0) > 0 && <span className="text-xs bg-yellow-900/40 text-yellow-300 px-2 py-0.5 rounded-lg">{r.historial_cambios[0].vales_30}×S/30=S/{r.historial_cambios[0].vales_30*30}</span>}
-                              {r.vales_43 > 0 && <span className="text-xs bg-yellow-900/40 text-yellow-300 px-2 py-0.5 rounded-lg">{r.vales_43}×S/43=S/{r.vales_43*43}</span>}
-                            </div>
-                            {r.notas && <p className="text-xs text-gray-500 mt-1 italic">{r.notas}</p>}
-                          </div>
-                          <div className="flex gap-2 flex-shrink-0">
-                            <button onClick={() => entregarAcuentaDist(r)}
-                              className="text-xs bg-emerald-600/20 border border-emerald-600/30 text-emerald-400 px-2 py-1 rounded-lg">
-                              ✓ Entregar
-                            </button>
-                            <button onClick={() => borrarAcuentaDist(r.id)}
-                              className="text-xs bg-red-600/20 border border-red-600/30 text-red-400 px-2 py-1 rounded-lg">
-                              🗑️
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              {/* Tabs Pendientes / Entregados */}
+              <div style={{display:'flex',gap:4,background:'var(--app-card-bg-alt)',borderRadius:10,padding:4,marginBottom:12}}>
+                <button onClick={() => setTabAcuenta('pendientes')}
+                  style={{flex:1,padding:'7px',borderRadius:7,border:'none',cursor:'pointer',fontSize:12,fontWeight:600,
+                    background:tabAcuenta==='pendientes'?'var(--app-accent)':'transparent',
+                    color:tabAcuenta==='pendientes'?'#fff':'var(--app-text-secondary)'}}>
+                  📋 Pendientes ({acuentaDist.length})
+                </button>
+                <button onClick={() => setTabAcuenta('entregados')}
+                  style={{flex:1,padding:'7px',borderRadius:7,border:'none',cursor:'pointer',fontSize:12,fontWeight:600,
+                    background:tabAcuenta==='entregados'?'#34d399':'transparent',
+                    color:tabAcuenta==='entregados'?'#fff':'var(--app-text-secondary)'}}>
+                  ✅ Entregados ({acuentaEntregados.length})
+                </button>
               </div>
 
-              {/* Sección entregados */}
-              {acuentaEntregados.length > 0 && (
+              {tabAcuenta === 'pendientes' && (
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Entregados recientes</p>
-                  <div className="space-y-2">
-                    {acuentaEntregados.map(r => {
-                      const entregas = (r.historial_cambios||[]).filter(h=>h.tipo==='entrega')
-                      return (
-                        <div key={r.id} style={{background:'rgba(52,211,153,0.05)',border:'1px solid rgba(52,211,153,0.2)',borderRadius:8,padding:'10px 12px'}}>
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p style={{color:'var(--app-text)',fontWeight:600,fontSize:13,margin:0}}>{r.nombre_cliente}</p>
-                              <p style={{color:'#34d399',fontSize:11,margin:'2px 0 0'}}>✅ Entregado el {r.fecha_entrega}</p>
-                              {entregas.map((e,i) => (
-                                <div key={i} style={{marginTop:4,display:'flex',gap:6,flexWrap:'wrap'}}>
-                                  {e.vales_20>0 && <span style={{fontSize:10,color:'#fde047'}}>{e.vales_20}×S/20</span>}
-                                  {e.vales_30>0 && <span style={{fontSize:10,color:'#fde047'}}>{e.vales_30}×S/30</span>}
-                                  {e.vales_43>0 && <span style={{fontSize:10,color:'#fde047'}}>{e.vales_43}×S/43</span>}
-                                  {e.notas && <span style={{fontSize:10,color:'var(--app-text-secondary)',fontStyle:'italic'}}>— {e.notas}</span>}
+                  {/* Barra de búsqueda */}
+                  <div style={{position:'relative',marginBottom:8}}>
+                    <input className="input" placeholder="🔍 Buscar por nombre..."
+                      value={busquedaAcuenta}
+                      onChange={e => setBusquedaAcuenta(e.target.value)} />
+                    {busquedaAcuenta && (
+                      <button onClick={() => setBusquedaAcuenta('')}
+                        style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--app-text-secondary)'}}>✕</button>
+                    )}
+                  </div>
+                  {(() => {
+                    const filtrados = busquedaAcuenta
+                      ? acuentaDist.filter(r => r.nombre_cliente?.toLowerCase().includes(busquedaAcuenta.toLowerCase()))
+                      : acuentaDist
+                    return loadingAcuenta ? (
+                      <p className="text-center text-gray-600 text-sm py-4">Cargando...</p>
+                    ) : filtrados.length === 0 ? (
+                      <p className="text-center text-gray-600 text-sm py-4">{busquedaAcuenta ? `Sin resultados para "${busquedaAcuenta}"` : 'Sin registros pendientes'}</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {filtrados.map(r => (
+                          <div key={r.id} className="bg-transparent border border-[var(--app-card-border)] rounded-xl p-3">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <p className="text-white font-semibold text-sm">{r.nombre_cliente}</p>
+                                <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0'}}>
+                                  📅 {r.fecha}{r.fecha_recojo && <span style={{color:'#60a5fa',marginLeft:8}}>📦 Recojo: {r.fecha_recojo}</span>}
+                                </p>
+                                <div className="flex gap-2 mt-1 flex-wrap">
+                                  {r.vales_20 > 0 && <span style={{fontSize:11,background:'rgba(253,224,71,0.15)',border:'1px solid rgba(253,224,71,0.3)',borderRadius:6,padding:'2px 8px',color:'#fde047'}}>{r.vales_20} × S/20 = S/{r.vales_20*20}</span>}
+                                  {(r.historial_cambios?.[0]?.vales_30||0) > 0 && <span style={{fontSize:11,background:'rgba(253,224,71,0.15)',border:'1px solid rgba(253,224,71,0.3)',borderRadius:6,padding:'2px 8px',color:'#fde047'}}>{r.historial_cambios[0].vales_30} × S/30 = S/{r.historial_cambios[0].vales_30*30}</span>}
+                                  {r.vales_43 > 0 && <span style={{fontSize:11,background:'rgba(253,224,71,0.15)',border:'1px solid rgba(253,224,71,0.3)',borderRadius:6,padding:'2px 8px',color:'#fde047'}}>{r.vales_43} × S/43 = S/{r.vales_43*43}</span>}
                                 </div>
-                              ))}
+                                {r.notas && <p className="text-xs text-gray-500 mt-1 italic">{r.notas}</p>}
+                              </div>
+                              <div className="flex gap-2 flex-shrink-0">
+                                <button onClick={() => entregarAcuentaDist(r)}
+                                  className="text-xs bg-emerald-600/20 border border-emerald-600/30 text-emerald-400 px-2 py-1 rounded-lg">
+                                  ✓ Entregar
+                                </button>
+                                <button onClick={() => borrarAcuentaDist(r.id)}
+                                  className="text-xs bg-red-600/20 border border-red-600/30 text-red-400 px-2 py-1 rounded-lg">
+                                  🗑️
+                                </button>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
+
+              {tabAcuenta === 'entregados' && (
+                <div>
+                  {acuentaEntregados.length === 0 ? (
+                    <p className="text-center text-gray-600 text-sm py-4">Sin entregas registradas</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {acuentaEntregados.map(r => {
+                        const entregas = (r.historial_cambios||[]).filter(h=>h.tipo==='entrega')
+                        return (
+                          <div key={r.id} style={{background:'rgba(52,211,153,0.05)',border:'1px solid rgba(52,211,153,0.25)',borderRadius:10,padding:'10px 14px'}}>
+                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+                              <div>
+                                <p style={{color:'var(--app-text)',fontWeight:700,fontSize:13,margin:0}}>{r.nombre_cliente}</p>
+                                <p style={{color:'#34d399',fontSize:11,margin:'2px 0'}}>✅ Entregado el {r.fecha_entrega}</p>
+                              </div>
+                            </div>
+                            {entregas.map((e,i) => (
+                              <div key={i} style={{marginTop:8,padding:'6px 10px',background:'rgba(52,211,153,0.05)',borderRadius:6,border:'1px solid rgba(52,211,153,0.15)'}}>
+                                <p style={{fontSize:10,color:'var(--app-text-secondary)',margin:'0 0 4px',textTransform:'uppercase',fontWeight:600}}>Entrega {entregas.length>1?i+1:''} — {e.fecha}</p>
+                                <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                                  {e.vales_20>0 && <span style={{fontSize:11,background:'rgba(253,224,71,0.15)',border:'1px solid rgba(253,224,71,0.3)',borderRadius:6,padding:'2px 8px',color:'#fde047'}}>{e.vales_20} × S/20 = S/{e.vales_20*20}</span>}
+                                  {e.vales_30>0 && <span style={{fontSize:11,background:'rgba(253,224,71,0.15)',border:'1px solid rgba(253,224,71,0.3)',borderRadius:6,padding:'2px 8px',color:'#fde047'}}>{e.vales_30} × S/30 = S/{e.vales_30*30}</span>}
+                                  {e.vales_43>0 && <span style={{fontSize:11,background:'rgba(253,224,71,0.15)',border:'1px solid rgba(253,224,71,0.3)',borderRadius:6,padding:'2px 8px',color:'#fde047'}}>{e.vales_43} × S/43 = S/{e.vales_43*43}</span>}
+                                  {e.notas && <span style={{fontSize:10,color:'var(--app-text-secondary)',fontStyle:'italic',alignSelf:'center'}}>— {e.notas}</span>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
