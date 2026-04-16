@@ -92,9 +92,9 @@ export default function Reportes() {
         { data: deudas },
         { data: stockPorTipo },
       ] = await Promise.all([
-        supabase.from('ventas').select('*, clientes(nombre), almacenes(nombre)').gte('fecha', desdeDate + 'T00:00:00-05:00').lte('fecha', hastaDate + 'T23:59:59-05:00').neq('metodo_pago', 'credito'),
+        supabase.from('ventas').select('*, clientes(nombre), almacenes(nombre)').gte('fecha', desdeDate + 'T00:00:00-05:00').lte('fecha', hastaDate + 'T23:59:59-05:00').not('metodo_pago', 'in', '("credito")'),
         supabase.from('cuentas_distribuidor').select('*, distribuidores(nombre)').gte('periodo_fin', desdeDate).lte('periodo_fin', hastaDate),
-        supabase.from('ventas').select('*, almacenes(nombre)').gte('fecha', desdeDate + 'T00:00:00-05:00').lte('fecha', hastaDate + 'T23:59:59-05:00').not('almacen_id', 'is', null).in('metodo_pago', ['efectivo','yape','vale','mixto','arreglo_distribuidor']),
+        supabase.from('ventas').select('*, almacenes(nombre)').gte('fecha', desdeDate + 'T00:00:00-05:00').lte('fecha', hastaDate + 'T23:59:59-05:00').not('almacen_id', 'is', null).in('metodo_pago', ['efectivo','yape','vale','mixto','arreglo_distribuidor','cobro_credito']),
         supabase.from('configuracion').select('clave, valor').in('clave', ['costo_5kg', 'costo_10kg', 'costo_45kg']),
         supabase.from('almacenes').select('*').eq('activo', true).order('nombre'),
         supabase.from('distribuidores').select('*').eq('activo', true).order('nombre'),
