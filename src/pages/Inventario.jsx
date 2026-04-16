@@ -74,7 +74,7 @@ export default function Inventario() {
       supabase.from('marcas_gas').select('*').eq('activo', true).order('nombre'),
       supabase.from('compras').select('*, proveedores(nombre), marcas_gas(nombre)').order('fecha', { ascending: false }).limit(30),
       supabase.from('movimientos_stock').select('*, almacenes(nombre)').not('almacen_id', 'is', null).order('created_at', { ascending: false }).limit(50),
-      supabase.from('distribuidores').select('id, nombre, almacen_id, precio_base').eq('activo', true).order('nombre'),
+      supabase.from('distribuidores').select('id, nombre, almacen_id, precio_base, modalidad').eq('activo', true).order('nombre'),
       supabase.from('precio_distribuidor_tipo').select('*'),
       supabase.from('deudas').select('balones_pendiente').neq('estado', 'liquidada'),
       supabase.from('stock_por_tipo').select('*')
@@ -989,7 +989,9 @@ export default function Inventario() {
         </div>
       )}
 
-      {editStockAlmacen && (
+      {editStockAlmacen && (() => {
+        const distAutonomo = distribuidoresList.find(d => d.almacen_id === editStockAlmacen.id && d.modalidad === 'autonomo')
+        return (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
@@ -1001,37 +1003,54 @@ export default function Inventario() {
             </div>
             <div className="px-6 py-5 space-y-4">
               <p className="text-xs text-gray-500">Ingresa el stock actual por tipo de balón:</p>
-              <div className="grid grid-cols-3 gap-3">
-                {[['5kg','🔵','blue'],['10kg','🟡','yellow'],['45kg','🔴','red']].map(([tipo, icon, color]) => {
-                  const sptVal = stockPorTipo.find(s => s.almacen_id === editStockAlmacen.id && s.tipo_balon === tipo)
-                  return (
-                    <div key={tipo} className={`bg-${color}-900/20 border border-${color}-800/40 rounded-xl p-3 text-center`}>
-                      <p className={`text-${color}-400 font-bold text-xs mb-2`}>{icon} {tipo}</p>
-                      <input type="number" min="0"
-                        className="input text-center font-bold py-2"
-                        defaultValue={sptVal?.stock_actual || 0}
-                        id={`stock-edit-${tipo}`} />
-                    </div>
-                  )
-                })}
-              </div>
+              {distAutonomo ? (
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="bg-yellow-900/20 border border-yellow-800/40 rounded-xl p-3 text-center">
+                    <p className="text-yellow-400 font-bold text-xs mb-2">🟡 10kg</p>
+                    <input type="number" min="0"
+                      className="input text-center font-bold py-2"
+                      defaultValue={editStockAlmacen.stock_actual || 0}
+                      id="stock-edit-10kg-autonomo" />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  {[['5kg','🔵','blue'],['10kg','🟡','yellow'],['45kg','🔴','red']].map(([tipo, icon, color]) => {
+                    const sptVal = stockPorTipo.find(s => s.almacen_id === editStockAlmacen.id && s.tipo_balon === tipo)
+                    return (
+                      <div key={tipo} className={`bg-${color}-900/20 border border-${color}-800/40 rounded-xl p-3 text-center`}>
+                        <p className={`text-${color}-400 font-bold text-xs mb-2`}>{icon} {tipo}</p>
+                        <input type="number" min="0"
+                          className="input text-center font-bold py-2"
+                          defaultValue={sptVal?.stock_actual || 0}
+                          id={`stock-edit-${tipo}`} />
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
               <div className="flex gap-3">
                 <button onClick={() => setEditStockAlmacen(null)} className="btn-secondary flex-1">Cancelar</button>
                 <button onClick={async () => {
                   setSaving(true)
-                  const tipos = ['5kg','10kg','45kg']
-                  let totalNuevo = 0
-                  for (const tipo of tipos) {
-                    const val = parseInt(document.getElementById(`stock-edit-${tipo}`)?.value) || 0
-                    totalNuevo += val
-                    const existing = stockPorTipo.find(s => s.almacen_id === editStockAlmacen.id && s.tipo_balon === tipo)
-                    if (existing) {
-                      await supabase.from('stock_por_tipo').update({ stock_actual: val }).eq('id', existing.id)
-                    } else if (val > 0) {
-                      await supabase.from('stock_por_tipo').insert({ almacen_id: editStockAlmacen.id, tipo_balon: tipo, stock_actual: val })
+                  if (distAutonomo) {
+                    const val = parseInt(document.getElementById('stock-edit-10kg-autonomo')?.value) || 0
+                    await supabase.from('almacenes').update({ stock_actual: val }).eq('id', editStockAlmacen.id)
+                  } else {
+                    const tipos = ['5kg','10kg','45kg']
+                    let totalNuevo = 0
+                    for (const tipo of tipos) {
+                      const val = parseInt(document.getElementById(`stock-edit-${tipo}`)?.value) || 0
+                      totalNuevo += val
+                      const existing = stockPorTipo.find(s => s.almacen_id === editStockAlmacen.id && s.tipo_balon === tipo)
+                      if (existing) {
+                        await supabase.from('stock_por_tipo').update({ stock_actual: val }).eq('id', existing.id)
+                      } else if (val > 0) {
+                        await supabase.from('stock_por_tipo').insert({ almacen_id: editStockAlmacen.id, tipo_balon: tipo, stock_actual: val })
+                      }
                     }
+                    await supabase.from('almacenes').update({ stock_actual: totalNuevo }).eq('id', editStockAlmacen.id)
                   }
-                  await supabase.from('almacenes').update({ stock_actual: totalNuevo }).eq('id', editStockAlmacen.id)
                   setSaving(false); setEditStockAlmacen(null); cargar()
                 }} disabled={saving} className="btn-primary flex-1 justify-center">
                   {saving ? 'Guardando...' : '✓ Guardar'}
@@ -1040,7 +1059,8 @@ export default function Inventario() {
             </div>
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* Modal mover entre almacenes */}
       {modal === 'movimiento' && (
