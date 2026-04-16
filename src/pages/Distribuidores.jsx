@@ -211,7 +211,7 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
 
     return (
       <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-        <div className="w-full max-w-3xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
+        <div className="w-full max-w-5xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
           style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
           <div className="flex items-center justify-between px-6 py-4" style={{borderBottom:'1px solid var(--app-card-border)'}}>
             <h3 style={{color:'var(--app-text)',fontWeight:700,fontSize:16,margin:0}}>
@@ -307,6 +307,40 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
                 <div style={{display:'flex',justifyContent:'space-between',padding:'8px 12px',borderRadius:8,background:'rgba(52,211,153,0.08)',border:'1px solid rgba(52,211,153,0.25)'}}>
                   <span style={{fontSize:12,fontWeight:700,color:'var(--app-text-secondary)'}}>Total abonado:</span>
                   <span style={{fontSize:14,fontWeight:700,color:'#34d399'}}>S/{totalAbonado.toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Abonos parciales */}
+            {abonosParciales.length > 0 && (
+              <div>
+                <h4 style={{fontSize:14,fontWeight:700,color:'var(--app-text)',margin:'0 0 10px'}}>Abonos registrados</h4>
+                <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden',overflowX:'auto'}}>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 0.6fr 0.6fr 0.8fr 0.6fr 0.8fr',background:'var(--app-accent)',minWidth:650}}>
+                    {['Fecha','V.S/20','V.S/30','V.S/43','Efectivo','Yape','Total'].map(h => (
+                      <div key={h} style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#fff',textTransform:'uppercase',borderRight:'1px solid rgba(255,255,255,0.2)',textAlign:'center'}}>{h}</div>
+                    ))}
+                  </div>
+                  {abonosParciales.map((a,i) => (
+                    <div key={a.id} style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 0.6fr 0.6fr 0.8fr 0.6fr 0.8fr',borderBottom:i<abonosParciales.length-1?'1px solid var(--app-card-border)':'none',minWidth:650,background:i%2===0?'transparent':'var(--app-row-alt)'}}>
+                      <div style={{padding:'12px 10px',fontSize:14,fontWeight:700,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{a.fecha}</div>
+                      <div style={{padding:'12px 10px',fontSize:16,fontWeight:700,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{(a.vales_20||0)>0?a.vales_20:'—'}</div>
+                      <div style={{padding:'12px 10px',fontSize:16,fontWeight:700,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{(a.vales_30||0)>0?a.vales_30:'—'}</div>
+                      <div style={{padding:'12px 10px',fontSize:16,fontWeight:700,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{(a.vales_43||0)>0?a.vales_43:'—'}</div>
+                      <div style={{padding:'12px 10px',fontSize:16,fontWeight:700,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{(a.efectivo||0)>0?`S/${parseFloat(a.efectivo).toLocaleString('es-PE')}`:'—'}</div>
+                      <div style={{padding:'12px 10px',fontSize:16,fontWeight:700,color:'#818cf8',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{(a.yape||0)>0?`S/${parseFloat(a.yape).toLocaleString('es-PE')}`:'—'}</div>
+                      <div style={{padding:'12px 10px',fontSize:18,fontWeight:800,color:'#34d399',textAlign:'center'}}>S/{(a.total||0).toLocaleString('es-PE')}</div>
+                    </div>
+                  ))}
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 0.6fr 0.6fr 0.8fr 0.6fr 0.8fr',background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)',minWidth:650}}>
+                    <div style={{padding:'12px 10px',fontSize:14,fontWeight:800,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>TOTAL ABONADO</div>
+                    <div style={{padding:'8px',borderRight:'1px solid var(--app-card-border)'}}/>
+                    <div style={{padding:'8px',borderRight:'1px solid var(--app-card-border)'}}/>
+                    <div style={{padding:'8px',borderRight:'1px solid var(--app-card-border)'}}/>
+                    <div style={{padding:'8px',borderRight:'1px solid var(--app-card-border)'}}/>
+                    <div style={{padding:'8px',borderRight:'1px solid var(--app-card-border)'}}/>
+                    <div style={{padding:'12px 10px',fontSize:18,fontWeight:800,color:'#34d399',textAlign:'center'}}>S/{abonosParciales.reduce((s,a)=>s+(a.total||0),0).toLocaleString('es-PE')}</div>
+                  </div>
                 </div>
               </div>
             )}
