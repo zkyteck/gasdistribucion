@@ -370,7 +370,7 @@ export default function Ventas() {
           balones_pendiente: (parseInt(deudaExistente.balones_pendiente) || 0) + balonesDeuda,
           cantidad_pendiente: (parseInt(deudaExistente.cantidad_pendiente) || 0) + balonesDeuda,
           estado: 'activa',
-          historial: [...historialAnterior, { tipo: 'deuda', fecha: form.fecha || hoyPeru(), monto: montoDeuda, balones: balonesDeuda, tipo_balon: form.tipo_balon, notas: 'Venta al crédito' }],
+          historial: [...historialAnterior, { tipo: 'deuda', fecha: form.fecha || hoyPeru(), monto: montoDeuda, balones: balonesDeuda, tipo_balon: form.tipo_balon, notas: `Venta al crédito${form.notas ? ' — ' + form.notas : ''}` }],
           updated_at: new Date().toISOString()
         }).eq('id', deudaExistente.id)
       } else {
@@ -387,7 +387,7 @@ export default function Ventas() {
           notas: `Venta al crédito${form.notas ? ' — ' + form.notas : ''}`,
           almacen_id: form.almacen_id,
           usuario_id: perfil?.id || null,
-          historial: [{ tipo: 'deuda', fecha: form.fecha || hoyPeru(), monto: montoDeuda, balones: balonesDeuda, tipo_balon: form.tipo_balon, notas: 'Venta al crédito' }]
+          historial: [{ tipo: 'deuda', fecha: form.fecha || hoyPeru(), monto: montoDeuda, balones: balonesDeuda, tipo_balon: form.tipo_balon, notas: `Venta al crédito${form.notas ? ' — ' + form.notas : ''}` }]
         })
       }
     }
