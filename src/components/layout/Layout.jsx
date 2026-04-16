@@ -6,7 +6,7 @@ import Topbar from './Topbar'
 import {
   LayoutDashboard, ShoppingCart, Ticket, ClipboardList, Users,
   CreditCard, Package, Truck, Warehouse, BarChart3, Settings,
-  Palette, LogOut, MoreHorizontal, X
+  Palette, LogOut, MoreHorizontal, X, Mail
 } from 'lucide-react'
 
 // ── Definición completa de items con su clave de permiso ─────────────────────
@@ -150,6 +150,28 @@ function BottomDrawer({ open, onClose, extraItems }) {
             </p>
           </div>
         )}
+
+        {/* Correo */}
+        <div style={{ padding: '4px 16px 8px' }}>
+          <a
+            href="https://outlook.live.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={onClose}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', gap: 8,
+              padding: '12px', borderRadius: 12,
+              border: '1px solid rgba(59,130,246,0.3)',
+              background: 'rgba(59,130,246,0.08)', color: '#60a5fa',
+              fontWeight: 600, fontSize: 13, cursor: 'pointer',
+              textDecoration: 'none',
+            }}
+          >
+            <Mail style={{ width: 16, height: 16 }} />
+            Abrir correo
+          </a>
+        </div>
 
         {/* Cerrar sesión */}
         <div style={{ padding: '4px 16px 20px' }}>

@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext'
 import {
   LayoutDashboard, ShoppingCart, Ticket, ClipboardList, Users,
   CreditCard, Package, Truck, Warehouse, BarChart3, Settings,
-  LogOut, Flame, Palette
+  LogOut, Flame, Palette, Mail
 } from 'lucide-react'
 
 const ALL_ITEMS = [
@@ -136,6 +136,23 @@ export default function Sidebar() {
             </p>
           </div>
         </div>
+        <a
+          href="https://outlook.live.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            color: '#60a5fa', fontSize: 12,
+            width: '100%', background: 'none', border: 'none',
+            cursor: 'pointer', transition: 'color 0.15s', padding: '4px 0',
+            textDecoration: 'none', marginBottom: 6,
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = '#93c5fd'}
+          onMouseLeave={e => e.currentTarget.style.color = '#60a5fa'}
+        >
+          <Mail style={{ width: 14, height: 14 }} />
+          Correo
+        </a>
         <button
           onClick={handleSignOut}
           style={{
