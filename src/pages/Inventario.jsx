@@ -74,7 +74,7 @@ export default function Inventario() {
 
   async function cargar() {
     setLoading(true)
-    const [{ data: a }, { data: p }, { data: m }, { data: c }, { data: mv }, { data: dl }, { data: deudasBal }, { data: spt }, { data: pdt }] = await Promise.all([
+    const [{ data: a }, { data: p }, { data: m }, { data: c }, { data: mv }, { data: dl }, { data: pdt }, { data: deudasBal }, { data: spt }] = await Promise.all([
       supabase.from('almacenes').select('*').eq('activo', true).order('nombre'),
       supabase.from('proveedores').select('*').eq('activo', true),
       supabase.from('marcas_gas').select('*').eq('activo', true).order('nombre'),
