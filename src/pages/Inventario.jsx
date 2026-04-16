@@ -488,21 +488,19 @@ export default function Inventario() {
               <p className="text-gray-300 text-sm font-medium">{a.nombre}</p>
             </div>
             <div className="flex gap-3 mt-1">
-              <div className="flex items-start gap-2">
-                <div>
-                  <p className={`text-2xl font-bold ${a.stock_actual > 100 ? 'text-emerald-400' : a.stock_actual > 30 ? 'text-yellow-400' : 'text-red-400'}`}>{a.stock_actual}</p>
-                  <p className="text-xs text-gray-500">🟢 llenos</p>
-                </div>
-                <button onClick={() => abrirLotesModal(a)} title="Ver lotes"
-                  className="mt-1 text-gray-500 hover:text-blue-400 transition-colors">
-                  <LayoutList className="w-4 h-4" />
-                </button>
+              <div>
+                <p className={`text-2xl font-bold ${a.stock_actual > 100 ? 'text-emerald-400' : a.stock_actual > 30 ? 'text-yellow-400' : 'text-red-400'}`}>{a.stock_actual}</p>
+                <p className="text-xs text-gray-500">🟢 llenos</p>
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-400">{a.balones_vacios || 0}</p>
                 <p className="text-xs text-gray-500">⚪ vacíos</p>
               </div>
             </div>
+            <button onClick={() => abrirLotesModal(a)}
+              style={{marginTop:8,padding:'5px 12px',borderRadius:8,border:'1px solid rgba(59,130,246,0.4)',background:'rgba(59,130,246,0.1)',color:'#60a5fa',fontSize:12,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:5}}>
+              📋 Ver lotes
+            </button>
             {/* Desglose llenos por tipo */}
             <div className="flex gap-2 mt-1 flex-wrap">
               {(spt5?.stock_actual || 0) > 0 && <span className="text-xs bg-blue-900/30 text-blue-300 px-2 py-0.5 rounded-lg">🔵 5kg: {spt5.stock_actual}</span>}
