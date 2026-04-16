@@ -255,29 +255,31 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
                   Sin cargas — usa "Registrar carga"
                 </div>
               ) : (
-                <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden'}}>
-                  <div style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr',background:'var(--app-accent)'}}>
-                    {['Fecha','Cargados','Descargados','Faltantes','Precio','Monto'].map(h => (
-                      <div key={h} style={{padding:'7px 8px',fontSize:15,fontWeight:800,color:'#fff',textTransform:'uppercase',borderRight:'1px solid rgba(255,255,255,0.2)',textAlign:'center'}}>{h}</div>
+                <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden',overflowX:'auto'}}>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 0.7fr 0.7fr 0.7fr 0.8fr 0.9fr 1.2fr',background:'var(--app-accent)',minWidth:750}}>
+                    {['Fecha','Cargados','Descargados','Faltantes','Precio','Monto','Notas'].map(h => (
+                      <div key={h} style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#fff',textTransform:'uppercase',borderRight:'1px solid rgba(255,255,255,0.2)',textAlign:'center'}}>{h}</div>
                     ))}
                   </div>
                   {cargasDist.map((c,i) => (
-                    <div key={c.id} style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr',borderBottom:i<cargasDist.length-1?'1px solid var(--app-card-border)':'none'}}>
-                      <div style={{padding:'8px',fontSize:11,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{c.fecha}</div>
-                      <div style={{padding:'8px',fontSize:12,fontWeight:700,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{c.cantidad}</div>
-                      <div style={{padding:'8px',fontSize:11,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{(c.descargados||0)}</div>
-                      <div style={{padding:'8px',fontSize:11,color:'#fb923c',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{Math.max(0,c.cantidad-(c.descargados||0))}</div>
-                      <div style={{padding:'8px',fontSize:11,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{c.precio_por_balon}</div>
-                      <div style={{padding:'8px',fontSize:12,fontWeight:700,color:'#34d399',textAlign:'center'}}>S/{(c.total||0).toLocaleString('es-PE')}</div>
+                    <div key={c.id} style={{display:'grid',gridTemplateColumns:'1fr 0.7fr 0.7fr 0.7fr 0.8fr 0.9fr 1.2fr',borderBottom:i<cargasDist.length-1?'1px solid var(--app-card-border)':'none',minWidth:750,background:i%2===0?'transparent':'var(--app-row-alt)'}}>
+                      <div style={{padding:'14px 10px',fontSize:15,fontWeight:700,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{c.fecha}</div>
+                      <div style={{padding:'14px 10px',fontSize:20,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{c.cantidad}</div>
+                      <div style={{padding:'14px 10px',fontSize:16,fontWeight:600,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{(c.descargados||0)}</div>
+                      <div style={{padding:'14px 10px',fontSize:16,fontWeight:700,color:'#fb923c',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{Math.max(0,c.cantidad-(c.descargados||0))}</div>
+                      <div style={{padding:'14px 10px',fontSize:15,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{c.precio_por_balon}</div>
+                      <div style={{padding:'14px 10px',fontSize:18,fontWeight:800,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{(c.total||0).toLocaleString('es-PE')}</div>
+                      <div style={{padding:'14px 10px',fontSize:13,color:'var(--app-text-secondary)',textAlign:'center',fontStyle:'italic'}}>{c.notas || '—'}</div>
                     </div>
                   ))}
-                  <div style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr',background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)'}}>
-                    <div style={{padding:'8px',fontSize:11,fontWeight:700,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>TOTAL</div>
-                    <div style={{padding:'8px',fontSize:13,fontWeight:700,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{totalCargado}</div>
-                    <div style={{padding:'8px',fontSize:13,fontWeight:700,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{totalDescargado}</div>
-                    <div style={{padding:'8px',fontSize:13,fontWeight:700,color:'#fb923c',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{faltantesBal}</div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 0.7fr 0.7fr 0.7fr 0.8fr 0.9fr 1.2fr',background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)',minWidth:750}}>
+                    <div style={{padding:'14px 10px',fontSize:15,fontWeight:800,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>TOTAL</div>
+                    <div style={{padding:'14px 10px',fontSize:20,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{totalCargado}</div>
+                    <div style={{padding:'14px 10px',fontSize:16,fontWeight:700,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{totalDescargado}</div>
+                    <div style={{padding:'14px 10px',fontSize:16,fontWeight:700,color:'#fb923c',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{faltantesBal}</div>
                     <div style={{padding:'8px',borderRight:'1px solid var(--app-card-border)'}}/>
-                    <div style={{padding:'8px',fontSize:13,fontWeight:700,color:'#34d399',textAlign:'center'}}>S/{montoConSaldo.toLocaleString('es-PE')}</div>
+                    <div style={{padding:'14px 10px',fontSize:18,fontWeight:800,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{montoConSaldo.toLocaleString('es-PE')}</div>
+                    <div style={{padding:'8px'}}/>
                   </div>
                 </div>
               )}
