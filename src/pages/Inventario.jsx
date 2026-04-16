@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { hoyPeru } from '../lib/fechas'
-import { Package, Plus, X, AlertCircle, TrendingUp, DollarSign, ShoppingCart, Edit2 } from 'lucide-react'
+import { Package, Plus, X, AlertCircle, TrendingUp, DollarSign, ShoppingCart, Edit2, LayoutList } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -38,6 +38,9 @@ export default function Inventario() {
   const [editStockAlmacen, setEditStockAlmacen] = useState(null)
   const [editStockVal, setEditStockVal] = useState(0)
   const [editVaciosModal, setEditVaciosModal] = useState(null)
+  const [lotesModal, setLotesModal] = useState(null) // almacen object
+  const [lotesData, setLotesData] = useState([])
+  const [loadingLotes, setLoadingLotes] = useState(false)
   const [editVaciosModalVal, setEditVaciosModalVal] = useState({ '5kg': 0, '10kg': 0, '45kg': 0 })
   const [movimientoForm, setMovimientoForm] = useState({ origen_id: '', destino_id: '', cantidad: '', tipo_balon: '10kg', notas: '', fecha: hoyPeru() })
   const [vaciosForm, setVaciosForm] = useState({ almacen_id: '', cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, notas: '', fecha: hoyPeru() })
@@ -102,6 +105,33 @@ export default function Inventario() {
     setLoading(false)
   }
 
+
+
+  async function abrirLotesModal(almacen) {
+    setLotesModal(almacen)
+    setLoadingLotes(true)
+    const dist = distribuidoresList.find(d => d.almacen_id === almacen.id)
+    if (dist) {
+      const { data } = await supabase.from('lotes_distribuidor')
+        .select('*')
+        .eq('distribuidor_id', dist.id)
+        .order('fecha', { ascending: false })
+      setLotesData(data || [])
+    } else {
+      // Almacén normal: leer stock_por_tipo
+      const spt = stockPorTipo.filter(s => s.almacen_id === almacen.id)
+      setLotesData(spt.map(s => ({
+        fecha: '—',
+        precio_unitario: almacen.precio_base || '—',
+        cantidad_inicial: s.stock_actual,
+        cantidad_restante: s.stock_actual,
+        cantidad_vendida: 0,
+        tipo_balon: s.tipo_balon,
+        cerrado: false,
+      })))
+    }
+    setLoadingLotes(false)
+  }
 
   async function actualizarEstadoPago(compraId, nuevoEstado, montoExtra) {
     const { data: compra } = await supabase.from('compras').select('monto_amortizado, monto_total').eq('id', compraId).single()
@@ -458,9 +488,15 @@ export default function Inventario() {
               <p className="text-gray-300 text-sm font-medium">{a.nombre}</p>
             </div>
             <div className="flex gap-3 mt-1">
-              <div>
-                <p className={`text-2xl font-bold ${a.stock_actual > 100 ? 'text-emerald-400' : a.stock_actual > 30 ? 'text-yellow-400' : 'text-red-400'}`}>{a.stock_actual}</p>
-                <p className="text-xs text-gray-500">🟢 llenos</p>
+              <div className="flex items-start gap-2">
+                <div>
+                  <p className={`text-2xl font-bold ${a.stock_actual > 100 ? 'text-emerald-400' : a.stock_actual > 30 ? 'text-yellow-400' : 'text-red-400'}`}>{a.stock_actual}</p>
+                  <p className="text-xs text-gray-500">🟢 llenos</p>
+                </div>
+                <button onClick={() => abrirLotesModal(a)} title="Ver lotes"
+                  className="mt-1 text-gray-500 hover:text-blue-400 transition-colors">
+                  <LayoutList className="w-4 h-4" />
+                </button>
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-400">{a.balones_vacios || 0}</p>
@@ -1371,6 +1407,88 @@ export default function Inventario() {
                   {savingQuick ? 'Guardando...' : '✓ Agregar'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal lotes por almacén */}
+      {lotesModal && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
+              <div>
+                <h3 className="text-white font-semibold">📦 Lotes — {lotesModal.nombre}</h3>
+                <p className="text-gray-500 text-xs mt-0.5">{lotesModal.stock_actual} llenos · {lotesModal.balones_vacios || 0} vacíos</p>
+              </div>
+              <button onClick={() => setLotesModal(null)} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="px-6 py-5">
+              {loadingLotes ? (
+                <p className="text-center text-gray-500 py-8">Cargando lotes...</p>
+              ) : lotesData.length === 0 ? (
+                <p className="text-center text-gray-500 py-8">Sin lotes registrados</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table style={{width:'100%',borderCollapse:'collapse'}}>
+                    <thead>
+                      <tr style={{background:'var(--app-accent)'}}>
+                        {['Fecha','Precio/bal','Inicial','Vendidos','Restantes','Valor restante','Estado'].map(h => (
+                          <th key={h} style={{padding:'10px 12px',fontSize:12,fontWeight:700,color:'#fff',textAlign:'center',borderRight:'1px solid rgba(255,255,255,0.15)'}}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lotesData.map((l, i) => {
+                        const agotado = l.cerrado || l.cantidad_restante <= 0
+                        const valorRestante = (l.cantidad_restante || 0) * (l.precio_unitario || 0)
+                        return (
+                          <tr key={i} style={{borderBottom:'1px solid var(--app-card-border)',background:i%2===0?'transparent':'var(--app-row-alt)'}}>
+                            <td style={{padding:'12px',fontSize:14,color:'var(--app-text)',textAlign:'center'}}>{l.fecha}</td>
+                            <td style={{padding:'12px',fontSize:16,fontWeight:700,color:'#fb923c',textAlign:'center'}}>
+                              {l.precio_unitario ? `S/${l.precio_unitario}` : '—'}
+                            </td>
+                            <td style={{padding:'12px',fontSize:14,color:'var(--app-text-secondary)',textAlign:'center'}}>{l.cantidad_inicial}</td>
+                            <td style={{padding:'12px',fontSize:14,color:'#60a5fa',textAlign:'center'}}>{l.cantidad_vendida || 0}</td>
+                            <td style={{padding:'12px',fontSize:18,fontWeight:800,color:agotado?'#9ca3af':'#34d399',textAlign:'center'}}>{l.cantidad_restante}</td>
+                            <td style={{padding:'12px',fontSize:14,fontWeight:700,color:'#34d399',textAlign:'center'}}>
+                              {l.precio_unitario ? `S/${valorRestante.toLocaleString('es-PE')}` : '—'}
+                            </td>
+                            <td style={{padding:'8px',textAlign:'center'}}>
+                              <span style={{fontSize:12,fontWeight:700,padding:'4px 10px',borderRadius:6,
+                                background:agotado?'rgba(107,114,128,0.15)':'rgba(52,211,153,0.15)',
+                                color:agotado?'#9ca3af':'#34d399'}}>
+                                {agotado ? 'Agotado' : l.cantidad_vendida === 0 ? 'Nuevo' : 'Activo'}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                    {/* Fila total */}
+                    {lotesData.length > 1 && (() => {
+                      const totalIni = lotesData.reduce((s,l) => s+(l.cantidad_inicial||0), 0)
+                      const totalVend = lotesData.reduce((s,l) => s+(l.cantidad_vendida||0), 0)
+                      const totalRest = lotesData.reduce((s,l) => s+(l.cantidad_restante||0), 0)
+                      const totalValor = lotesData.reduce((s,l) => s+((l.cantidad_restante||0)*(l.precio_unitario||0)), 0)
+                      return (
+                        <tfoot>
+                          <tr style={{background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)'}}>
+                            <td style={{padding:'12px',fontWeight:800,color:'var(--app-text-secondary)',fontSize:13}}>TOTAL</td>
+                            <td></td>
+                            <td style={{padding:'12px',fontWeight:800,color:'var(--app-text)',textAlign:'center'}}>{totalIni}</td>
+                            <td style={{padding:'12px',fontWeight:800,color:'#60a5fa',textAlign:'center'}}>{totalVend}</td>
+                            <td style={{padding:'12px',fontWeight:800,color:'#34d399',fontSize:18,textAlign:'center'}}>{totalRest}</td>
+                            <td style={{padding:'12px',fontWeight:800,color:'#34d399',textAlign:'center'}}>S/{totalValor.toLocaleString('es-PE')}</td>
+                            <td></td>
+                          </tr>
+                        </tfoot>
+                      )
+                    })()}
+                  </table>
+                </div>
+              )}
+              <button onClick={() => setLotesModal(null)} className="btn-secondary w-full mt-4">Cerrar</button>
             </div>
           </div>
         </div>
