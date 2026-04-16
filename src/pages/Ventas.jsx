@@ -121,7 +121,7 @@ export default function Ventas() {
       almacen_id: almacenDefault?.id || '', precio_tipo_id: primerTipo?.id || '',
       tipo_balon: '10kg', cantidad: '',
       precio_unitario: getPrecio(primerTipo?.id, '10kg') || primerTipo?.precio || '',
-      metodo_pago: 'efectivo', notas: '', es_credito: false, credito_tipo: 'dinero', vales20: '', vales30: '', vales43: '', efectivoDist: '',
+      metodo_pago: 'efectivo', notas: '', es_credito: false, credito_tipo: 'dinero', balones_credito: '', vales20: '', vales30: '', vales43: '', efectivoDist: '',
       tipo_venta: 'gas', precio_balon: '100'
     })
     setError(''); setModal(true); setBusquedaCliente(''); setSubModal(null)
@@ -351,7 +351,7 @@ export default function Ventas() {
     if (esCred) {
       const totalDeuda = cant * parseFloat(form.precio_unitario)
       const montoDeuda = debeDinero ? totalDeuda : 0
-      const balonesDeuda = debeBalon ? cant : 0
+      const balonesDeuda = debeBalon ? (parseInt(form.balones_credito) || cant) : 0
 
       // Buscar deuda activa del mismo cliente
       const { data: deudaExistente } = await supabase.from('deudas')
@@ -748,10 +748,20 @@ export default function Ventas() {
                     </button>
                   ))}
                 </div>
+                {(form.credito_tipo === 'balon' || form.credito_tipo === 'ambos') && (
+                  <div>
+                    <label className="label">¿Cuántos balones debe devolver?</label>
+                    <input type="number" min="0" max={form.cantidad} className="input text-center"
+                      placeholder={`Máx: ${form.cantidad || 0}`}
+                      value={form.balones_credito}
+                      onChange={e => setForm(f => ({...f, balones_credito: e.target.value}))} />
+                    <p className="text-xs text-gray-500 mt-1">Si no ingresas nada, se asume {form.cantidad || 0} balón(es)</p>
+                  </div>
+                )}
                 <div className="bg-orange-900/20 rounded-lg p-2 text-xs text-orange-300">
                   {form.credito_tipo === 'dinero' && `⚠️ Deuda: S/${((parseInt(form.cantidad)||0) * (parseFloat(form.precio_unitario)||0)).toLocaleString()} en efectivo`}
-                  {form.credito_tipo === 'balon' && `⚠️ Deuda: ${form.cantidad || 0} balón(es) a devolver — dinero cobrado`}
-                  {form.credito_tipo === 'ambos' && `⚠️ Deuda: S/${((parseInt(form.cantidad)||0) * (parseFloat(form.precio_unitario)||0)).toLocaleString()} + ${form.cantidad || 0} balón(es)`}
+                  {form.credito_tipo === 'balon' && `⚠️ Deuda: ${parseInt(form.balones_credito)||parseInt(form.cantidad)||0} balón(es) a devolver — dinero cobrado`}
+                  {form.credito_tipo === 'ambos' && `⚠️ Deuda: S/${((parseInt(form.cantidad)||0) * (parseFloat(form.precio_unitario)||0)).toLocaleString()} + ${parseInt(form.balones_credito)||parseInt(form.cantidad)||0} balón(es)`}
                 </div>
               </div>
             )}
