@@ -256,23 +256,22 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
                 </div>
               ) : (
                 <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden',overflowX:'auto'}}>
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 0.7fr 0.7fr 0.7fr 0.8fr 0.9fr 1.2fr',background:'var(--app-accent)',minWidth:750}}>
-                    {['Fecha','Cargados','Descargados','Faltantes','Precio','Monto','Notas'].map(h => (
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 0.7fr 0.7fr 0.7fr 0.9fr 1.3fr',background:'var(--app-accent)',minWidth:650}}>
+                    {['Fecha','Cargados','Descargados','Faltantes','Monto','Notas'].map(h => (
                       <div key={h} style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#fff',textTransform:'uppercase',borderRight:'1px solid rgba(255,255,255,0.2)',textAlign:'center'}}>{h}</div>
                     ))}
                   </div>
                   {cargasDist.map((c,i) => (
-                    <div key={c.id} style={{display:'grid',gridTemplateColumns:'1fr 0.7fr 0.7fr 0.7fr 0.8fr 0.9fr 1.2fr',borderBottom:i<cargasDist.length-1?'1px solid var(--app-card-border)':'none',minWidth:750,background:i%2===0?'transparent':'var(--app-row-alt)'}}>
+                    <div key={c.id} style={{display:'grid',gridTemplateColumns:'1fr 0.7fr 0.7fr 0.7fr 0.9fr 1.3fr',borderBottom:i<cargasDist.length-1?'1px solid var(--app-card-border)':'none',minWidth:750,background:i%2===0?'transparent':'var(--app-row-alt)'}}>
                       <div style={{padding:'14px 10px',fontSize:15,fontWeight:700,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{c.fecha}</div>
                       <div style={{padding:'14px 10px',fontSize:20,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{c.cantidad}</div>
                       <div style={{padding:'14px 10px',fontSize:16,fontWeight:600,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{(c.descargados||0)}</div>
                       <div style={{padding:'14px 10px',fontSize:16,fontWeight:700,color:'#fb923c',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{Math.max(0,c.cantidad-(c.descargados||0))}</div>
-                      <div style={{padding:'14px 10px',fontSize:15,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{c.precio_por_balon}</div>
                       <div style={{padding:'14px 10px',fontSize:18,fontWeight:800,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{(c.total||0).toLocaleString('es-PE')}</div>
                       <div style={{padding:'14px 10px',fontSize:13,color:'var(--app-text-secondary)',textAlign:'center',fontStyle:'italic'}}>{c.notas || '—'}</div>
                     </div>
                   ))}
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 0.7fr 0.7fr 0.7fr 0.8fr 0.9fr 1.2fr',background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)',minWidth:750}}>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 0.7fr 0.7fr 0.7fr 0.9fr 1.3fr',background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)',minWidth:650}}>
                     <div style={{padding:'14px 10px',fontSize:15,fontWeight:800,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>TOTAL</div>
                     <div style={{padding:'14px 10px',fontSize:20,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{totalCargado}</div>
                     <div style={{padding:'14px 10px',fontSize:16,fontWeight:700,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{totalDescargado}</div>
@@ -463,8 +462,8 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
               </div>
             ) : (
               <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden',overflowX:'auto'}}>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 0.7fr 0.9fr 0.6fr 0.6fr 0.6fr 0.9fr 0.8fr',background:'var(--app-accent)',minWidth:900}}>
-                  {['Fecha','Cant.','Precio','Monto total','V.S/20','V.S/30','V.S/43','Saldo/Efectivo','Estado'].map(h => (
+                <div style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 0.9fr 0.6fr 0.6fr 0.6fr 0.9fr 0.8fr',background:'var(--app-accent)',minWidth:800}}>
+                  {['Fecha','Cant.','Monto total','V.S/20','V.S/30','V.S/43','Saldo/Efectivo','Estado'].map(h => (
                     <div key={h} style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#fff',textTransform:'uppercase',borderRight:'1px solid rgba(255,255,255,0.2)',textAlign:'center'}}>{h}</div>
                   ))}
                 </div>
@@ -476,10 +475,9 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
                   const saldo = d.monto - totalPagado
                   const cancelado = saldo <= 0
                   return (
-                    <div key={dia} style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 0.7fr 0.9fr 0.6fr 0.6fr 0.6fr 0.9fr 0.8fr',borderBottom:i<diasOrdenados.length-1?'1px solid var(--app-card-border)':'none',minWidth:900,background:i%2===0?'transparent':'var(--app-row-alt)'}}>
+                    <div key={dia} style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 0.9fr 0.6fr 0.6fr 0.6fr 0.9fr 0.8fr',borderBottom:i<diasOrdenados.length-1?'1px solid var(--app-card-border)':'none',minWidth:900,background:i%2===0?'transparent':'var(--app-row-alt)'}}>
                       <div style={{padding:'14px 10px',fontSize:15,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center',fontWeight:700}}>{dia}</div>
                       <div style={{padding:'14px 10px',fontSize:20,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.cantidad}</div>
-                      <div style={{padding:'14px 10px',fontSize:15,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{precio.toFixed(2)}</div>
                       <div style={{padding:'14px 10px',fontSize:18,fontWeight:800,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{d.monto.toLocaleString('es-PE')}</div>
                       <div style={{padding:'14px 10px',fontSize:18,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.v20>0?d.v20:'—'}</div>
                       <div style={{padding:'14px 10px',fontSize:18,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.v30>0?d.v30:'—'}</div>
@@ -510,10 +508,9 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
                   const tVales = tv20*20+tv30*30+tv43*43
                   const tSaldo = tMonto - tVales - tEf
                   return (
-                    <div style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 0.7fr 0.9fr 0.6fr 0.6fr 0.6fr 0.9fr 0.8fr',background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)',minWidth:720}}>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 0.9fr 0.6fr 0.6fr 0.6fr 0.9fr 0.8fr',background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)',minWidth:720}}>
                       <div style={{padding:'14px 10px',fontSize:16,fontWeight:800,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>TOTAL</div>
                       <div style={{padding:'14px 10px',fontSize:20,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tCant}</div>
-                      <div style={{padding:'8px 5px',borderRight:'1px solid var(--app-card-border)'}}/>
                       <div style={{padding:'14px 10px',fontSize:20,fontWeight:800,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{tMonto.toLocaleString('es-PE')}</div>
                       <div style={{padding:'8px 5px',fontSize:17,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tv20||'—'}</div>
                       <div style={{padding:'8px 5px',fontSize:17,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tv30||'—'}</div>
