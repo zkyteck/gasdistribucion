@@ -44,7 +44,7 @@ export default function Configuracion() {
 
   const [provForm, setProvForm] = useState({ nombre: '', telefono: '', direccion: '', ruc: '' })
   const [usuarioForm, setUsuarioForm] = useState({ nombre: '', email: '', password: '', rol: 'trabajador', almacen_id: '' })
-  const [permisos, setPermisos] = useState({ ventas:false, vales:false, acuenta:false, clientes:false, deudas:false, inventario:false, distribuidores:false, almacenes:false, reportes:false, configuracion:false })
+  const [permisos, setPermisos] = useState({ ventas:false, vales:false, acuenta:false, clientes:false, deudas:false, inventario:false, distribuidores:false, almacenes:false, reportes:false, configuracion:false, correo:false })
   const [editUsuarioSelected, setEditUsuarioSelected] = useState(null)
   const [editPermisos, setEditPermisos] = useState({})
   const [editPassword, setEditPassword] = useState('')
@@ -56,7 +56,7 @@ export default function Configuracion() {
     ['ventas','🛒 Ventas'], ['vales','🎫 Vales FISE'], ['acuenta','📋 A Cuenta'],
     ['clientes','👥 Clientes'], ['deudas','⚠️ Deudas'], ['inventario','📦 Inventario'],
     ['distribuidores','🚛 Distribuidores'], ['almacenes','🏪 Almacenes'],
-    ['reportes','📊 Reportes'], ['configuracion','⚙️ Configuración']
+    ['reportes','📊 Reportes'], ['configuracion','⚙️ Configuración'], ['correo','📧 Correo']
   ]
 
   async function cargar() {
@@ -652,7 +652,7 @@ export default function Configuracion() {
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <p className="text-gray-400 text-sm">Personas con acceso al sistema</p>
-            <button onClick={() => { setUsuarioForm({ nombre: '', email: '', password: '', rol: 'trabajador' }); setPermisos({ ventas:false, vales:false, acuenta:false, clientes:false, deudas:false, inventario:false, distribuidores:false, almacenes:false, reportes:false, configuracion:false }); setError(''); setModal('usuario') }} className="btn-primary">
+            <button onClick={() => { setUsuarioForm({ nombre: '', email: '', password: '', rol: 'trabajador' }); setPermisos({ ventas:false, vales:false, acuenta:false, clientes:false, deudas:false, inventario:false, distribuidores:false, almacenes:false, reportes:false, configuracion:false, correo:false }); setError(''); setModal('usuario') }} className="btn-primary">
               <Plus className="w-4 h-4" />Nuevo usuario
             </button>
           </div>
@@ -749,9 +749,9 @@ export default function Configuracion() {
                 <div className="flex items-center justify-between mb-2">
                   <label className="label mb-0">Módulos con acceso</label>
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => setPermisos({ ventas:true, vales:true, acuenta:true, clientes:true, deudas:true, inventario:true, distribuidores:true, almacenes:true, reportes:true, configuracion:false })}
+                    <button type="button" onClick={() => setPermisos({ ventas:true, vales:true, acuenta:true, clientes:true, deudas:true, inventario:true, distribuidores:true, almacenes:true, reportes:true, configuracion:false, correo:true })}
                       className="text-xs text-blue-400 hover:text-blue-300">✓ Todos</button>
-                    <button type="button" onClick={() => setPermisos({ ventas:false, vales:false, acuenta:false, clientes:false, deudas:false, inventario:false, distribuidores:false, almacenes:false, reportes:false, configuracion:false })}
+                    <button type="button" onClick={() => setPermisos({ ventas:false, vales:false, acuenta:false, clientes:false, deudas:false, inventario:false, distribuidores:false, almacenes:false, reportes:false, configuracion:false, correo:false })}
                       className="text-xs text-gray-500 hover:text-gray-400">✗ Ninguno</button>
                   </div>
                 </div>
@@ -844,9 +844,9 @@ export default function Configuracion() {
                 <div className="flex items-center justify-between mb-2">
                   <label className="label mb-0">Módulos con acceso</label>
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => setEditPermisos({ ventas:true, vales:true, acuenta:true, clientes:true, deudas:true, inventario:true, distribuidores:true, almacenes:true, reportes:true, configuracion:false })}
+                    <button type="button" onClick={() => setEditPermisos({ ventas:true, vales:true, acuenta:true, clientes:true, deudas:true, inventario:true, distribuidores:true, almacenes:true, reportes:true, configuracion:false, correo:true })}
                       className="text-xs text-blue-400 hover:text-blue-300">✓ Todos</button>
-                    <button type="button" onClick={() => setEditPermisos({ ventas:false, vales:false, acuenta:false, clientes:false, deudas:false, inventario:false, distribuidores:false, almacenes:false, reportes:false, configuracion:false })}
+                    <button type="button" onClick={() => setEditPermisos({ ventas:false, vales:false, acuenta:false, clientes:false, deudas:false, inventario:false, distribuidores:false, almacenes:false, reportes:false, configuracion:false, correo:false })}
                       className="text-xs text-gray-500 hover:text-gray-400">✗ Ninguno</button>
                   </div>
                 </div>

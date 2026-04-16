@@ -152,26 +152,28 @@ function BottomDrawer({ open, onClose, extraItems }) {
         )}
 
         {/* Correo */}
-        <div style={{ padding: '4px 16px 8px' }}>
-          <a
-            href="https://outlook.live.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={onClose}
-            style={{
-              width: '100%', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', gap: 8,
-              padding: '12px', borderRadius: 12,
-              border: '1px solid rgba(59,130,246,0.3)',
-              background: 'rgba(59,130,246,0.08)', color: '#60a5fa',
-              fontWeight: 600, fontSize: 13, cursor: 'pointer',
-              textDecoration: 'none',
-            }}
-          >
-            <Mail style={{ width: 16, height: 16 }} />
-            Abrir correo
-          </a>
-        </div>
+        {(perfil?.rol === 'admin' || perfil?.permisos?.correo) && (
+          <div style={{ padding: '4px 16px 8px' }}>
+            <a
+              href="https://outlook.live.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={onClose}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', gap: 8,
+                padding: '12px', borderRadius: 12,
+                border: '1px solid rgba(59,130,246,0.3)',
+                background: 'rgba(59,130,246,0.08)', color: '#60a5fa',
+                fontWeight: 600, fontSize: 13, cursor: 'pointer',
+                textDecoration: 'none',
+              }}
+            >
+              <Mail style={{ width: 16, height: 16 }} />
+              Abrir correo
+            </a>
+          </div>
+        )}
 
         {/* Cerrar sesión */}
         <div style={{ padding: '4px 16px 20px' }}>
