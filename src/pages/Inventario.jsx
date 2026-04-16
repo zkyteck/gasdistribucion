@@ -1433,9 +1433,9 @@ export default function Inventario() {
                 <div className="overflow-x-auto">
                   <table style={{width:'100%',borderCollapse:'collapse'}}>
                     <thead>
-                      <tr style={{background:'var(--app-accent)'}}>
+                      <tr style={{background:'#1a3a2a'}}>
                         {['Fecha','Precio/bal','Inicial','Vendidos','Restantes','Valor restante','Estado',''].map(h => (
-                          <th key={h} style={{padding:'14px 16px',fontSize:14,fontWeight:700,color:'#fff',textAlign:'center',borderRight:'1px solid rgba(255,255,255,0.15)',letterSpacing:'0.3px'}}>{h}</th>
+                          <th key={h} style={{padding:'14px 16px',fontSize:14,fontWeight:700,color:'#4ade80',textAlign:'center',borderRight:'1px solid rgba(255,255,255,0.1)',letterSpacing:'0.5px',textTransform:'uppercase'}}>{h}</th>
                         ))}
                       </tr>
                     </thead>
