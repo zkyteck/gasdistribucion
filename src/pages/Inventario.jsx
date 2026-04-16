@@ -273,6 +273,21 @@ export default function Inventario() {
           updated_at: new Date().toISOString()
         }).eq('id', d.almacen_id)
       }
+      // Restar vacíos del almacén según el tipo comprado
+      const { data: almVacios } = await supabase.from('almacenes')
+        .select('balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg').eq('id', d.almacen_id).single()
+      if (almVacios) {
+        const campoVacio = d.tipo_balon === '5kg' ? 'vacios_5kg' : d.tipo_balon === '10kg' ? 'vacios_10kg' : 'vacios_45kg'
+        const vaciosActuales = almVacios[campoVacio] || 0
+        const nuevosVacios = Math.max(0, vaciosActuales - d.cantidad)
+        const diffVacios = vaciosActuales - nuevosVacios
+        await supabase.from('almacenes').update({
+          balones_vacios: Math.max(0, (almVacios.balones_vacios || 0) - diffVacios),
+          [campoVacio]: nuevosVacios,
+          updated_at: new Date().toISOString()
+        }).eq('id', d.almacen_id)
+      }
+
       // Si el almacén pertenece a un distribuidor → crear lote FIFO
       const distrib = distribuidoresList.find(dist => dist.almacen_id === d.almacen_id)
       if (distrib) {
