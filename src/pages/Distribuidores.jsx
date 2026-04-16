@@ -52,9 +52,9 @@ function imprimirCuentaActiva(dist, cargas, abonos, cuenta) {
     const totalV43 = abonos.reduce((s,a)=>s+(a.vales_43||0),0)
     const totalEfectivo = abonos.reduce((s,a)=>s+(parseFloat(a.efectivo)||0),0)
     const totalYape = abonos.reduce((s,a)=>s+(parseFloat(a.yape)||0),0)
-    const totalCargado = cargas.reduce((s,c)=>s+(c.cargados||0),0)
-    const totalDescargado = cargas.reduce((s,c)=>s+(c.descargados||0),0)
-    const montoTotal = cargas.reduce((s,c)=>s+(c.monto||0),0) + (cuenta?.saldo_anterior||0)
+    const totalCargado = cargas.reduce((s,c)=>s+(c.cantidad||0),0)
+    const totalDescargado = cargas.reduce((s,c)=>s+((c.descargados||0)||0),0)
+    const montoTotal = cargas.reduce((s,c)=>s+(c.total||0),0) + (cuenta?.saldo_anterior||0)
     const totalPagado = abonos.reduce((s,a)=>s+(a.total||0),0)
     const saldoPendiente = Math.max(0, montoTotal - totalPagado)
     const faltantesBal = Math.max(0, totalCargado - totalDescargado) + (cuenta?.faltantes_anterior||0)
@@ -77,11 +77,11 @@ function generarHTMLReporte({ titulo, periodo, cargas, totalCargado, totalDescar
     const filasCargas = cargas.map(c => `
       <tr>
         <td>${c.fecha}</td>
-        <td class="center">${c.cargados}</td>
-        <td class="center">${c.descargados}</td>
-        <td class="center">${Math.max(0,c.cargados-c.descargados)}</td>
-        <td class="center">S/${c.precio_unitario}</td>
-        <td class="right">S/${(c.monto||0).toLocaleString('es-PE')}</td>
+        <td class="center">${c.cantidad}</td>
+        <td class="center">${(c.descargados||0)}</td>
+        <td class="center">${Math.max(0,c.cantidad-(c.descargados||0))}</td>
+        <td class="center">S/${c.precio_por_balon}</td>
+        <td class="right">S/${(c.total||0).toLocaleString('es-PE')}</td>
       </tr>`).join('')
 
     return `<!DOCTYPE html>
@@ -196,9 +196,9 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
 
   if (esCuentaCorriente) {
     // Vista cuenta corriente (Cristian)
-    const totalCargado = cargasDist.reduce((s,c) => s+(c.cargados||0), 0)
-    const totalDescargado = cargasDist.reduce((s,c) => s+(c.descargados||0), 0)
-    const montoTotal = cargasDist.reduce((s,c) => s+(c.monto||0), 0)
+    const totalCargado = cargasDist.reduce((s,c) => s+(c.cantidad||0), 0)
+    const totalDescargado = cargasDist.reduce((s,c) => s+((c.descargados||0)||0), 0)
+    const montoTotal = cargasDist.reduce((s,c) => s+(c.total||0), 0)
     const totalAbonado = abonosParciales.reduce((s,a) => s+(a.total||0), 0)
     const saldoAnterior = cuentaActiva?.saldo_anterior || 0
     const faltantesAnterior = cuentaActiva?.faltantes_anterior || 0
@@ -264,11 +264,11 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
                   {cargasDist.map((c,i) => (
                     <div key={c.id} style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr',borderBottom:i<cargasDist.length-1?'1px solid var(--app-card-border)':'none'}}>
                       <div style={{padding:'8px',fontSize:11,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{c.fecha}</div>
-                      <div style={{padding:'8px',fontSize:12,fontWeight:700,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{c.cargados}</div>
-                      <div style={{padding:'8px',fontSize:11,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{c.descargados}</div>
-                      <div style={{padding:'8px',fontSize:11,color:'#fb923c',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{Math.max(0,c.cargados-c.descargados)}</div>
-                      <div style={{padding:'8px',fontSize:11,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{c.precio_unitario}</div>
-                      <div style={{padding:'8px',fontSize:12,fontWeight:700,color:'#34d399',textAlign:'center'}}>S/{(c.monto||0).toLocaleString('es-PE')}</div>
+                      <div style={{padding:'8px',fontSize:12,fontWeight:700,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{c.cantidad}</div>
+                      <div style={{padding:'8px',fontSize:11,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{(c.descargados||0)}</div>
+                      <div style={{padding:'8px',fontSize:11,color:'#fb923c',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{Math.max(0,c.cantidad-(c.descargados||0))}</div>
+                      <div style={{padding:'8px',fontSize:11,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{c.precio_por_balon}</div>
+                      <div style={{padding:'8px',fontSize:12,fontWeight:700,color:'#34d399',textAlign:'center'}}>S/{(c.total||0).toLocaleString('es-PE')}</div>
                     </div>
                   ))}
                   <div style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 1fr',background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)'}}>
@@ -683,7 +683,7 @@ export default function Distribuidores() {
   const [savingAbono, setSavingAbono] = useState(false)
   // Estados para cuenta corriente (Cristian)
   const [cargaModal, setCargaModal] = useState(false)
-  const [cargaForm, setCargaForm] = useState({ cargados: '', descargados: '', notas: '', fecha: hoyPeru() })
+  const [cargaForm, setCargaForm] = useState({ cargados: '', descargados: '', tipo_balon: '10kg', notas: '', fecha: hoyPeru() })
   const [abonoParciModal, setAbonoParciModal] = useState(false)
   const [abonoParciForm, setAbonoParciForm] = useState({ vales20: '', vales30: '', vales43: '', efectivo: '', yape: '', notas: '', fecha: hoyPeru() })
   const [arregloModal, setArregloModal] = useState(false)
@@ -726,7 +726,7 @@ export default function Distribuidores() {
       supabase.from('cuentas_corrientes_distribuidor')
         .select('*').eq('distribuidor_id', distId).eq('estado', 'abierta').maybeSingle(),
       supabase.from('cargas_distribuidor')
-        .select('*').eq('distribuidor_id', distId).order('fecha', { ascending: true }),
+        .select('*').eq('distribuidor_id', distId).order('fecha', { ascending: false }),
       supabase.from('abonos_distribuidor_parcial')
         .select('*').eq('distribuidor_id', distId).order('fecha', { ascending: true }),
       supabase.from('cuentas_corrientes_distribuidor')
@@ -774,12 +774,11 @@ export default function Distribuidores() {
     // Registrar carga
     await supabase.from('cargas_distribuidor').insert({
       distribuidor_id: selected.id,
-      cuenta_id: cuentaId,
       fecha: cargaForm.fecha || hoyPeru(),
-      cargados: cant,
-      descargados: desc,
-      precio_unitario: precio,
-      monto,
+      cantidad: cant,
+      tipo_balon: cargaForm.tipo_balon || '10kg',
+      precio_por_balon: precio,
+      total: monto,
       notas: cargaForm.notas || null
     })
 
@@ -813,7 +812,7 @@ export default function Distribuidores() {
 
     setSaving(false)
     setCargaModal(false)
-    setCargaForm({ cargados: '', descargados: '', notas: '', fecha: hoyPeru() })
+    setCargaForm({ cargados: '', descargados: '', tipo_balon: '10kg', notas: '', fecha: hoyPeru() })
     await cargarCuentaCorriente(selected.id)
     cargar()
   }
@@ -852,9 +851,9 @@ export default function Distribuidores() {
     const pagoHoy = v20*20 + v30*30 + v43*43 + efectivo + yape
 
     // Calcular totales de la cuenta
-    const totalCargado = cargasDist.reduce((s,c) => s+(c.cargados||0), 0)
-    const totalDescargado = cargasDist.reduce((s,c) => s+(c.descargados||0), 0)
-    const montoTotal = cargasDist.reduce((s,c) => s+(c.monto||0), 0)
+    const totalCargado = cargasDist.reduce((s,c) => s+(c.cantidad||0), 0)
+    const totalDescargado = cargasDist.reduce((s,c) => s+((c.descargados||0)||0), 0)
+    const montoTotal = cargasDist.reduce((s,c) => s+(c.total||0), 0)
     const saldoAnterior = cuentaActiva?.saldo_anterior || 0
     const faltantesAnterior = cuentaActiva?.faltantes_anterior || 0
     const totalAbonado = abonosParciales.reduce((s,a) => s+(a.total||0), 0)
@@ -1521,7 +1520,7 @@ export default function Distribuidores() {
 
                 {d.modalidad === 'cuenta_corriente' ? (
                   <>
-                    <button onClick={() => { setSelected(d); setCargaModal(true); setCargaForm({ cargados:'', descargados:'', notas:'', fecha:hoyPeru() }); cargarCuentaCorriente(d.id) }}
+                    <button onClick={() => { setSelected(d); setCargaModal(true); setCargaForm({ cargados:'', descargados:'', tipo_balon:'10kg', notas:'', fecha:hoyPeru() }); cargarCuentaCorriente(d.id) }}
                       className="bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
                       📦 Registrar carga
                     </button>
@@ -1872,6 +1871,15 @@ export default function Distribuidores() {
                 <label className="label">Fecha</label>
                 <input type="date" className="input" value={cargaForm.fecha}
                   onChange={e => setCargaForm(f => ({...f, fecha: e.target.value}))} />
+              </div>
+              <div>
+                <label className="label">Tipo de balón</label>
+                <select className="input" value={cargaForm.tipo_balon}
+                  onChange={e => setCargaForm(f => ({...f, tipo_balon: e.target.value}))}>
+                  <option value="10kg">🟡 10kg</option>
+                  <option value="45kg">🔴 45kg</option>
+                  <option value="5kg">🔵 5kg</option>
+                </select>
               </div>
               <div>
                 <label className="label">Notas (opcional)</label>
