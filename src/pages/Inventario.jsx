@@ -38,9 +38,12 @@ export default function Inventario() {
   const [editStockAlmacen, setEditStockAlmacen] = useState(null)
   const [editStockVal, setEditStockVal] = useState(0)
   const [editVaciosModal, setEditVaciosModal] = useState(null)
-  const [lotesModal, setLotesModal] = useState(null) // almacen object
+  const [lotesModal, setLotesModal] = useState(null)
   const [lotesData, setLotesData] = useState([])
   const [loadingLotes, setLoadingLotes] = useState(false)
+  const [editPrecioLote, setEditPrecioLote] = useState(null) // {id, precio_unitario}
+  const [editPrecioVal, setEditPrecioVal] = useState('')
+  const [savingPrecio, setSavingPrecio] = useState(false)
   const [editVaciosModalVal, setEditVaciosModalVal] = useState({ '5kg': 0, '10kg': 0, '45kg': 0 })
   const [movimientoForm, setMovimientoForm] = useState({ origen_id: '', destino_id: '', cantidad: '', tipo_balon: '10kg', notas: '', fecha: hoyPeru() })
   const [vaciosForm, setVaciosForm] = useState({ almacen_id: '', cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, notas: '', fecha: hoyPeru() })
@@ -1413,11 +1416,11 @@ export default function Inventario() {
       {/* Modal lotes por almacén */}
       {lotesModal && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-4xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-800 sticky top-0 bg-gray-900">
               <div>
-                <h3 className="text-white font-semibold">📦 Lotes — {lotesModal.nombre}</h3>
-                <p className="text-gray-500 text-xs mt-0.5">{lotesModal.stock_actual} llenos · {lotesModal.balones_vacios || 0} vacíos</p>
+                <h3 style={{color:'var(--app-text)',fontWeight:700,fontSize:18,margin:0}}>📦 Lotes — {lotesModal.nombre}</h3>
+                <p style={{color:'var(--app-text-secondary)',fontSize:13,marginTop:3}}>{lotesModal.stock_actual} llenos · {lotesModal.balones_vacios || 0} vacíos</p>
               </div>
               <button onClick={() => setLotesModal(null)} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
             </div>
@@ -1431,8 +1434,8 @@ export default function Inventario() {
                   <table style={{width:'100%',borderCollapse:'collapse'}}>
                     <thead>
                       <tr style={{background:'var(--app-accent)'}}>
-                        {['Fecha','Precio/bal','Inicial','Vendidos','Restantes','Valor restante','Estado'].map(h => (
-                          <th key={h} style={{padding:'10px 12px',fontSize:12,fontWeight:700,color:'#fff',textAlign:'center',borderRight:'1px solid rgba(255,255,255,0.15)'}}>{h}</th>
+                        {['Fecha','Precio/bal','Inicial','Vendidos','Restantes','Valor restante','Estado',''].map(h => (
+                          <th key={h} style={{padding:'14px 16px',fontSize:14,fontWeight:700,color:'#fff',textAlign:'center',borderRight:'1px solid rgba(255,255,255,0.15)',letterSpacing:'0.3px'}}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1440,24 +1443,64 @@ export default function Inventario() {
                       {lotesData.map((l, i) => {
                         const agotado = l.cerrado || l.cantidad_restante <= 0
                         const valorRestante = (l.cantidad_restante || 0) * (l.precio_unitario || 0)
+                        const editando = editPrecioLote?.id === l.id
                         return (
                           <tr key={i} style={{borderBottom:'1px solid var(--app-card-border)',background:i%2===0?'transparent':'var(--app-row-alt)'}}>
-                            <td style={{padding:'12px',fontSize:14,color:'var(--app-text)',textAlign:'center'}}>{l.fecha}</td>
-                            <td style={{padding:'12px',fontSize:16,fontWeight:700,color:'#fb923c',textAlign:'center'}}>
-                              {l.precio_unitario ? `S/${l.precio_unitario}` : '—'}
+                            <td style={{padding:'16px',fontSize:15,color:'var(--app-text)',textAlign:'center',fontWeight:600}}>{l.fecha}</td>
+                            <td style={{padding:'16px',fontSize:18,fontWeight:800,color:'#fb923c',textAlign:'center'}}>
+                              {editando ? (
+                                <div style={{display:'flex',alignItems:'center',gap:4,justifyContent:'center'}}>
+                                  <span style={{color:'#fb923c',fontSize:15}}>S/</span>
+                                  <input type="number" min="0" step="0.01" autoFocus
+                                    style={{width:80,padding:'4px 8px',borderRadius:6,border:'1px solid #fb923c',background:'rgba(251,146,60,0.1)',color:'#fb923c',fontSize:16,fontWeight:700,textAlign:'center'}}
+                                    value={editPrecioVal}
+                                    onChange={e => setEditPrecioVal(e.target.value)} />
+                                </div>
+                              ) : (
+                                l.precio_unitario ? `S/${l.precio_unitario}` : <span style={{color:'#f87171',fontSize:13}}>Sin precio</span>
+                              )}
                             </td>
-                            <td style={{padding:'12px',fontSize:14,color:'var(--app-text-secondary)',textAlign:'center'}}>{l.cantidad_inicial}</td>
-                            <td style={{padding:'12px',fontSize:14,color:'#60a5fa',textAlign:'center'}}>{l.cantidad_vendida || 0}</td>
-                            <td style={{padding:'12px',fontSize:18,fontWeight:800,color:agotado?'#9ca3af':'#34d399',textAlign:'center'}}>{l.cantidad_restante}</td>
-                            <td style={{padding:'12px',fontSize:14,fontWeight:700,color:'#34d399',textAlign:'center'}}>
+                            <td style={{padding:'16px',fontSize:16,color:'var(--app-text-secondary)',textAlign:'center'}}>{l.cantidad_inicial}</td>
+                            <td style={{padding:'16px',fontSize:16,color:'#60a5fa',textAlign:'center',fontWeight:600}}>{l.cantidad_vendida || 0}</td>
+                            <td style={{padding:'16px',fontSize:22,fontWeight:800,color:agotado?'#9ca3af':'#34d399',textAlign:'center'}}>{l.cantidad_restante}</td>
+                            <td style={{padding:'16px',fontSize:16,fontWeight:700,color:'#34d399',textAlign:'center'}}>
                               {l.precio_unitario ? `S/${valorRestante.toLocaleString('es-PE')}` : '—'}
                             </td>
                             <td style={{padding:'8px',textAlign:'center'}}>
-                              <span style={{fontSize:12,fontWeight:700,padding:'4px 10px',borderRadius:6,
+                              <span style={{fontSize:13,fontWeight:700,padding:'5px 14px',borderRadius:6,
                                 background:agotado?'rgba(107,114,128,0.15)':'rgba(52,211,153,0.15)',
                                 color:agotado?'#9ca3af':'#34d399'}}>
                                 {agotado ? 'Agotado' : l.cantidad_vendida === 0 ? 'Nuevo' : 'Activo'}
                               </span>
+                            </td>
+                            <td style={{padding:'8px',textAlign:'center'}}>
+                              {editando ? (
+                                <div style={{display:'flex',gap:4,justifyContent:'center'}}>
+                                  <button onClick={async () => {
+                                    setSavingPrecio(true)
+                                    await supabase.from('lotes_distribuidor').update({ precio_unitario: parseFloat(editPrecioVal) }).eq('id', l.id)
+                                    setSavingPrecio(false)
+                                    setEditPrecioLote(null)
+                                    const dist = distribuidoresList.find(d => d.almacen_id === lotesModal.id)
+                                    if (dist) {
+                                      const { data } = await supabase.from('lotes_distribuidor').select('*').eq('distribuidor_id', dist.id).order('fecha', { ascending: false })
+                                      setLotesData(data || [])
+                                    }
+                                  }} disabled={savingPrecio}
+                                    style={{padding:'4px 10px',borderRadius:6,border:'none',background:'#34d399',color:'#000',fontSize:12,fontWeight:700,cursor:'pointer'}}>
+                                    {savingPrecio ? '...' : '✓'}
+                                  </button>
+                                  <button onClick={() => setEditPrecioLote(null)}
+                                    style={{padding:'4px 10px',borderRadius:6,border:'none',background:'rgba(239,68,68,0.2)',color:'#f87171',fontSize:12,cursor:'pointer'}}>
+                                    ✕
+                                  </button>
+                                </div>
+                              ) : (
+                                <button onClick={() => { setEditPrecioLote(l); setEditPrecioVal(l.precio_unitario || '') }}
+                                  style={{padding:'4px 10px',borderRadius:6,border:'1px solid rgba(251,146,60,0.3)',background:'rgba(251,146,60,0.1)',color:'#fb923c',fontSize:12,cursor:'pointer'}}>
+                                  ✏️ Precio
+                                </button>
+                              )}
                             </td>
                           </tr>
                         )
@@ -1472,13 +1515,13 @@ export default function Inventario() {
                       return (
                         <tfoot>
                           <tr style={{background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)'}}>
-                            <td style={{padding:'12px',fontWeight:800,color:'var(--app-text-secondary)',fontSize:13}}>TOTAL</td>
+                            <td style={{padding:'14px 16px',fontWeight:800,color:'var(--app-text-secondary)',fontSize:15}}>TOTAL</td>
                             <td></td>
-                            <td style={{padding:'12px',fontWeight:800,color:'var(--app-text)',textAlign:'center'}}>{totalIni}</td>
-                            <td style={{padding:'12px',fontWeight:800,color:'#60a5fa',textAlign:'center'}}>{totalVend}</td>
-                            <td style={{padding:'12px',fontWeight:800,color:'#34d399',fontSize:18,textAlign:'center'}}>{totalRest}</td>
-                            <td style={{padding:'12px',fontWeight:800,color:'#34d399',textAlign:'center'}}>S/{totalValor.toLocaleString('es-PE')}</td>
-                            <td></td>
+                            <td style={{padding:'14px',fontWeight:800,color:'var(--app-text)',textAlign:'center',fontSize:16}}>{totalIni}</td>
+                            <td style={{padding:'14px',fontWeight:800,color:'#60a5fa',textAlign:'center',fontSize:16}}>{totalVend}</td>
+                            <td style={{padding:'14px',fontWeight:800,color:'#34d399',fontSize:22,textAlign:'center'}}>{totalRest}</td>
+                            <td style={{padding:'14px',fontWeight:800,color:'#34d399',textAlign:'center',fontSize:16}}>S/{totalValor.toLocaleString('es-PE')}</td>
+                            <td></td><td></td>
                           </tr>
                         </tfoot>
                       )
