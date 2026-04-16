@@ -1840,6 +1840,195 @@ export default function Distribuidores() {
         </Modal>
       )}
 
+
+      {/* Modal Registrar Carga */}
+      {cargaModal && selected && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl shadow-2xl" style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
+            <div className="flex items-center justify-between px-6 py-4" style={{borderBottom:'1px solid var(--app-card-border)'}}>
+              <div>
+                <h3 style={{color:'var(--app-text)',fontWeight:700,fontSize:15,margin:0}}>📦 Registrar carga</h3>
+                <p style={{color:'var(--app-text-secondary)',fontSize:12,margin:'2px 0 0'}}>{selected.nombre}</p>
+              </div>
+              <button onClick={() => setCargaModal(false)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--app-text-secondary)'}}>✕</button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm">{error}</div>}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Cargados (llenos) *</label>
+                  <input type="number" min="0" className="input" placeholder="0"
+                    value={cargaForm.cargados}
+                    onChange={e => setCargaForm(f => ({...f, cargados: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="label">Descargados (vacíos)</label>
+                  <input type="number" min="0" className="input" placeholder="0"
+                    value={cargaForm.descargados}
+                    onChange={e => setCargaForm(f => ({...f, descargados: e.target.value}))} />
+                </div>
+              </div>
+              <div>
+                <label className="label">Fecha</label>
+                <input type="date" className="input" value={cargaForm.fecha}
+                  onChange={e => setCargaForm(f => ({...f, fecha: e.target.value}))} />
+              </div>
+              <div>
+                <label className="label">Notas (opcional)</label>
+                <input className="input" placeholder="Observaciones..."
+                  value={cargaForm.notas}
+                  onChange={e => setCargaForm(f => ({...f, notas: e.target.value}))} />
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button onClick={() => setCargaModal(false)} className="btn-secondary flex-1">Cancelar</button>
+                <button onClick={guardarCarga} disabled={saving} className="btn-primary flex-1 justify-center">
+                  {saving ? 'Guardando...' : '✓ Registrar carga'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Registrar Abono Parcial */}
+      {abonoParciModal && selected && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl shadow-2xl" style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
+            <div className="flex items-center justify-between px-6 py-4" style={{borderBottom:'1px solid var(--app-card-border)'}}>
+              <div>
+                <h3 style={{color:'var(--app-text)',fontWeight:700,fontSize:15,margin:0}}>💵 Registrar abono</h3>
+                <p style={{color:'var(--app-text-secondary)',fontSize:12,margin:'2px 0 0'}}>{selected.nombre}</p>
+              </div>
+              <button onClick={() => setAbonoParciModal(false)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--app-text-secondary)'}}>✕</button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm">{error}</div>}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="label">Vales S/20</label>
+                  <input type="number" min="0" className="input text-center" placeholder="0"
+                    value={abonoParciForm.vales20}
+                    onChange={e => setAbonoParciForm(f => ({...f, vales20: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="label">Vales S/30</label>
+                  <input type="number" min="0" className="input text-center" placeholder="0"
+                    value={abonoParciForm.vales30}
+                    onChange={e => setAbonoParciForm(f => ({...f, vales30: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="label">Vales S/43</label>
+                  <input type="number" min="0" className="input text-center" placeholder="0"
+                    value={abonoParciForm.vales43}
+                    onChange={e => setAbonoParciForm(f => ({...f, vales43: e.target.value}))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Efectivo S/</label>
+                  <input type="number" min="0" step="0.01" className="input" placeholder="0.00"
+                    value={abonoParciForm.efectivo}
+                    onChange={e => setAbonoParciForm(f => ({...f, efectivo: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="label">Yape S/</label>
+                  <input type="number" min="0" step="0.01" className="input" placeholder="0.00"
+                    value={abonoParciForm.yape}
+                    onChange={e => setAbonoParciForm(f => ({...f, yape: e.target.value}))} />
+                </div>
+              </div>
+              <div>
+                <label className="label">Fecha</label>
+                <input type="date" className="input" value={abonoParciForm.fecha}
+                  onChange={e => setAbonoParciForm(f => ({...f, fecha: e.target.value}))} />
+              </div>
+              <div>
+                <label className="label">Notas (opcional)</label>
+                <input className="input" placeholder="Observaciones..."
+                  value={abonoParciForm.notas}
+                  onChange={e => setAbonoParciForm(f => ({...f, notas: e.target.value}))} />
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button onClick={() => setAbonoParciModal(false)} className="btn-secondary flex-1">Cancelar</button>
+                <button onClick={guardarAbonoParcial} disabled={saving} className="btn-primary flex-1 justify-center">
+                  {saving ? 'Guardando...' : '✓ Registrar abono'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Arreglar Cuentas */}
+      {arregloModal && selected && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl shadow-2xl" style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
+            <div className="flex items-center justify-between px-6 py-4" style={{borderBottom:'1px solid var(--app-card-border)'}}>
+              <div>
+                <h3 style={{color:'var(--app-text)',fontWeight:700,fontSize:15,margin:0}}>🧾 Arreglar cuentas</h3>
+                <p style={{color:'var(--app-text-secondary)',fontSize:12,margin:'2px 0 0'}}>{selected.nombre}</p>
+              </div>
+              <button onClick={() => setArregloModal(false)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--app-text-secondary)'}}>✕</button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm">{error}</div>}
+              <p style={{fontSize:12,color:'var(--app-text-secondary)'}}>Cierra la cuenta actual y registra el pago final.</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="label">Vales S/20</label>
+                  <input type="number" min="0" className="input text-center" placeholder="0"
+                    value={arregloForm.vales20}
+                    onChange={e => setArregloForm(f => ({...f, vales20: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="label">Vales S/30</label>
+                  <input type="number" min="0" className="input text-center" placeholder="0"
+                    value={arregloForm.vales30}
+                    onChange={e => setArregloForm(f => ({...f, vales30: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="label">Vales S/43</label>
+                  <input type="number" min="0" className="input text-center" placeholder="0"
+                    value={arregloForm.vales43}
+                    onChange={e => setArregloForm(f => ({...f, vales43: e.target.value}))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Efectivo S/</label>
+                  <input type="number" min="0" step="0.01" className="input" placeholder="0.00"
+                    value={arregloForm.efectivo}
+                    onChange={e => setArregloForm(f => ({...f, efectivo: e.target.value}))} />
+                </div>
+                <div>
+                  <label className="label">Yape S/</label>
+                  <input type="number" min="0" step="0.01" className="input" placeholder="0.00"
+                    value={arregloForm.yape}
+                    onChange={e => setArregloForm(f => ({...f, yape: e.target.value}))} />
+                </div>
+              </div>
+              <div>
+                <label className="label">Fecha cierre</label>
+                <input type="date" className="input" value={arregloForm.fecha}
+                  onChange={e => setArregloForm(f => ({...f, fecha: e.target.value}))} />
+              </div>
+              <div>
+                <label className="label">Notas (opcional)</label>
+                <input className="input" placeholder="Observaciones..."
+                  value={arregloForm.notas}
+                  onChange={e => setArregloForm(f => ({...f, notas: e.target.value}))} />
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button onClick={() => setArregloModal(false)} className="btn-secondary flex-1">Cancelar</button>
+                <button onClick={guardarArreglo} disabled={saving} className="btn-primary flex-1 justify-center">
+                  {saving ? 'Guardando...' : '✓ Cerrar cuenta'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal historial */}
       {modal === 'historial' && selected && (
         <ModalHistorial
