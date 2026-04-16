@@ -785,11 +785,15 @@ export default function Distribuidores() {
     const desc = parseInt(cargaForm.descargados) || 0
     if (cant <= 0) { setError('Ingresa la cantidad a cargar'); return }
     setSaving(true); setError('')
-    // Obtener precio FIFO activo
-    const { data: loteActivo } = await supabase.from('lotes_distribuidor')
-      .select('*').eq('distribuidor_id', selected.id).eq('cerrado', false)
-      .gt('cantidad_restante', 0).order('fecha', { ascending: true }).limit(1).maybeSingle()
-    const precio = loteActivo?.precio_unitario || selected.precio_base || 0
+    // Para cuenta_corriente usar precio_base del distribuidor; para autónomo usar lote FIFO
+    const esCuentaCorriente = selected.modalidad === 'cuenta_corriente'
+    let precio = selected.precio_base || 0
+    if (!esCuentaCorriente) {
+      const { data: loteActivo } = await supabase.from('lotes_distribuidor')
+        .select('*').eq('distribuidor_id', selected.id).eq('cerrado', false)
+        .gt('cantidad_restante', 0).order('fecha', { ascending: true }).limit(1).maybeSingle()
+      precio = loteActivo?.precio_unitario || selected.precio_base || 0
+    }
     const monto = cant * precio
 
     // Obtener o crear cuenta activa
