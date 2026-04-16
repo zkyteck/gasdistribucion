@@ -531,7 +531,7 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
               <h4 style={{fontSize:15,fontWeight:700,color:'var(--app-text)',margin:'0 0 12px'}}>Lotes de precio (FIFO)</h4>
               <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden'}}>
                 <div style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',background:'var(--app-card-bg-alt)',borderBottom:'1px solid var(--app-card-border)'}}>
-                  {['Fecha','Precio','Inicial','Vendidos','Restantes','Estado'].map(h => (
+                  {['Fecha','P. Venta','Inicial','Vendidos','Restantes','Estado'].map(h => (
                     <div key={h} style={{padding:'13px 12px',fontSize:14,fontWeight:800,color:'var(--app-text-secondary)',textTransform:'uppercase',borderRight:'1px solid var(--app-card-border)'}}>{h}</div>
                   ))}
                 </div>
@@ -540,7 +540,9 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
                   return (
                     <div key={lote.id} style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',borderBottom:i<lotesDistribuidor.length-1?'1px solid var(--app-card-border)':'none'}}>
                       <div style={{padding:'13px 12px',fontSize:15,fontWeight:600,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)'}}>{lote.fecha}</div>
-                      <div style={{padding:'13px 12px',fontSize:17,fontWeight:800,color:'#fb923c',borderRight:'1px solid var(--app-card-border)'}}>{lote.precio_unitario}</div>
+                      <div style={{padding:'13px 12px',fontSize:17,fontWeight:800,color:'#fb923c',borderRight:'1px solid var(--app-card-border)'}}>
+                        {lote.precio_venta ? `S/${lote.precio_venta}` : <span style={{color:'#f87171',fontSize:12}}>Sin precio</span>}
+                      </div>
                       <div style={{padding:'13px 12px',fontSize:16,fontWeight:600,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{lote.cantidad_inicial}</div>
                       <div style={{padding:'13px 12px',fontSize:17,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{lote.cantidad_vendida}</div>
                       <div style={{padding:'13px 12px',fontSize:19,fontWeight:800,color:ag?'#9ca3af':'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{lote.cantidad_restante}</div>
