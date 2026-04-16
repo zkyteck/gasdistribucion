@@ -724,7 +724,7 @@ export default function Distribuidores() {
   async function cargarCuentaCorriente(distId) {
     const [{ data: cuenta }, { data: cargas }, { data: abonos }, { data: cerradas }] = await Promise.all([
       supabase.from('cuentas_corrientes_distribuidor')
-        .select('*').eq('distribuidor_id', distId).eq('estado', 'abierta').single(),
+        .select('*').eq('distribuidor_id', distId).eq('estado', 'abierta').maybeSingle(),
       supabase.from('cargas_distribuidor')
         .select('*').eq('distribuidor_id', distId).order('fecha', { ascending: true }),
       supabase.from('abonos_distribuidor_parcial')
@@ -755,7 +755,7 @@ export default function Distribuidores() {
     // Obtener precio FIFO activo
     const { data: loteActivo } = await supabase.from('lotes_distribuidor')
       .select('*').eq('distribuidor_id', selected.id).eq('cerrado', false)
-      .gt('cantidad_restante', 0).order('fecha', { ascending: true }).limit(1).single()
+      .gt('cantidad_restante', 0).order('fecha', { ascending: true }).limit(1).maybeSingle()
     const precio = loteActivo?.precio_unitario || selected.precio_base || 0
     const monto = cant * precio
 
