@@ -778,7 +778,6 @@ export default function Distribuidores() {
       cantidad: cant,
       tipo_balon: cargaForm.tipo_balon || '10kg',
       precio_por_balon: precio,
-      total: monto,
       notas: cargaForm.notas || null
     })
 
