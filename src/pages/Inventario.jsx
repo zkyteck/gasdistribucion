@@ -481,6 +481,7 @@ export default function Inventario() {
       {/* Stock por almacén */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {almacenes.map(a => {
+          const distAutonomo = distribuidoresList.find(d => d.almacen_id === a.id && d.modalidad === 'autonomo')
           const spt5 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '5kg')
           const spt10 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '10kg')
           const spt45 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '45kg')
@@ -504,12 +505,19 @@ export default function Inventario() {
               style={{marginTop:8,padding:'5px 12px',borderRadius:8,border:'1px solid rgba(59,130,246,0.4)',background:'rgba(59,130,246,0.1)',color:'#60a5fa',fontSize:12,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:5}}>
               📋 Ver lotes
             </button>
-            {/* Desglose llenos por tipo */}
+            {/* Desglose llenos por tipo — autónomo usa stock_actual total, otros usan stock_por_tipo */}
+            {!distAutonomo && a.stock_actual > 0 && (
             <div className="flex gap-2 mt-1 flex-wrap">
               {(spt5?.stock_actual || 0) > 0 && <span className="text-xs bg-blue-900/30 text-blue-300 px-2 py-0.5 rounded-lg">🔵 5kg: {spt5.stock_actual}</span>}
               {(spt10?.stock_actual || 0) > 0 && <span className="text-xs bg-yellow-900/30 text-yellow-300 px-2 py-0.5 rounded-lg">🟡 10kg: {spt10.stock_actual}</span>}
               {(spt45?.stock_actual || 0) > 0 && <span className="text-xs bg-red-900/30 text-red-300 px-2 py-0.5 rounded-lg">🔴 45kg: {spt45.stock_actual}</span>}
             </div>
+            )}
+            {distAutonomo && a.stock_actual > 0 && (
+            <div className="flex gap-2 mt-1 flex-wrap">
+              <span className="text-xs bg-yellow-900/30 text-yellow-300 px-2 py-0.5 rounded-lg">🟡 10kg: {a.stock_actual}</span>
+            </div>
+            )}
             {/* Desglose vacíos por tipo */}
             {(a.balones_vacios || 0) > 0 && (
               <div className="flex gap-2 mt-1 flex-wrap">
@@ -1434,7 +1442,7 @@ export default function Inventario() {
                   <table style={{width:'100%',borderCollapse:'collapse'}}>
                     <thead>
                       <tr style={{background:'#1a3a2a'}}>
-                        {['Fecha','Precio/bal','Inicial','Vendidos','Restantes','Valor restante','Estado',''].map(h => (
+                        {['Fecha','P. Compra','P. Venta','Inicial','Vendidos','Restantes','Valor restante','Estado',''].map(h => (
                           <th key={h} style={{padding:'14px 16px',fontSize:14,fontWeight:700,color:'#4ade80',textAlign:'center',borderRight:'1px solid rgba(255,255,255,0.1)',letterSpacing:'0.5px',textTransform:'uppercase'}}>{h}</th>
                         ))}
                       </tr>
@@ -1442,11 +1450,14 @@ export default function Inventario() {
                     <tbody>
                       {lotesData.map((l, i) => {
                         const agotado = l.cerrado || l.cantidad_restante <= 0
-                        const valorRestante = (l.cantidad_restante || 0) * (l.precio_unitario || 0)
+                        const valorRestante = (l.cantidad_restante || 0) * (l.precio_venta || l.precio_unitario || 0)
                         const editando = editPrecioLote?.id === l.id
                         return (
                           <tr key={i} style={{borderBottom:'1px solid var(--app-card-border)',background:i%2===0?'transparent':'var(--app-row-alt)'}}>
                             <td style={{padding:'16px',fontSize:15,color:'var(--app-text)',textAlign:'center',fontWeight:600}}>{l.fecha}</td>
+                            <td style={{padding:'16px',fontSize:16,fontWeight:700,color:'#94a3b8',textAlign:'center'}}>
+                              {l.precio_unitario ? `S/${l.precio_unitario}` : '—'}
+                            </td>
                             <td style={{padding:'16px',fontSize:18,fontWeight:800,color:'#fb923c',textAlign:'center'}}>
                               {editando ? (
                                 <div style={{display:'flex',alignItems:'center',gap:4,justifyContent:'center'}}>
@@ -1457,7 +1468,7 @@ export default function Inventario() {
                                     onChange={e => setEditPrecioVal(e.target.value)} />
                                 </div>
                               ) : (
-                                l.precio_unitario ? `S/${l.precio_unitario}` : <span style={{color:'#f87171',fontSize:13}}>Sin precio</span>
+                                l.precio_venta ? `S/${l.precio_venta}` : <span style={{color:'#f87171',fontSize:13}}>Sin precio</span>
                               )}
                             </td>
                             <td style={{padding:'16px',fontSize:16,color:'var(--app-text-secondary)',textAlign:'center'}}>{l.cantidad_inicial}</td>
@@ -1478,7 +1489,7 @@ export default function Inventario() {
                                 <div style={{display:'flex',gap:4,justifyContent:'center'}}>
                                   <button onClick={async () => {
                                     setSavingPrecio(true)
-                                    await supabase.from('lotes_distribuidor').update({ precio_unitario: parseFloat(editPrecioVal) }).eq('id', l.id)
+                                    await supabase.from('lotes_distribuidor').update({ precio_venta: parseFloat(editPrecioVal) }).eq('id', l.id)
                                     setSavingPrecio(false)
                                     setEditPrecioLote(null)
                                     const dist = distribuidoresList.find(d => d.almacen_id === lotesModal.id)
@@ -1496,7 +1507,7 @@ export default function Inventario() {
                                   </button>
                                 </div>
                               ) : (
-                                <button onClick={() => { setEditPrecioLote(l); setEditPrecioVal(l.precio_unitario || '') }}
+                                <button onClick={() => { setEditPrecioLote(l); setEditPrecioVal(l.precio_venta || '') }}
                                   style={{padding:'4px 10px',borderRadius:6,border:'1px solid rgba(251,146,60,0.3)',background:'rgba(251,146,60,0.1)',color:'#fb923c',fontSize:12,cursor:'pointer'}}>
                                   ✏️ Precio
                                 </button>
@@ -1511,11 +1522,12 @@ export default function Inventario() {
                       const totalIni = lotesData.reduce((s,l) => s+(l.cantidad_inicial||0), 0)
                       const totalVend = lotesData.reduce((s,l) => s+(l.cantidad_vendida||0), 0)
                       const totalRest = lotesData.reduce((s,l) => s+(l.cantidad_restante||0), 0)
-                      const totalValor = lotesData.reduce((s,l) => s+((l.cantidad_restante||0)*(l.precio_unitario||0)), 0)
+                      const totalValor = lotesData.reduce((s,l) => s+((l.cantidad_restante||0)*(l.precio_venta||l.precio_unitario||0)), 0)
                       return (
                         <tfoot>
                           <tr style={{background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)'}}>
                             <td style={{padding:'14px 16px',fontWeight:800,color:'var(--app-text-secondary)',fontSize:15}}>TOTAL</td>
+                            <td></td>
                             <td></td>
                             <td style={{padding:'14px',fontWeight:800,color:'var(--app-text)',textAlign:'center',fontSize:16}}>{totalIni}</td>
                             <td style={{padding:'14px',fontWeight:800,color:'#60a5fa',textAlign:'center',fontSize:16}}>{totalVend}</td>
