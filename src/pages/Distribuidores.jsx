@@ -2214,19 +2214,11 @@ export default function Distribuidores() {
                       onChange={e => setAcuentaForm(f => ({...f, vales_43: e.target.value}))} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="label">📅 Fecha depósito</label>
-                    <input type="date" className="input"
-                      value={acuentaForm.fecha}
-                      onChange={e => setAcuentaForm(f => ({...f, fecha: e.target.value}))} />
-                  </div>
-                  <div>
-                    <label className="label">📦 Fecha de recojo</label>
-                    <input type="date" className="input"
-                      value={acuentaForm.fecha_recojo}
-                      onChange={e => setAcuentaForm(f => ({...f, fecha_recojo: e.target.value}))} />
-                  </div>
+                <div>
+                  <label className="label">📅 Fecha depósito</label>
+                  <input type="date" className="input"
+                    value={acuentaForm.fecha}
+                    onChange={e => setAcuentaForm(f => ({...f, fecha: e.target.value}))} />
                 </div>
                 <div>
                   <label className="label">Notas (opcional)</label>
@@ -2292,6 +2284,16 @@ export default function Distribuidores() {
                                   {r.vales_43 > 0 && <span style={{fontSize:11,background:'rgba(253,224,71,0.15)',border:'1px solid rgba(253,224,71,0.3)',borderRadius:6,padding:'2px 8px',color:'#fde047'}}>{r.vales_43} × S/43 = S/{r.vales_43*43}</span>}
                                 </div>
                                 {r.notas && <p className="text-xs text-gray-500 mt-1 italic">{r.notas}</p>}
+                                <div style={{display:'flex',alignItems:'center',gap:6,marginTop:4}}>
+                                  <span style={{fontSize:10,color:'var(--app-text-secondary)'}}>📦 Recojo:</span>
+                                  <input type="date" 
+                                    style={{fontSize:10,padding:'2px 6px',borderRadius:5,border:'1px solid var(--app-card-border)',background:'var(--app-input-bg)',color:'var(--app-text)',width:120}}
+                                    value={r.fecha_recojo || ''}
+                                    onChange={async e => {
+                                      await supabase.from('a_cuenta').update({ fecha_recojo: e.target.value || null }).eq('id', r.id)
+                                      cargarAcuentaDist(selected.id)
+                                    }} />
+                                </div>
                               </div>
                               <div style={{display:'flex',flexDirection:'column',gap:4,flexShrink:0}}>
                                 <button onClick={() => entregarAcuentaDist(r)}
