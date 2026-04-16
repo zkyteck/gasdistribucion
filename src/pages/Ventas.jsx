@@ -293,9 +293,11 @@ export default function Ventas() {
           .eq('id', form.almacen_id).single()
         if (almActual) {
           const updateData = { stock_actual: Math.max(0, (almActual.stock_actual || 0) - cant) }
-          if (!debeBalon) {
-            updateData.balones_vacios = (almActual.balones_vacios || 0) + cant
-            updateData[campoVacios] = (almActual[campoVacios] || 0) + cant
+          // Vacíos que entregó = cantidad vendida - balones que debe
+          const vaciosEntregados = debeBalon ? Math.max(0, cant - (parseInt(form.balones_credito) || cant)) : cant
+          if (vaciosEntregados > 0) {
+            updateData.balones_vacios = (almActual.balones_vacios || 0) + vaciosEntregados
+            updateData[campoVacios] = (almActual[campoVacios] || 0) + vaciosEntregados
           }
           await supabase.from('almacenes').update(updateData).eq('id', form.almacen_id)
         }
