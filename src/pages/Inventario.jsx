@@ -621,6 +621,7 @@ export default function Inventario() {
               <tbody className="divide-y divide-gray-800/50">
                 {almacenes.map(a => {
                   const esTienda = a.nombre?.toLowerCase().includes('tienda') || a.nombre?.toLowerCase().includes('principal')
+                  const esAutonomo = distribuidoresList.find(d => d.almacen_id === a.id && d.modalidad === 'autonomo')
                   const spt5 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '5kg')
                   const spt10 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '10kg')
                   const spt45 = stockPorTipo.find(s => s.almacen_id === a.id && s.tipo_balon === '45kg')
@@ -632,9 +633,10 @@ export default function Inventario() {
                       <div className="flex flex-col gap-1">
                         <span className={`text-lg font-bold ${a.stock_actual > 100 ? 'text-emerald-400' : a.stock_actual > 30 ? 'text-yellow-400' : 'text-red-400'}`}>{a.stock_actual} bal.</span>
                         <div className="flex gap-1 flex-wrap">
-                          {(spt5?.stock_actual || 0) > 0 && <span className="text-xs bg-blue-900/30 text-blue-300 px-1.5 py-0.5 rounded">5kg: {spt5.stock_actual}</span>}
-                          {(spt10?.stock_actual || 0) > 0 && <span className="text-xs bg-yellow-900/30 text-yellow-300 px-1.5 py-0.5 rounded">10kg: {spt10.stock_actual}</span>}
-                          {(spt45?.stock_actual || 0) > 0 && <span className="text-xs bg-red-900/30 text-red-300 px-1.5 py-0.5 rounded">45kg: {spt45.stock_actual}</span>}
+                          {esAutonomo && a.stock_actual > 0 && <span className="text-xs bg-yellow-900/30 text-yellow-300 px-1.5 py-0.5 rounded">10kg: {a.stock_actual}</span>}
+                          {!esAutonomo && (spt5?.stock_actual || 0) > 0 && <span className="text-xs bg-blue-900/30 text-blue-300 px-1.5 py-0.5 rounded">5kg: {spt5.stock_actual}</span>}
+                          {!esAutonomo && (spt10?.stock_actual || 0) > 0 && <span className="text-xs bg-yellow-900/30 text-yellow-300 px-1.5 py-0.5 rounded">10kg: {spt10.stock_actual}</span>}
+                          {!esAutonomo && (spt45?.stock_actual || 0) > 0 && <span className="text-xs bg-red-900/30 text-red-300 px-1.5 py-0.5 rounded">45kg: {spt45.stock_actual}</span>}
                         </div>
                       </div>
                     </td>
