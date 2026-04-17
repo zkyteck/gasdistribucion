@@ -217,6 +217,20 @@ export default function Deudas() {
     const tipoBalonAdd = deudaForm.tipo_balon || '10kg'
     const entradaHistorial = { tipo: 'deuda', fecha: deudaForm.fecha, monto, balones, tipo_balon: balones > 0 ? tipoBalonAdd : null, vales_20: vales20, vales_43: vales43, notas: deudaForm.notas || null }
     const historialAnterior = deudaPendiente.historial || []
+    // Descontar stock si hay balones adicionales
+    if (balones > 0) {
+      const { data: almsAdd } = await supabase.from('almacenes').select('id, nombre, stock_actual, vacios_5kg, vacios_10kg, vacios_45kg').eq('activo', true)
+      const almAdd = perfil?.almacen_id ? almsAdd?.find(a => a.id === perfil.almacen_id) : almsAdd?.find(a => a.nombre?.toLowerCase().includes('tienda')) || almsAdd?.[0]
+      if (almAdd) {
+        const campoVaciosAdd = tipoBalonAdd === '5kg' ? 'vacios_5kg' : tipoBalonAdd === '45kg' ? 'vacios_45kg' : 'vacios_10kg'
+        await supabase.from('almacenes').update({
+          stock_actual: Math.max(0, (almAdd.stock_actual || 0) - balones),
+          updated_at: new Date().toISOString()
+        }).eq('id', almAdd.id)
+        const { data: sptAdd } = await supabase.from('stock_por_tipo').select('stock_actual').eq('almacen_id', almAdd.id).eq('tipo_balon', tipoBalonAdd).single()
+        if (sptAdd) await supabase.from('stock_por_tipo').update({ stock_actual: Math.max(0, sptAdd.stock_actual - balones) }).eq('almacen_id', almAdd.id).eq('tipo_balon', tipoBalonAdd)
+      }
+    }
     const { error: e } = await supabase.from('deudas').update({
       monto_pendiente: (parseFloat(deudaPendiente.monto_pendiente) || 0) + monto,
       monto_original: (parseFloat(deudaPendiente.monto_original) || 0) + monto,
