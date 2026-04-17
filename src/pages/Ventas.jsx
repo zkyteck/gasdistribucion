@@ -50,6 +50,7 @@ export default function Ventas() {
   const [errorCierre, setErrorCierre] = useState('')
   const [aperturaForm, setAperturaForm] = useState({ '5kg': '', '10kg': '', '45kg': '', 'v_5kg': '', 'v_10kg': '', 'v_45kg': '' })
   const [cierreForm, setCierreForm] = useState({ '5kg': '', '10kg': '', '45kg': '' })
+  const [historialCierres, setHistorialCierres] = useState([])
 
   const [form, setForm] = useState({
     cliente_id: '', cliente_nombre: '', es_varios: false,
@@ -65,9 +66,12 @@ export default function Ventas() {
   async function cargarCierre() {
     if (!filtroCierreAlmacen) return
     setLoadingCierre(true)
-    const { data } = await supabase.from('cierres_dia')
-      .select('*').eq('almacen_id', filtroCierreAlmacen).eq('fecha', hoyPeru()).maybeSingle()
+    const [{ data }, { data: hist }] = await Promise.all([
+      supabase.from('cierres_dia').select('*').eq('almacen_id', filtroCierreAlmacen).eq('fecha', hoyPeru()).maybeSingle(),
+      supabase.from('cierres_dia').select('*').eq('almacen_id', filtroCierreAlmacen).order('fecha', { ascending: false }).limit(10)
+    ])
     setCierreHoy(data || null)
+    setHistorialCierres(hist || [])
     if (data?.llenos_apertura) {
       setAperturaForm({
         '5kg': data.llenos_apertura['5kg'] || '',
@@ -194,6 +198,11 @@ export default function Ventas() {
     setDistribuidores(dist || [])
     setLotesDistribuidor(lotes || [])
     setLoading(false)
+    // Preseleccionar Tienda Principal
+    if (!filtroCierreAlmacen && a?.length) {
+      const tienda = a.find(al => al.nombre?.toLowerCase().includes('tienda') || al.nombre?.toLowerCase().includes('principal')) || a[0]
+      if (tienda) setFiltroCierreAlmacen(tienda.id)
+    }
   }
 
   function getPrecio(precioTipoId, tipoBalon) {
@@ -658,6 +667,47 @@ export default function Ventas() {
 
             </div>
           ))}
+        </div>
+      )}
+
+      {/* HISTORIAL CIERRES */}
+      {tabActivo === 'cierre' && filtroCierreAlmacen && historialCierres.length > 0 && (
+        <div className="card p-0 overflow-hidden">
+          <div className="px-5 py-3 border-b border-gray-800">
+            <h3 className="text-sm font-semibold text-white">📅 Historial de cierres</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-gray-800">
+                {['Fecha','Apertura 5kg','Apertura 10kg','Apertura 45kg','Cierre 5kg','Cierre 10kg','Cierre 45kg','Ef. 5kg','Ef. 10kg','Ef. 45kg','Estado'].map(h => (
+                  <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-3 py-2">{h}</th>
+                ))}
+              </tr></thead>
+              <tbody className="divide-y divide-gray-800/50">
+                {historialCierres.map(c => (
+                  <tr key={c.id} className="hover:bg-gray-800/30">
+                    <td className="px-3 py-2 text-white font-medium">{c.fecha}</td>
+                    <td className="px-3 py-2 text-gray-400">{c.llenos_apertura?.['5kg'] ?? '—'}</td>
+                    <td className="px-3 py-2 text-gray-400">{c.llenos_apertura?.['10kg'] ?? '—'}</td>
+                    <td className="px-3 py-2 text-gray-400">{c.llenos_apertura?.['45kg'] ?? '—'}</td>
+                    <td className="px-3 py-2 text-gray-400">{c.llenos_cierre?.['5kg'] ?? '—'}</td>
+                    <td className="px-3 py-2 text-gray-400">{c.llenos_cierre?.['10kg'] ?? '—'}</td>
+                    <td className="px-3 py-2 text-gray-400">{c.llenos_cierre?.['45kg'] ?? '—'}</td>
+                    <td className="px-3 py-2 text-emerald-400 font-bold">{c.ventas_efectivo?.['5kg'] ?? '—'}</td>
+                    <td className="px-3 py-2 text-emerald-400 font-bold">{c.ventas_efectivo?.['10kg'] ?? '—'}</td>
+                    <td className="px-3 py-2 text-emerald-400 font-bold">{c.ventas_efectivo?.['45kg'] ?? '—'}</td>
+                    <td className="px-3 py-2">
+                      {c.cierre_registrado
+                        ? <span className="text-xs bg-emerald-900/40 text-emerald-400 px-2 py-0.5 rounded-full">✅ Cerrado</span>
+                        : c.apertura_registrada
+                        ? <span className="text-xs bg-yellow-900/40 text-yellow-400 px-2 py-0.5 rounded-full">🌅 Abierto</span>
+                        : <span className="text-xs bg-gray-700 text-gray-400 px-2 py-0.5 rounded-full">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
