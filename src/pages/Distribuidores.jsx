@@ -792,10 +792,12 @@ export default function Distribuidores() {
     // Para cuenta_corriente usar precio_base del distribuidor; para autónomo usar lote FIFO
     const esCuentaCorriente = selected.modalidad === 'cuenta_corriente'
     let precio = selected.precio_base || 0
+    let loteActivo = null
     if (!esCuentaCorriente) {
-      const { data: loteActivo } = await supabase.from('lotes_distribuidor')
+      const { data: loteData } = await supabase.from('lotes_distribuidor')
         .select('*').eq('distribuidor_id', selected.id).eq('cerrado', false)
         .gt('cantidad_restante', 0).order('fecha', { ascending: true }).limit(1).maybeSingle()
+      loteActivo = loteData
       precio = loteActivo?.precio_unitario || selected.precio_base || 0
     }
     const monto = cant * precio
@@ -815,8 +817,10 @@ export default function Distribuidores() {
     // Registrar carga
     await supabase.from('cargas_distribuidor').insert({
       distribuidor_id: selected.id,
+      cuenta_id: cuentaId || null,
       fecha: cargaForm.fecha || hoyPeru(),
       cantidad: cant,
+      descargados: desc,
       tipo_balon: cargaForm.tipo_balon || '10kg',
       precio_por_balon: precio,
       notas: cargaForm.notas || null
@@ -839,8 +843,8 @@ export default function Distribuidores() {
         .eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg')
     }
 
-    // Aplicar FIFO al lote
-    if (cant > 0 && loteActivo) {
+    // Aplicar FIFO al lote (solo para autónomo)
+    if (!esCuentaCorriente && cant > 0 && loteActivo) {
       const nuevaVendida = (loteActivo.cantidad_vendida || 0) + cant
       const nuevaRestante = Math.max(0, loteActivo.cantidad_restante - cant)
       await supabase.from('lotes_distribuidor').update({
