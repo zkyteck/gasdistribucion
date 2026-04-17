@@ -474,11 +474,22 @@ export default function Ventas() {
       const montoDeuda = debeDinero ? totalDeuda : 0
       const balonesDeuda = debeBalon ? (parseInt(form.balones_credito) || cant) : 0
 
-      // Buscar deuda activa del mismo cliente
-      const { data: deudaExistente } = await supabase.from('deudas')
-        .select('*').in('estado', ['activa', 'pagada_parcial'])
-        .ilike('nombre_deudor', (form.cliente_nombre || 'Cliente Varios').trim())
-        .limit(1).single()
+      // Buscar deuda activa del mismo cliente — primero por cliente_id, luego por nombre
+      let deudaExistente = null
+      if (form.cliente_id) {
+        const { data: d1 } = await supabase.from('deudas')
+          .select('*').in('estado', ['activa', 'pagada_parcial'])
+          .eq('cliente_id', form.cliente_id)
+          .limit(1).maybeSingle()
+        deudaExistente = d1
+      }
+      if (!deudaExistente) {
+        const { data: d2 } = await supabase.from('deudas')
+          .select('*').in('estado', ['activa', 'pagada_parcial'])
+          .ilike('nombre_deudor', (form.cliente_nombre || 'Cliente Varios').trim())
+          .limit(1).maybeSingle()
+        deudaExistente = d2
+      }
 
       if (deudaExistente) {
         // Sumar a deuda existente
@@ -565,23 +576,19 @@ export default function Ventas() {
                 <p className="text-xs text-gray-500">Cuenta físicamente los balones al inicio del día y ajusta el stock.</p>
                 {errorCierre && <div className="text-red-400 text-xs bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">{errorCierre}</div>}
                 <div className="space-y-3">
-                  {/* Llenos */}
-                  <p className="text-xs font-semibold text-green-400 uppercase tracking-wide">🟢 Llenos</p>
                   {['5kg','10kg','45kg'].map(tipo => (
                     <div key={tipo} className="flex items-center gap-3">
                       <span className="text-sm text-gray-400 w-10">{tipo}</span>
-                      <input type="number" min="0" className="input flex-1" placeholder="0"
+                      <input type="number" min="0" className="input flex-1" placeholder="0 llenos"
                         value={aperturaForm[tipo]}
                         onChange={e => setAperturaForm(f => ({...f, [tipo]: e.target.value}))} />
                       <span className="text-xs text-gray-600">llenos</span>
                     </div>
                   ))}
-                  {/* Vacíos */}
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-2">⚪ Vacíos</p>
                   {[['v_5kg','5kg'],['v_10kg','10kg'],['v_45kg','45kg']].map(([key,tipo]) => (
                     <div key={key} className="flex items-center gap-3">
                       <span className="text-sm text-gray-400 w-10">{tipo}</span>
-                      <input type="number" min="0" className="input flex-1" placeholder="0"
+                      <input type="number" min="0" className="input flex-1" placeholder="0 vacíos"
                         value={aperturaForm[key]}
                         onChange={e => setAperturaForm(f => ({...f, [key]: e.target.value}))} />
                       <span className="text-xs text-gray-600">vacíos</span>
