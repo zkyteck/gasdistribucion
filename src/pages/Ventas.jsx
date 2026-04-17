@@ -42,6 +42,14 @@ export default function Ventas() {
   const [error, setError] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [filtroFecha, setFiltroFecha] = useState(hoyPeru())
+  const [tabActivo, setTabActivo] = useState('ventas')
+  const [filtroCierreAlmacen, setFiltroCierreAlmacen] = useState('')
+  const [cierreHoy, setCierreHoy] = useState(null)
+  const [loadingCierre, setLoadingCierre] = useState(false)
+  const [savingCierre, setSavingCierre] = useState(false)
+  const [errorCierre, setErrorCierre] = useState('')
+  const [aperturaForm, setAperturaForm] = useState({ '5kg': '', '10kg': '', '45kg': '', vacios: '' })
+  const [cierreForm, setCierreForm] = useState({ '5kg': '', '10kg': '', '45kg': '' })
 
   const [form, setForm] = useState({
     cliente_id: '', cliente_nombre: '', es_varios: false,
@@ -52,6 +60,112 @@ export default function Ventas() {
   })
 
   useEffect(() => { cargar() }, [filtroFecha])
+  useEffect(() => { if (filtroCierreAlmacen) cargarCierre() }, [filtroCierreAlmacen])
+
+  async function cargarCierre() {
+    if (!filtroCierreAlmacen) return
+    setLoadingCierre(true)
+    const { data } = await supabase.from('cierres_dia')
+      .select('*').eq('almacen_id', filtroCierreAlmacen).eq('fecha', hoyPeru()).maybeSingle()
+    setCierreHoy(data || null)
+    if (data?.llenos_apertura) {
+      setAperturaForm({
+        '5kg': data.llenos_apertura['5kg'] || '',
+        '10kg': data.llenos_apertura['10kg'] || '',
+        '45kg': data.llenos_apertura['45kg'] || '',
+        vacios: data.vacios_apertura || ''
+      })
+    }
+    setLoadingCierre(false)
+  }
+
+  async function guardarApertura() {
+    if (!filtroCierreAlmacen) { setErrorCierre('Selecciona un almacén'); return }
+    setSavingCierre(true); setErrorCierre('')
+    const llenos = { '5kg': parseInt(aperturaForm['5kg'])||0, '10kg': parseInt(aperturaForm['10kg'])||0, '45kg': parseInt(aperturaForm['45kg'])||0 }
+    const vacios = parseInt(aperturaForm.vacios) || 0
+    const totalLlenos = llenos['5kg'] + llenos['10kg'] + llenos['45kg']
+    // Ajustar stock en almacén
+    await supabase.from('almacenes').update({ stock_actual: totalLlenos, balones_vacios: vacios, updated_at: new Date().toISOString() }).eq('id', filtroCierreAlmacen)
+    // Actualizar stock_por_tipo
+    for (const tipo of ['5kg', '10kg', '45kg']) {
+      const { data: spt } = await supabase.from('stock_por_tipo').select('id').eq('almacen_id', filtroCierreAlmacen).eq('tipo_balon', tipo).maybeSingle()
+      if (spt) await supabase.from('stock_por_tipo').update({ stock_actual: llenos[tipo] }).eq('almacen_id', filtroCierreAlmacen).eq('tipo_balon', tipo)
+    }
+    // Guardar apertura
+    const { error: e } = await supabase.from('cierres_dia').upsert({
+      almacen_id: filtroCierreAlmacen, fecha: hoyPeru(),
+      llenos_apertura: llenos, vacios_apertura: vacios,
+      apertura_registrada: true, usuario_id: perfil?.id || null,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'almacen_id,fecha' })
+    setSavingCierre(false)
+    if (e) { setErrorCierre(e.message); return }
+    await cargarCierre(); cargar()
+  }
+
+  async function guardarCierre() {
+    if (!filtroCierreAlmacen) { setErrorCierre('Selecciona un almacén'); return }
+    if (!cierreHoy?.apertura_registrada) { setErrorCierre('Primero registra la apertura del día'); return }
+    setSavingCierre(true); setErrorCierre('')
+    const llenos_cierre = { '5kg': parseInt(cierreForm['5kg'])||0, '10kg': parseInt(cierreForm['10kg'])||0, '45kg': parseInt(cierreForm['45kg'])||0 }
+    const llenos_apertura = cierreHoy.llenos_apertura || {}
+    // Calcular créditos del día registrados
+    const hoyInicio = hoyPeru() + 'T00:00:00-05:00'
+    const hoyFin = hoyPeru() + 'T23:59:59-05:00'
+    const { data: ventasHoy } = await supabase.from('ventas')
+      .select('cantidad, tipo_balon, metodo_pago')
+      .eq('almacen_id', filtroCierreAlmacen)
+      .gte('fecha', hoyInicio).lte('fecha', hoyFin)
+      .in('metodo_pago', ['credito'])
+    // Créditos tipo dinero y ambos (vacío ya entró al almacén)
+    const creditosDinero = { '5kg': 0, '10kg': 0, '45kg': 0 }
+    ;(ventasHoy || []).forEach(v => { creditosDinero[v.tipo_balon || '10kg'] = (creditosDinero[v.tipo_balon || '10kg'] || 0) + v.cantidad })
+    // Calcular ventas efectivo = apertura - cierre - créditos_dinero
+    const ventas_efectivo = {}
+    let monto_efectivo = 0
+    for (const tipo of ['5kg', '10kg', '45kg']) {
+      const vendido = Math.max(0, (llenos_apertura[tipo]||0) - (llenos_cierre[tipo]||0) - (creditosDinero[tipo]||0))
+      ventas_efectivo[tipo] = vendido
+      // Calcular monto buscando precio promedio del día
+      const { data: vEfectivo } = await supabase.from('ventas').select('precio_unitario').eq('almacen_id', filtroCierreAlmacen).eq('tipo_balon', tipo).eq('metodo_pago', 'efectivo').gte('fecha', hoyInicio).lte('fecha', hoyFin).limit(1).maybeSingle()
+      const precio = vEfectivo?.precio_unitario || 0
+      monto_efectivo += vendido * precio
+    }
+    // Registrar ventas efectivo acumuladas por tipo
+    for (const tipo of ['5kg', '10kg', '45kg']) {
+      if (ventas_efectivo[tipo] > 0) {
+        const { data: precioRef } = await supabase.from('ventas').select('precio_unitario').eq('almacen_id', filtroCierreAlmacen).eq('tipo_balon', tipo).neq('metodo_pago', 'credito').gte('fecha', hoyInicio).lte('fecha', hoyFin).limit(1).maybeSingle()
+        const precio = precioRef?.precio_unitario || 0
+        if (precio > 0) {
+          await supabase.from('ventas').insert({
+            almacen_id: filtroCierreAlmacen, tipo_balon: tipo,
+            fecha: hoyPeru() + 'T20:00:00-05:00',
+            cantidad: ventas_efectivo[tipo], precio_unitario: precio,
+            metodo_pago: 'efectivo',
+            notas: `Cierre del día — ${ventas_efectivo[tipo]} bal. ${tipo}`,
+            usuario_id: perfil?.id || null
+          })
+        }
+      }
+    }
+    // Actualizar stock al conteo nocturno
+    const totalCierre = llenos_cierre['5kg'] + llenos_cierre['10kg'] + llenos_cierre['45kg']
+    await supabase.from('almacenes').update({ stock_actual: totalCierre, updated_at: new Date().toISOString() }).eq('id', filtroCierreAlmacen)
+    for (const tipo of ['5kg', '10kg', '45kg']) {
+      await supabase.from('stock_por_tipo').update({ stock_actual: llenos_cierre[tipo] }).eq('almacen_id', filtroCierreAlmacen).eq('tipo_balon', tipo)
+    }
+    // Guardar cierre
+    const { error: e } = await supabase.from('cierres_dia').upsert({
+      almacen_id: filtroCierreAlmacen, fecha: hoyPeru(),
+      llenos_cierre, ventas_efectivo, ventas_credito_dinero: creditosDinero,
+      monto_efectivo, cierre_registrado: true,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'almacen_id,fecha' })
+    setSavingCierre(false)
+    if (e) { setErrorCierre(e.message); return }
+    await cargarCierre(); cargar()
+  }
 
   async function cargar() {
     setLoading(true)
@@ -407,6 +521,142 @@ export default function Ventas() {
         <button onClick={abrirModal} className="btn-primary"><Plus className="w-4 h-4" />Nueva venta</button>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-gray-800 pb-0">
+        {[['ventas','📋 Ventas'],['cierre','🌙 Apertura / Cierre']].map(([id,label]) => (
+          <button key={id} onClick={() => setTabActivo(id)}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-all border-b-2 ${tabActivo===id ? 'border-blue-500 text-blue-400 bg-blue-900/20' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* TAB APERTURA/CIERRE */}
+      {tabActivo === 'cierre' && (
+        <div className="space-y-5">
+          {/* Selector almacén */}
+          <div className="flex items-center gap-3">
+            <div>
+              <label className="label">Almacén</label>
+              <select className="input" value={filtroCierreAlmacen} onChange={e => setFiltroCierreAlmacen(e.target.value)}>
+                <option value="">— Selecciona almacén —</option>
+                {almacenes.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+              </select>
+            </div>
+            {filtroCierreAlmacen && <button onClick={cargarCierre} className="btn-secondary mt-5 text-xs">🔄 Actualizar</button>}
+          </div>
+
+          {filtroCierreAlmacen && (
+            loadingCierre ? <div className="text-gray-500 text-sm">Cargando...</div> : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+              {/* APERTURA */}
+              <div className="card p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🌅</span>
+                  <h3 className="text-white font-semibold">Apertura del día</h3>
+                  {cierreHoy?.apertura_registrada && <span className="text-xs bg-emerald-900/40 text-emerald-400 px-2 py-0.5 rounded-full">✅ Registrada</span>}
+                </div>
+                <p className="text-xs text-gray-500">Cuenta físicamente los balones al inicio del día y ajusta el stock.</p>
+                {errorCierre && <div className="text-red-400 text-xs bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">{errorCierre}</div>}
+                <div className="space-y-3">
+                  {['5kg','10kg','45kg'].map(tipo => (
+                    <div key={tipo} className="flex items-center gap-3">
+                      <span className="text-sm text-gray-400 w-10">{tipo}</span>
+                      <input type="number" min="0" className="input flex-1" placeholder="0 llenos"
+                        value={aperturaForm[tipo]}
+                        onChange={e => setAperturaForm(f => ({...f, [tipo]: e.target.value}))} />
+                      <span className="text-xs text-gray-600">llenos</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-400 w-10">Vacíos</span>
+                    <input type="number" min="0" className="input flex-1" placeholder="0 vacíos"
+                      value={aperturaForm.vacios}
+                      onChange={e => setAperturaForm(f => ({...f, vacios: e.target.value}))} />
+                    <span className="text-xs text-gray-600">vacíos</span>
+                  </div>
+                </div>
+                <button onClick={guardarApertura} disabled={savingCierre}
+                  className="btn-primary w-full justify-center">
+                  {savingCierre ? 'Guardando...' : '✓ Registrar apertura y ajustar stock'}
+                </button>
+              </div>
+
+              {/* CIERRE */}
+              <div className="card p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🌙</span>
+                  <h3 className="text-white font-semibold">Cierre del día</h3>
+                  {cierreHoy?.cierre_registrado && <span className="text-xs bg-blue-900/40 text-blue-400 px-2 py-0.5 rounded-full">✅ Cerrado</span>}
+                </div>
+                <p className="text-xs text-gray-500">Cuenta los llenos al final del día. Se calcularán automáticamente las ventas en efectivo.</p>
+
+                {cierreHoy?.apertura_registrada && (
+                  <div className="bg-gray-800/50 rounded-lg p-3 text-xs space-y-1">
+                    <p className="text-gray-400 font-semibold">Apertura registrada:</p>
+                    {['5kg','10kg','45kg'].map(t => (
+                      (cierreHoy.llenos_apertura?.[t] || 0) > 0 &&
+                      <p key={t} className="text-gray-500">{t}: <span className="text-white font-bold">{cierreHoy.llenos_apertura[t]}</span> llenos</p>
+                    ))}
+                  </div>
+                )}
+
+                {!cierreHoy?.apertura_registrada && (
+                  <div className="bg-yellow-900/20 border border-yellow-800/50 rounded-lg p-3 text-xs text-yellow-400">
+                    ⚠️ Primero registra la apertura del día
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  {['5kg','10kg','45kg'].map(tipo => (
+                    <div key={tipo} className="flex items-center gap-3">
+                      <span className="text-sm text-gray-400 w-10">{tipo}</span>
+                      <input type="number" min="0" className="input flex-1" placeholder="0 llenos"
+                        value={cierreForm[tipo]}
+                        onChange={e => setCierreForm(f => ({...f, [tipo]: e.target.value}))}
+                        disabled={!cierreHoy?.apertura_registrada} />
+                      <span className="text-xs text-gray-600">llenos</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Preview ventas calculadas */}
+                {cierreHoy?.apertura_registrada && (cierreForm['5kg'] || cierreForm['10kg'] || cierreForm['45kg']) && (() => {
+                  const apertura = cierreHoy.llenos_apertura || {}
+                  const credHoy = ventas.filter(v => v.metodo_pago === 'credito')
+                  const credPorTipo = { '5kg': 0, '10kg': 0, '45kg': 0 }
+                  credHoy.forEach(v => { credPorTipo[v.tipo_balon || '10kg'] += v.cantidad })
+                  return (
+                    <div className="bg-emerald-900/20 border border-emerald-800/50 rounded-lg p-3 space-y-1">
+                      <p className="text-xs text-emerald-400 font-semibold">📊 Ventas en efectivo estimadas:</p>
+                      {['5kg','10kg','45kg'].map(tipo => {
+                        const vendido = Math.max(0, (apertura[tipo]||0) - (parseInt(cierreForm[tipo])||0) - (credPorTipo[tipo]||0))
+                        return vendido > 0 ? (
+                          <p key={tipo} className="text-xs text-gray-300">{tipo}: <span className="text-emerald-400 font-bold">{vendido} bal.</span> <span className="text-gray-500">(apertura {apertura[tipo]||0} - cierre {cierreForm[tipo]||0} - créditos {credPorTipo[tipo]||0})</span></p>
+                        ) : null
+                      })}
+                      {credHoy.length > 0 && (
+                        <p className="text-xs text-orange-400 mt-1">💳 Créditos del día: {credHoy.reduce((s,v)=>s+v.cantidad,0)} bal.</p>
+                      )}
+                    </div>
+                  )
+                })()}
+
+                <button onClick={guardarCierre} disabled={savingCierre || !cierreHoy?.apertura_registrada}
+                  className="btn-primary w-full justify-center disabled:opacity-40">
+                  {savingCierre ? 'Guardando...' : '🌙 Registrar cierre del día'}
+                </button>
+              </div>
+
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* TAB VENTAS — solo se muestra si tab es ventas */}
+      {tabActivo === 'ventas' && (<>
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="flex items-end gap-2">
           <div><label className="label">Filtrar por fecha</label><input type="date" className="input" value={filtroFecha} onChange={e => setFiltroFecha(e.target.value)} /></div>
@@ -496,6 +746,7 @@ export default function Ventas() {
             </>
           )}
       </div>
+      </>)}
 
       {modal && (
         <Modal title="Registrar venta" onClose={() => setModal(false)} wide>
