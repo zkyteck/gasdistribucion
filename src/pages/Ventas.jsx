@@ -48,7 +48,7 @@ export default function Ventas() {
   const [loadingCierre, setLoadingCierre] = useState(false)
   const [savingCierre, setSavingCierre] = useState(false)
   const [errorCierre, setErrorCierre] = useState('')
-  const [aperturaForm, setAperturaForm] = useState({ '5kg': '', '10kg': '', '45kg': '', vacios: '' })
+  const [aperturaForm, setAperturaForm] = useState({ '5kg': '', '10kg': '', '45kg': '', 'v_5kg': '', 'v_10kg': '', 'v_45kg': '' })
   const [cierreForm, setCierreForm] = useState({ '5kg': '', '10kg': '', '45kg': '' })
 
   const [form, setForm] = useState({
@@ -73,7 +73,9 @@ export default function Ventas() {
         '5kg': data.llenos_apertura['5kg'] || '',
         '10kg': data.llenos_apertura['10kg'] || '',
         '45kg': data.llenos_apertura['45kg'] || '',
-        vacios: data.vacios_apertura || ''
+        'v_5kg': data.llenos_apertura?.v_5kg || '',
+        'v_10kg': data.llenos_apertura?.v_10kg || '',
+        'v_45kg': data.llenos_apertura?.v_45kg || ''
       })
     }
     setLoadingCierre(false)
@@ -83,10 +85,13 @@ export default function Ventas() {
     if (!filtroCierreAlmacen) { setErrorCierre('Selecciona un almacén'); return }
     setSavingCierre(true); setErrorCierre('')
     const llenos = { '5kg': parseInt(aperturaForm['5kg'])||0, '10kg': parseInt(aperturaForm['10kg'])||0, '45kg': parseInt(aperturaForm['45kg'])||0 }
-    const vacios = parseInt(aperturaForm.vacios) || 0
+    const vacios5 = parseInt(aperturaForm['v_5kg']) || 0
+    const vacios10 = parseInt(aperturaForm['v_10kg']) || 0
+    const vacios45 = parseInt(aperturaForm['v_45kg']) || 0
+    const vacios = vacios5 + vacios10 + vacios45
     const totalLlenos = llenos['5kg'] + llenos['10kg'] + llenos['45kg']
     // Ajustar stock en almacén
-    await supabase.from('almacenes').update({ stock_actual: totalLlenos, balones_vacios: vacios, updated_at: new Date().toISOString() }).eq('id', filtroCierreAlmacen)
+    await supabase.from('almacenes').update({ stock_actual: totalLlenos, balones_vacios: vacios, vacios_5kg: vacios5, vacios_10kg: vacios10, vacios_45kg: vacios45, updated_at: new Date().toISOString() }).eq('id', filtroCierreAlmacen)
     // Actualizar stock_por_tipo
     for (const tipo of ['5kg', '10kg', '45kg']) {
       const { data: spt } = await supabase.from('stock_por_tipo').select('id').eq('almacen_id', filtroCierreAlmacen).eq('tipo_balon', tipo).maybeSingle()
@@ -569,13 +574,15 @@ export default function Ventas() {
                       <span className="text-xs text-gray-600">llenos</span>
                     </div>
                   ))}
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-gray-400 w-10">Vacíos</span>
-                    <input type="number" min="0" className="input flex-1" placeholder="0 vacíos"
-                      value={aperturaForm.vacios}
-                      onChange={e => setAperturaForm(f => ({...f, vacios: e.target.value}))} />
-                    <span className="text-xs text-gray-600">vacíos</span>
-                  </div>
+                  {[['v_5kg','5kg'],['v_10kg','10kg'],['v_45kg','45kg']].map(([key,tipo]) => (
+                    <div key={key} className="flex items-center gap-3">
+                      <span className="text-sm text-gray-400 w-10">{tipo}</span>
+                      <input type="number" min="0" className="input flex-1" placeholder="0 vacíos"
+                        value={aperturaForm[key]}
+                        onChange={e => setAperturaForm(f => ({...f, [key]: e.target.value}))} />
+                      <span className="text-xs text-gray-600">vacíos</span>
+                    </div>
+                  ))}
                 </div>
                 <button onClick={guardarApertura} disabled={savingCierre}
                   className="btn-primary w-full justify-center">
