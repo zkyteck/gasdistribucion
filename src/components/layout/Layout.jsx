@@ -1,60 +1,25 @@
-import { useState } from 'react'
+// src/components/layout/Layout.jsx
+import { useState, useCallback } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
-import {
-  LayoutDashboard, ShoppingCart, Ticket, ClipboardList, Users,
-  CreditCard, Package, Truck, Warehouse, BarChart3, Settings,
-  Palette, LogOut, MoreHorizontal, X, Mail
-} from 'lucide-react'
-
-// ── Definición completa de items con su clave de permiso ─────────────────────
-// permiso: null  → siempre visible (todos)
-// permiso: 'x'   → solo si perfil.permisos.x === true  (o admin)
-// adminOnly: true → solo admin, ignorando permisos de trabajador
-const ALL_ITEMS = [
-  { to: '/dashboard',      icon: LayoutDashboard, label: 'Inicio',         permiso: null },
-  { to: '/ventas',         icon: ShoppingCart,    label: 'Ventas',         permiso: 'ventas' },
-  { to: '/vales',          icon: Ticket,          label: 'Vales',          permiso: 'vales' },
-  { to: '/acuenta',        icon: ClipboardList,   label: 'A Cuenta',       permiso: 'acuenta' },
-  { to: '/clientes',       icon: Users,           label: 'Clientes',       permiso: 'clientes' },
-  { to: '/deudas',         icon: CreditCard,      label: 'Deudas',         permiso: 'deudas' },
-  { to: '/inventario',     icon: Package,         label: 'Inventario',     permiso: 'inventario',     adminOnly: true },
-  { to: '/distribuidores', icon: Truck,           label: 'Distribuidores', permiso: 'distribuidores', adminOnly: true },
-  { to: '/almacenes',      icon: Warehouse,       label: 'Almacenes',      permiso: 'almacenes',      adminOnly: true },
-  { to: '/reportes',       icon: BarChart3,       label: 'Reportes',       permiso: 'reportes',       adminOnly: true },
-  { to: '/configuracion',  icon: Settings,        label: 'Configuración',  permiso: 'configuracion',  adminOnly: true },
-  { to: '/apariencia',     icon: Palette,         label: 'Apariencia',     permiso: null },
-]
-
-// Items fijos en la barra inferior (los más usados)
-const BOTTOM_FIXED = ['/dashboard', '/ventas', '/deudas', '/acuenta', '/clientes']
-
-// ── Hook: filtra items según rol y permisos ───────────────────────────────────
-function useItemsVisibles() {
-  const { perfil } = useAuth()
-  const isAdmin = perfil?.rol === 'admin'
-  const permisos = perfil?.permisos || {}
-
-  return ALL_ITEMS.filter(item => {
-    if (isAdmin) return true                          // admin ve todo
-    if (item.adminOnly) return false                  // trabajador nunca ve adminOnly
-    if (item.permiso === null) return true            // siempre visible
-    return permisos[item.permiso] === true            // solo si tiene permiso
-  })
-}
+import { LogOut, MoreHorizontal, X, Mail } from 'lucide-react'
+import { useItemsVisibles, BOTTOM_FIXED } from './navConfig'
 
 // ── Drawer "Más" ──────────────────────────────────────────────────────────────
 function BottomDrawer({ open, onClose, extraItems }) {
   const { perfil, signOut } = useAuth()
   const navigate = useNavigate()
 
-  async function handleSignOut() {
+  const handleSignOut = useCallback(async () => {
     onClose()
     await signOut()
     navigate('/login')
-  }
+  }, [onClose, signOut, navigate])
+
+  const inicial = perfil?.nombre?.charAt(0)?.toUpperCase() || 'U'
+  const tieneCorreo = perfil?.rol === 'admin' || perfil?.permisos?.correo
 
   return (
     <>
@@ -80,6 +45,7 @@ function BottomDrawer({ open, onClose, extraItems }) {
         maxHeight: '80vh',
         overflowY: 'auto',
       }}>
+
         {/* Handle */}
         <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px' }}>
           <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--app-card-border)' }} />
@@ -99,28 +65,32 @@ function BottomDrawer({ open, onClose, extraItems }) {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: '#fff', fontWeight: 700, fontSize: 14,
             }}>
-              {perfil?.nombre?.charAt(0)?.toUpperCase() || 'U'}
+              {inicial}
             </div>
             <div>
               <p style={{ color: 'var(--app-text)', fontSize: 14, fontWeight: 600, margin: 0 }}>
                 {perfil?.nombre || 'Usuario'}
               </p>
               <p style={{ color: 'var(--app-text-secondary)', fontSize: 11, margin: 0, textTransform: 'capitalize' }}>
-                {perfil?.rol || 'trabajador'} {perfil?.almacenes?.nombre ? `· ${perfil.almacenes.nombre}` : ''}
+                {perfil?.rol || 'trabajador'}
+                {perfil?.almacenes?.nombre ? ` · ${perfil.almacenes.nombre}` : ''}
               </p>
             </div>
           </div>
-          <button onClick={onClose} style={{
-            background: 'var(--app-card-border)', border: 'none', cursor: 'pointer',
-            borderRadius: '50%', width: 30, height: 30,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--app-text-secondary)',
-          }}>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'var(--app-card-border)', border: 'none', cursor: 'pointer',
+              borderRadius: '50%', width: 30, height: 30,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--app-text-secondary)',
+            }}
+          >
             <X style={{ width: 16, height: 16 }} />
           </button>
         </div>
 
-        {/* Items extras (los que no caben en barra fija) */}
+        {/* Items extras */}
         {extraItems.length > 0 ? (
           <div style={{ padding: '12px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {extraItems.map(({ to, icon: Icon, label }) => (
@@ -152,7 +122,7 @@ function BottomDrawer({ open, onClose, extraItems }) {
         )}
 
         {/* Correo */}
-        {(perfil?.rol === 'admin' || perfil?.permisos?.correo) && (
+        {tieneCorreo && (
           <div style={{ padding: '4px 16px 8px' }}>
             <a
               href="https://outlook.live.com"
@@ -202,10 +172,11 @@ function BottomNav() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const itemsVisibles = useItemsVisibles()
 
-  // Separar: fijos (los que están en BOTTOM_FIXED y el usuario tiene acceso)
   const fixedItems = itemsVisibles.filter(i => BOTTOM_FIXED.includes(i.to))
-  // Extra: los que no están en la barra fija van al drawer
   const extraItems = itemsVisibles.filter(i => !BOTTOM_FIXED.includes(i.to))
+
+  const openDrawer = useCallback(() => setDrawerOpen(true), [])
+  const closeDrawer = useCallback(() => setDrawerOpen(false), [])
 
   return (
     <>
@@ -217,7 +188,6 @@ function BottomNav() {
         paddingBottom: 'env(safe-area-inset-bottom)',
         backdropFilter: 'blur(12px)',
       }}>
-        {/* Items fijos visibles */}
         {fixedItems.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
@@ -257,9 +227,9 @@ function BottomNav() {
           </NavLink>
         ))}
 
-        {/* Botón Más — siempre visible */}
+        {/* Botón Más */}
         <button
-          onClick={() => setDrawerOpen(true)}
+          onClick={openDrawer}
           style={{
             flex: 1, display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
@@ -281,7 +251,7 @@ function BottomNav() {
 
       <BottomDrawer
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={closeDrawer}
         extraItems={extraItems}
       />
     </>
@@ -301,13 +271,14 @@ export default function Layout() {
       {/* Main */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <Topbar />
-        <main style={{
-          flex: 1,
-          padding: '1rem',
-          overflowY: 'auto',
-          background: 'var(--app-main-bg)',
-          paddingBottom: 'calc(80px + env(safe-area-inset-bottom))',
-        }}
+        <main
+          style={{
+            flex: 1,
+            padding: '1rem',
+            overflowY: 'auto',
+            background: 'var(--app-main-bg)',
+            paddingBottom: 'calc(80px + env(safe-area-inset-bottom))',
+          }}
           className="lg:pb-6 lg:p-6"
         >
           <Outlet />
