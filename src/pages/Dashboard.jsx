@@ -1,309 +1,449 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import {
-  TrendingUp, Package, Ticket, AlertCircle, Truck,
-  ShoppingCart, ArrowUpRight, ArrowDownRight, RefreshCw
+  TrendingUp, Package, Ticket, AlertCircle, ShoppingCart,
+  RefreshCw, ArrowUpRight, ArrowDownRight, Truck, AlertTriangle,
 } from 'lucide-react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, BarChart, Bar
+  Tooltip, ResponsiveContainer, BarChart, Bar,
 } from 'recharts'
 import { format, subDays } from 'date-fns'
 import { es } from 'date-fns/locale'
 
-function StatCard({ icon: Icon, label, value, sub, color = 'blue', trend }) {
-  const colors = {
-    blue:   { bg: 'bg-blue-500/10',    text: 'text-blue-400',    border: 'border-blue-500/20' },
-    green:  { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20' },
-    yellow: { bg: 'bg-yellow-500/10',  text: 'text-yellow-400',  border: 'border-yellow-500/20' },
-    red:    { bg: 'bg-red-500/10',     text: 'text-red-400',     border: 'border-red-500/20' },
-    indigo: { bg: 'bg-indigo-500/10',  text: 'text-indigo-400',  border: 'border-indigo-500/20' },
-  }
-  const c = colors[color]
+const UMBRAL_STOCK_BAJO = 10
 
+// ─── StatCard con tema ────────────────────────────────────────────────────────
+function StatCard({ icon: Icon, label, value, sub, accent, trend }) {
   return (
-    <div className={`stat-card border ${c.border}`}>
-      <div className="flex items-center justify-between">
-        <div className={`w-9 h-9 ${c.bg} rounded-lg flex items-center justify-center`}>
-          <Icon className={`w-4 h-4 ${c.text}`} />
+    <div style={{
+      background: 'var(--app-card-bg)', border: '1px solid var(--app-card-border)',
+      borderRadius: 12, padding: '16px', display: 'flex', flexDirection: 'column', gap: 12,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: 8,
+          background: `color-mix(in srgb, ${accent} 12%, transparent)`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Icon style={{ width: 16, height: 16, color: accent }} />
         </div>
         {trend !== undefined && (
-          <span className={`flex items-center gap-1 text-xs font-medium ${trend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {trend >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+          <span style={{
+            display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, fontWeight: 500,
+            color: trend >= 0 ? '#22c55e' : '#f87171',
+          }}>
+            {trend >= 0 ? <ArrowUpRight style={{ width: 12, height: 12 }} /> : <ArrowDownRight style={{ width: 12, height: 12 }} />}
             {Math.abs(trend)}%
           </span>
         )}
       </div>
       <div>
-        <p className="text-2xl font-bold text-white">{value}</p>
-        <p className="text-xs text-gray-500 font-medium">{label}</p>
+        <p style={{ fontSize: 22, fontWeight: 700, color: 'var(--app-text)', margin: 0 }}>{value}</p>
+        <p style={{ fontSize: 12, color: 'var(--app-text-secondary)', margin: '2px 0 0', fontWeight: 500 }}>{label}</p>
       </div>
-      {sub && <p className="text-xs text-gray-600">{sub}</p>}
+      {sub && <p style={{ fontSize: 11, color: 'var(--app-text-secondary)', margin: 0 }}>{sub}</p>}
     </div>
   )
 }
 
-const CustomTooltip = ({ active, payload, label }) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="border border-[var(--app-card-border)] rounded-lg p-3 text-xs shadow-xl">
-        <p className="text-gray-400 mb-1">{label}</p>
-        {payload.map((p, i) => (
-          <p key={i} style={{ color: p.color }} className="font-semibold">
-            {p.name}: S/ {p.value?.toLocaleString('es-PE')}
-          </p>
-        ))}
-      </div>
-    )
-  }
-  return null
+// ─── Tooltip del gráfico ──────────────────────────────────────────────────────
+function CustomTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{ background: 'var(--app-card-bg)', border: '1px solid var(--app-card-border)', borderRadius: 8, padding: '10px 14px', fontSize: 12 }}>
+      <p style={{ color: 'var(--app-text-secondary)', marginBottom: 4 }}>{label}</p>
+      {payload.map((p, i) => (
+        <p key={i} style={{ color: p.color, fontWeight: 600, margin: 0 }}>
+          {p.name}: {p.name === 'Balones' ? p.value : `S/${p.value?.toLocaleString('es-PE')}`}
+        </p>
+      ))}
+    </div>
+  )
 }
 
+// ─── Dashboard ────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { perfil } = useAuth()
   const [stats, setStats] = useState({
-    ventasHoy: 0, montoHoy: 0,
+    ventasHoy: 0, montoHoy: 0, gananciaNeta: 0,
     stockTotal: 0, stockVacios: 0, balonesEnDeuda: 0,
-    valesMes: 0, deudasActivas: 0, distribuidores: 0,
+    valesMes: 0, deudasActivas: 0,
+    montoMes: 0, montoMesAnterior: 0,
   })
   const [ventasSemana, setVentasSemana] = useState([])
   const [stockAlmacenes, setStockAlmacenes] = useState([])
+  const [almacenesStockBajo, setAlmacenesStockBajo] = useState([])
+  const [distribuidores, setDistribuidores] = useState([])
+  const [topDeudas, setTopDeudas] = useState([])
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState(new Date())
 
-  useEffect(() => { 
-    if (perfil !== null) cargarDatos() 
-  }, [perfil])
-
-  async function cargarDatos() {
+  const cargarDatos = useCallback(async () => {
+    if (!perfil) return
     setLoading(true)
     try {
       const hoy = new Date().toISOString().split('T')[0]
-      const almacenId = perfil?.almacen_id // null = admin ve todo
+      const hace7dias = subDays(new Date(), 6).toISOString().split('T')[0]
+      const now = new Date()
+      const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+      const finMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
+      const inicioMesAnt = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0]
+      const finMesAnt = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0]
+      const almacenId = perfil?.almacen_id || null
 
-      // Ventas de hoy
-      let ventasQuery = supabase.from('ventas').select('cantidad, precio_unitario').gte('fecha', hoy)
-      if (almacenId) ventasQuery = ventasQuery.eq('almacen_id', almacenId)
-      const { data: ventasHoy } = await ventasQuery
-      const montoHoy = ventasHoy?.reduce((s, v) => s + (v.cantidad * v.precio_unitario), 0) || 0
+      // ── Todas las queries en paralelo ──────────────────────────────────────
+      const [
+        { data: ventasHoyData },
+        { data: almacenesData },
+        { data: deudasBalData },
+        { data: costosData },
+        { data: ventasMesData },
+        { data: ventasMesAntData },
+        { data: ventasSemanaData },
+        { data: distribuidoresData },
+        { data: topDeudasData },
+        { data: lotesDistData },
+        { data: cargasDistData },
+        { count: valesMes },
+        { count: deudasActivas },
+      ] = await Promise.all([
+        // Ventas hoy con tipo_balon para calcular ganancia
+        (() => { let q = supabase.from('ventas').select('cantidad, precio_unitario, tipo_balon').gte('fecha', hoy); if(almacenId) q=q.eq('almacen_id',almacenId); return q })(),
+        // Almacenes
+        (() => { let q = supabase.from('almacenes').select('id, stock_actual, balones_vacios, nombre').eq('activo',true); if(almacenId) q=q.eq('id',almacenId); return q })(),
+        // Balones en deuda
+        (() => { let q = supabase.from('deudas').select('balones_pendiente').neq('estado','liquidada'); if(almacenId) q=q.eq('almacen_id',almacenId); return q })(),
+        // Costos de compra
+        supabase.from('configuracion').select('clave,valor').in('clave',['costo_5kg','costo_10kg','costo_45kg']),
+        // Ventas mes actual
+        (() => { let q = supabase.from('ventas').select('cantidad,precio_unitario').gte('fecha',inicioMes).lte('fecha',finMes); if(almacenId) q=q.eq('almacen_id',almacenId); return q })(),
+        // Ventas mes anterior
+        (() => { let q = supabase.from('ventas').select('cantidad,precio_unitario').gte('fecha',inicioMesAnt).lte('fecha',finMesAnt); if(almacenId) q=q.eq('almacen_id',almacenId); return q })(),
+        // Ventas últimos 7 días — 1 sola query
+        (() => { let q = supabase.from('ventas').select('fecha,cantidad,precio_unitario').gte('fecha',hace7dias); if(almacenId) q=q.eq('almacen_id',almacenId); return q })(),
+        // Distribuidores
+        supabase.from('distribuidores').select('id,nombre,modalidad,precio_base').eq('activo',true).order('nombre'),
+        // Top 3 deudas por monto
+        (() => { let q = supabase.from('deudas').select('id,nombre_cliente,monto_total,monto_pagado,fecha').neq('estado','liquidada').order('monto_total',{ascending:false}).limit(3); if(almacenId) q=q.eq('almacen_id',almacenId); return q })(),
+        // Lotes distribuidor (stock autónomos como Alazan)
+        supabase.from('lotes_distribuidor').select('distribuidor_id,cantidad_actual').gt('cantidad_actual',0),
+        // Cargas distribuidor (cuenta corriente como Cristian)
+        supabase.from('cargas_distribuidor').select('distribuidor_id,cantidad,descargados,precio_unitario'),
+        // Vales del mes
+        supabase.from('vales_fise').select('*',{count:'exact',head:true}).gte('lote_dia',inicioMes).lte('lote_dia',finMes),
+        // Deudas activas
+        (() => { let q = supabase.from('deudas').select('*',{count:'exact',head:true}).neq('estado','liquidada'); if(almacenId) q=q.eq('almacen_id',almacenId); return q })(),
+      ])
 
-      // Stock total llenos
-      let stockQuery = supabase.from('almacenes').select('stock_actual, balones_vacios, nombre').eq('activo', true)
-      if (almacenId) stockQuery = stockQuery.eq('id', almacenId)
-      const { data: almacenesData } = await stockQuery
-      const stockTotal = almacenesData?.reduce((s, a) => s + (a.stock_actual || 0), 0) || 0
-      const stockVacios = almacenesData?.reduce((s, a) => s + (a.balones_vacios || 0), 0) || 0
+      // ── Costos por tipo ────────────────────────────────────────────────────
+      const costos = { '5kg': 0, '10kg': 0, '45kg': 0 }
+      costosData?.forEach(r => { if(r.clave==='costo_5kg') costos['5kg']=parseFloat(r.valor)||0; if(r.clave==='costo_10kg') costos['10kg']=parseFloat(r.valor)||0; if(r.clave==='costo_45kg') costos['45kg']=parseFloat(r.valor)||0 })
 
-      // Balones en deuda
-      let deudasQuery = supabase.from('deudas').select('balones_pendiente').neq('estado', 'liquidada')
-      if (almacenId) deudasQuery = deudasQuery.eq('almacen_id', almacenId)
-      const { data: deudasBal } = await deudasQuery
-      const balonesEnDeuda = deudasBal?.reduce((s, d) => s + (parseInt(d.balones_pendiente) || 0), 0) || 0
+      // ── Stats ventas hoy ───────────────────────────────────────────────────
+      const montoHoy = ventasHoyData?.reduce((s,v) => s + v.cantidad * v.precio_unitario, 0) || 0
+      const gananciaNeta = ventasHoyData?.reduce((s,v) => { const c=costos[v.tipo_balon]||0; return s + v.cantidad*(v.precio_unitario-c) }, 0) || 0
 
-      // Vales del mes
-      const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
-      const finMes = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]
-      const { count: valesMes } = await supabase.from('vales_fise').select('*', { count: 'exact', head: true })
-        .gte('lote_dia', inicioMes).lte('lote_dia', finMes)
+      // ── Stock ──────────────────────────────────────────────────────────────
+      const stockTotal = almacenesData?.reduce((s,a) => s+(a.stock_actual||0), 0) || 0
+      const stockVacios = almacenesData?.reduce((s,a) => s+(a.balones_vacios||0), 0) || 0
+      const balonesEnDeuda = deudasBalData?.reduce((s,d) => s+(parseInt(d.balones_pendiente)||0), 0) || 0
 
-      // Deudas activas
-      let deudasCountQuery = supabase.from('deudas').select('*', { count: 'exact', head: true }).neq('estado', 'liquidada')
-      if (almacenId) deudasCountQuery = deudasCountQuery.eq('almacen_id', almacenId)
-      const { count: deudasActivas } = await deudasCountQuery
+      // ── Alertas stock bajo ─────────────────────────────────────────────────
+      setAlmacenesStockBajo((almacenesData||[]).filter(a => (a.stock_actual||0) < UMBRAL_STOCK_BAJO))
 
-      // Distribuidores activos — solo admin ve
-      const { count: distribuidores } = !almacenId
-        ? await supabase.from('distribuidores').select('*', { count: 'exact', head: true }).eq('activo', true)
-        : { count: 0 }
+      // ── Meses ──────────────────────────────────────────────────────────────
+      const montoMes = ventasMesData?.reduce((s,v) => s+v.cantidad*v.precio_unitario, 0) || 0
+      const montoMesAnterior = ventasMesAntData?.reduce((s,v) => s+v.cantidad*v.precio_unitario, 0) || 0
 
-      setStats({
-        ventasHoy: ventasHoy?.length || 0,
-        montoHoy, stockTotal, stockVacios, balonesEnDeuda,
-        valesMes: valesMes || 0,
-        deudasActivas: deudasActivas || 0,
-        distribuidores: distribuidores || 0,
+      // ── Ventas semana (1 query → agrupar por día en JS) ───────────────────
+      const porDia = {}
+      ventasSemanaData?.forEach(v => {
+        const d = v.fecha?.split('T')[0] || v.fecha
+        if(!porDia[d]) porDia[d] = { ventas: 0, balones: 0 }
+        porDia[d].ventas += v.cantidad * v.precio_unitario
+        porDia[d].balones += v.cantidad
       })
-
-      // Ventas últimos 7 días
       const dias = []
-      for (let i = 6; i >= 0; i--) {
+      for(let i=6; i>=0; i--) {
         const fecha = subDays(new Date(), i)
         const fechaStr = fecha.toISOString().split('T')[0]
-        let diaQuery = supabase.from('ventas').select('cantidad, precio_unitario')
-          .gte('fecha', fechaStr).lt('fecha', subDays(fecha, -1).toISOString().split('T')[0])
-        if (almacenId) diaQuery = diaQuery.eq('almacen_id', almacenId)
-        const { data } = await diaQuery
-        dias.push({
-          dia: format(fecha, 'EEE', { locale: es }),
-          ventas: data?.reduce((s, v) => s + (v.cantidad * v.precio_unitario), 0) || 0,
-          balones: data?.reduce((s, v) => s + v.cantidad, 0) || 0,
-        })
+        dias.push({ dia: format(fecha,'EEE',{locale:es}), ventas: porDia[fechaStr]?.ventas||0, balones: porDia[fechaStr]?.balones||0 })
       }
       setVentasSemana(dias)
 
-      // Stock por almacén
-      setStockAlmacenes((almacenesData || []).map(a => ({
-        nombre: a.nombre.length > 15 ? a.nombre.substring(0, 15) + '…' : a.nombre,
+      // ── Stock por almacén ──────────────────────────────────────────────────
+      setStockAlmacenes((almacenesData||[]).map(a => ({
+        nombre: a.nombre.length>14 ? a.nombre.substring(0,14)+'…' : a.nombre,
         stock: a.stock_actual || 0,
-        tipo: 'almacen',
       })))
 
+      // ── Distribuidores con stock ───────────────────────────────────────────
+      const distConStock = (distribuidoresData||[]).map(d => {
+        const esAutonomo = d.modalidad?.toLowerCase().includes('autón') || d.modalidad?.toLowerCase().includes('auton')
+        let stockDist = 0, deudaDist = 0
+        if(esAutonomo) {
+          stockDist = (lotesDistData||[]).filter(l=>l.distribuidor_id===d.id).reduce((s,l)=>s+(l.cantidad_actual||0),0)
+        } else {
+          const cargas = (cargasDistData||[]).filter(c=>c.distribuidor_id===d.id)
+          const totalCargado = cargas.reduce((s,c)=>s+c.cantidad,0)
+          const totalDescargado = cargas.reduce((s,c)=>s+(c.descargados||0),0)
+          stockDist = totalCargado - totalDescargado
+          deudaDist = cargas.filter(c=>(c.descargados||0)<c.cantidad).reduce((s,c)=>s+(c.cantidad-(c.descargados||0))*c.precio_unitario,0)
+        }
+        return { ...d, stockDist, deudaDist, esAutonomo }
+      })
+      setDistribuidores(distConStock)
+
+      // ── Top deudas ─────────────────────────────────────────────────────────
+      setTopDeudas((topDeudasData||[]).map(d => ({
+        ...d,
+        pendiente: (d.monto_total||0) - (d.monto_pagado||0),
+        diasSinPagar: Math.floor((new Date()-new Date(d.fecha))/(1000*60*60*24)),
+      })))
+
+      setStats({
+        ventasHoy: ventasHoyData?.length||0, montoHoy, gananciaNeta,
+        stockTotal, stockVacios, balonesEnDeuda,
+        valesMes: valesMes||0, deudasActivas: deudasActivas||0,
+        montoMes, montoMesAnterior,
+      })
       setLastUpdate(new Date())
-    } catch (e) {
+    } catch(e) {
       console.error('Error cargando dashboard:', e)
     } finally {
       setLoading(false)
     }
-  }
+  }, [perfil])
+
+  useEffect(() => { if(perfil) cargarDatos() }, [perfil, cargarDatos])
 
   const hora = new Date().getHours()
-  const saludo = hora < 12 ? 'Buenos días' : hora < 18 ? 'Buenas tardes' : 'Buenas noches'
+  const saludo = hora<12 ? 'Buenos días' : hora<18 ? 'Buenas tardes' : 'Buenas noches'
+  const variacionMes = stats.montoMesAnterior > 0
+    ? parseFloat(((stats.montoMes - stats.montoMesAnterior) / stats.montoMesAnterior * 100).toFixed(1))
+    : null
+
+  const cardStyle = { background:'var(--app-card-bg)', border:'1px solid var(--app-card-border)', borderRadius:12, padding:16 }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+
+      {/* ── Header ── */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div>
-          <h2 className="text-xl font-bold text-white">
+          <h2 style={{ fontSize:20, fontWeight:700, color:'var(--app-text)', margin:0 }}>
             {saludo}, {perfil?.nombre?.split(' ')[0] || 'Admin'} 👋
           </h2>
-          <p className="text-gray-500 text-sm mt-0.5">
-            {format(new Date(), "EEEE d 'de' MMMM, yyyy", { locale: es })}
+          <p style={{ fontSize:13, color:'var(--app-text-secondary)', margin:'2px 0 0' }}>
+            {format(new Date(), "EEEE d 'de' MMMM, yyyy", { locale:es })}
           </p>
         </div>
-        <button
-          onClick={cargarDatos}
-          disabled={loading}
-          className="btn-secondary"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+        <button onClick={cargarDatos} disabled={loading} className="btn-secondary">
+          <RefreshCw className={`w-3.5 h-3.5 ${loading?'animate-spin':''}`}/>
           Actualizar
         </button>
       </div>
 
-      {/* Quick actions */}
-      <div className="card">
-        <h3 className="text-sm font-semibold text-white mb-4">Acciones rápidas</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: 'Nueva venta',      icon: ShoppingCart, color: 'text-blue-400',    bg: 'bg-blue-500/10',    href: '/ventas' },
-            { label: 'Registrar vale',   icon: Ticket,       color: 'text-yellow-400',  bg: 'bg-yellow-500/10',  href: '/vales' },
-            { label: 'Ver deudas',       icon: AlertCircle,  color: 'text-red-400',     bg: 'bg-red-500/10',     href: '/clientes' },
-            { label: 'Ver stock',        icon: Package,      color: 'text-emerald-400', bg: 'bg-emerald-500/10', href: '/inventario' },
-          ].map(({ label, icon: Icon, color, bg, href }) => (
-            <a
-              key={label}
-              href={href}
-              style={{background:"var(--app-card-bg)",border:"1px solid var(--app-card-border)"}} className="flex flex-col items-center gap-2 p-4 rounded-xl transition-all group"
-            >
-              <div className={`w-10 h-10 ${bg} rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                <Icon className={`w-5 h-5 ${color}`} />
+      {/* ── Alerta stock bajo ── */}
+      {almacenesStockBajo.length > 0 && (
+        <div style={{ background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.3)', borderRadius:10, padding:'12px 16px', display:'flex', alignItems:'center', gap:10 }}>
+          <AlertTriangle style={{ width:18, height:18, color:'#f87171', flexShrink:0 }}/>
+          <div>
+            <p style={{ fontSize:13, fontWeight:600, color:'#f87171', margin:0 }}>Stock bajo en {almacenesStockBajo.length} almacén{almacenesStockBajo.length>1?'es':''}</p>
+            <p style={{ fontSize:12, color:'var(--app-text-secondary)', margin:'2px 0 0' }}>
+              {almacenesStockBajo.map(a=>`${a.nombre}: ${a.stock_actual} balones`).join(' · ')}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Stats grid ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard icon={ShoppingCart} label="Ventas hoy"    value={stats.ventasHoy}                                      accent="var(--app-accent)" />
+        <StatCard icon={TrendingUp}   label="Ingresos hoy"  value={`S/${stats.montoHoy.toLocaleString('es-PE')}`}        accent="#22c55e" />
+        <StatCard icon={TrendingUp}   label="Ganancia neta" value={`S/${stats.gananciaNeta.toLocaleString('es-PE',{maximumFractionDigits:0})}`} accent="#a78bfa" sub="Ingresos - costos de compra" />
+        <StatCard icon={AlertCircle}  label="Deudas activas" value={stats.deudasActivas}                                 accent="#f87171" />
+      </div>
+
+      {/* ── Balones ── */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label:'Balones llenos', value:stats.stockTotal,     color:'#22c55e', emoji:'🟢' },
+          { label:'Balones vacíos', value:stats.stockVacios,    color:'var(--app-text-secondary)', emoji:'⚪' },
+          { label:'En deuda (calle)', value:stats.balonesEnDeuda, color:'#fb923c', emoji:'🔵' },
+        ].map(({ label, value, color, emoji }) => (
+          <div key={label} style={cardStyle}>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ width:36, height:36, borderRadius:8, background:`color-mix(in srgb, ${color} 10%, transparent)`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>{emoji}</div>
+              <div>
+                <p style={{ fontSize:22, fontWeight:700, color, margin:0 }}>{value}</p>
+                <p style={{ fontSize:11, color:'var(--app-text-secondary)', margin:0 }}>{label}</p>
               </div>
-              <span className="text-xs text-gray-400 font-medium text-center">{label}</span>
-            </a>
-          ))}
-        </div>
-      </div>
-
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        <StatCard icon={ShoppingCart}  label="Ventas hoy"          value={stats.ventasHoy}                                          color="blue"   />
-        <StatCard icon={TrendingUp}    label="Ingresos hoy"        value={`S/ ${stats.montoHoy.toLocaleString('es-PE')}`}           color="green"  />
-        <StatCard icon={Ticket}        label="Vales del mes"       value={stats.valesMes}                                           color="yellow" />
-        <StatCard icon={AlertCircle}   label="Deudas activas"      value={stats.deudasActivas}                                      color="red"    />
-      </div>
-
-      {/* Balones */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="card border border-emerald-500/20">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-emerald-500/10 rounded-lg flex items-center justify-center text-lg">🟢</div>
-            <div>
-              <p className="text-2xl font-bold text-emerald-400">{stats.stockTotal}</p>
-              <p className="text-xs text-gray-500">Balones llenos</p>
             </div>
           </div>
+        ))}
+      </div>
+
+      {/* ── Comparación mes ── */}
+      <div style={cardStyle}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+          <p style={{ fontSize:13, fontWeight:600, color:'var(--app-text)', margin:0 }}>Ingresos del mes</p>
+          {variacionMes !== null && (
+            <span style={{ display:'flex', alignItems:'center', gap:4, fontSize:12, fontWeight:500, color: variacionMes>=0?'#22c55e':'#f87171' }}>
+              {variacionMes>=0 ? <ArrowUpRight style={{width:14,height:14}}/> : <ArrowDownRight style={{width:14,height:14}}/>}
+              {Math.abs(variacionMes)}% vs mes anterior
+            </span>
+          )}
         </div>
-        <div className="card border border-gray-600/40">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gray-500/10 rounded-lg flex items-center justify-center text-lg">⚪</div>
-            <div>
-              <p className="text-2xl font-bold text-gray-300">{stats.stockVacios}</p>
-              <p className="text-xs text-gray-500">Balones vacíos</p>
-            </div>
+        <div style={{ display:'flex', gap:24 }}>
+          <div>
+            <p style={{ fontSize:24, fontWeight:700, color:'var(--app-text)', margin:0 }}>S/{stats.montoMes.toLocaleString('es-PE',{maximumFractionDigits:0})}</p>
+            <p style={{ fontSize:11, color:'var(--app-text-secondary)', margin:'2px 0 0' }}>Este mes</p>
           </div>
-        </div>
-        <div className="card border border-orange-500/20">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-orange-500/10 rounded-lg flex items-center justify-center text-lg">🔵</div>
-            <div>
-              <p className="text-2xl font-bold text-orange-400">{stats.balonesEnDeuda}</p>
-              <p className="text-xs text-gray-500">En deuda (calle)</p>
-            </div>
+          <div style={{ borderLeft:'1px solid var(--app-card-border)', paddingLeft:24 }}>
+            <p style={{ fontSize:18, fontWeight:600, color:'var(--app-text-secondary)', margin:0 }}>S/{stats.montoMesAnterior.toLocaleString('es-PE',{maximumFractionDigits:0})}</p>
+            <p style={{ fontSize:11, color:'var(--app-text-secondary)', margin:'2px 0 0' }}>Mes anterior</p>
+          </div>
+          <div style={{ borderLeft:'1px solid var(--app-card-border)', paddingLeft:24 }}>
+            <p style={{ fontSize:18, fontWeight:600, color:'#fbbf24', margin:0 }}>{stats.valesMes}</p>
+            <p style={{ fontSize:11, color:'var(--app-text-secondary)', margin:'2px 0 0' }}>Vales FISE</p>
           </div>
         </div>
       </div>
 
-      {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Ventas semana */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-white">Ingresos — Últimos 7 días</h3>
+      {/* ── Gráficos ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div style={cardStyle}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+            <p style={{ fontSize:13, fontWeight:600, color:'var(--app-text)', margin:0 }}>Ingresos — últimos 7 días</p>
             <span className="badge-blue">Esta semana</span>
           </div>
-          <ResponsiveContainer width="100%" height={200}>
+          <ResponsiveContainer width="100%" height={180}>
             <AreaChart data={ventasSemana}>
               <defs>
-                <linearGradient id="colorVentas" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                <linearGradient id="gradVentas" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--app-accent)" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="var(--app-accent)" stopOpacity={0}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--app-card-border)" />
-              <XAxis dataKey="dia" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} width={50}
-                tickFormatter={v => `S/${v}`} />
-              <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="ventas" name="Ingresos" stroke="#3b82f6"
-                strokeWidth={2} fill="url(#colorVentas)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--app-card-border)"/>
+              <XAxis dataKey="dia" tick={{fill:'var(--app-text-secondary)',fontSize:11}} axisLine={false} tickLine={false}/>
+              <YAxis tick={{fill:'var(--app-text-secondary)',fontSize:11}} axisLine={false} tickLine={false} width={50} tickFormatter={v=>`S/${v}`}/>
+              <Tooltip content={<CustomTooltip/>}/>
+              <Area type="monotone" dataKey="ventas" name="Ingresos" stroke="var(--app-accent)" strokeWidth={2} fill="url(#gradVentas)"/>
             </AreaChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Stock por ubicación */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-white">Stock por ubicación</h3>
-            <span className="badge-green">Actual</span>
+        <div style={cardStyle}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+            <p style={{ fontSize:13, fontWeight:600, color:'var(--app-text)', margin:0 }}>Balones vendidos — 7 días</p>
+            <span className="badge-green">Unidades</span>
           </div>
-          {stockAlmacenes.length === 0 ? (
-            <div className="flex items-center justify-center h-48 text-gray-600 text-sm">
-              Sin datos de stock aún
-            </div>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={ventasSemana}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--app-card-border)"/>
+              <XAxis dataKey="dia" tick={{fill:'var(--app-text-secondary)',fontSize:11}} axisLine={false} tickLine={false}/>
+              <YAxis tick={{fill:'var(--app-text-secondary)',fontSize:11}} axisLine={false} tickLine={false} width={30}/>
+              <Tooltip content={<CustomTooltip/>}/>
+              <Bar dataKey="balones" name="Balones" fill="var(--app-accent)" radius={[4,4,0,0]}/>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* ── Distribuidores + Top deudas ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+        {/* Distribuidores */}
+        <div style={cardStyle}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+            <p style={{ fontSize:13, fontWeight:600, color:'var(--app-text)', margin:0 }}>Distribuidores</p>
+            <Link to="/distribuidores" style={{ fontSize:12, color:'var(--app-accent)', textDecoration:'none' }}>Ver todos →</Link>
+          </div>
+          {distribuidores.length === 0 ? (
+            <p style={{ fontSize:13, color:'var(--app-text-secondary)', textAlign:'center', padding:'20px 0' }}>Sin distribuidores activos</p>
           ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={stockAlmacenes} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--app-card-border)" horizontal={false} />
-                <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="nombre" tick={{ fill: '#9ca3af', fontSize: 10 }}
-                  axisLine={false} tickLine={false} width={100} />
-                <Tooltip
-                  contentStyle={{ background: "var(--app-card-bg)", border: "1px solid var(--app-card-border)", borderRadius: "8px" }}
-                  labelStyle={{ color: '#9ca3af' }}
-                  formatter={v => [`${v} balones`, 'Stock']}
-                />
-                <Bar dataKey="stock" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {distribuidores.map(d => (
+                <div key={d.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 12px', background:'var(--app-card-bg-alt)', borderRadius:8, border:'1px solid var(--app-card-border)' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <div style={{ width:32, height:32, borderRadius:'50%', background:'color-mix(in srgb, var(--app-accent) 15%, transparent)', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--app-accent)', fontWeight:700, fontSize:13 }}>
+                      {d.nombre?.charAt(0)}
+                    </div>
+                    <div>
+                      <p style={{ fontSize:13, fontWeight:500, color:'var(--app-text)', margin:0 }}>{d.nombre}</p>
+                      <p style={{ fontSize:11, color:'var(--app-text-secondary)', margin:0 }}>{d.modalidad||'—'}</p>
+                    </div>
+                  </div>
+                  <div style={{ textAlign:'right' }}>
+                    <p style={{ fontSize:13, fontWeight:600, color:'#22c55e', margin:0 }}>{d.stockDist} bal</p>
+                    {d.deudaDist > 0 && <p style={{ fontSize:11, color:'#f87171', margin:0 }}>S/{d.deudaDist.toLocaleString('es-PE',{maximumFractionDigits:0})} pend.</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Top deudas */}
+        <div style={cardStyle}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+            <p style={{ fontSize:13, fontWeight:600, color:'var(--app-text)', margin:0 }}>Deudas más grandes</p>
+            <Link to="/deudas" style={{ fontSize:12, color:'var(--app-accent)', textDecoration:'none' }}>Ver todas →</Link>
+          </div>
+          {topDeudas.length === 0 ? (
+            <p style={{ fontSize:13, color:'#22c55e', textAlign:'center', padding:'20px 0' }}>✓ Sin deudas activas</p>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {topDeudas.map((d, i) => (
+                <div key={d.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 12px', background:'var(--app-card-bg-alt)', borderRadius:8, border:`1px solid ${d.diasSinPagar>30?'rgba(239,68,68,0.3)':'var(--app-card-border)'}` }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <div style={{ width:24, height:24, borderRadius:'50%', background: i===0?'rgba(239,68,68,0.2)':i===1?'rgba(251,146,60,0.2)':'rgba(250,204,21,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color: i===0?'#f87171':i===1?'#fb923c':'#fbbf24' }}>
+                      {i+1}
+                    </div>
+                    <div>
+                      <p style={{ fontSize:13, fontWeight:500, color:'var(--app-text)', margin:0 }}>{d.nombre_cliente}</p>
+                      <p style={{ fontSize:11, color:'var(--app-text-secondary)', margin:0 }}>{d.diasSinPagar}d sin pagar</p>
+                    </div>
+                  </div>
+                  <div style={{ textAlign:'right' }}>
+                    <p style={{ fontSize:13, fontWeight:700, color:'#f87171', margin:0 }}>S/{d.pendiente.toLocaleString('es-PE',{maximumFractionDigits:0})}</p>
+                    <p style={{ fontSize:11, color:'var(--app-text-secondary)', margin:0 }}>de S/{d.monto_total?.toLocaleString('es-PE',{maximumFractionDigits:0})}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
 
-      {/* Footer */}
-      <p className="text-xs text-gray-700 text-right">
-        Última actualización: {format(lastUpdate, 'HH:mm:ss')}
+      {/* ── Acciones rápidas ── */}
+      <div style={cardStyle}>
+        <p style={{ fontSize:13, fontWeight:600, color:'var(--app-text)', margin:'0 0 12px' }}>Acciones rápidas</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label:'Nueva venta',    icon:ShoppingCart, color:'var(--app-accent)',  href:'/ventas' },
+            { label:'Registrar vale', icon:Ticket,       color:'#fbbf24',            href:'/vales' },
+            { label:'Ver deudas',     icon:AlertCircle,  color:'#f87171',            href:'/deudas' },
+            { label:'Ver stock',      icon:Package,      color:'#22c55e',            href:'/inventario' },
+          ].map(({ label, icon:Icon, color, href }) => (
+            <Link key={label} to={href} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8, padding:16, borderRadius:12, background:'var(--app-card-bg-alt)', border:'1px solid var(--app-card-border)', textDecoration:'none', transition:'all 0.15s' }}>
+              <div style={{ width:40, height:40, borderRadius:12, background:`color-mix(in srgb, ${color} 12%, transparent)`, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <Icon style={{ width:20, height:20, color }}/>
+              </div>
+              <span style={{ fontSize:12, color:'var(--app-text-secondary)', fontWeight:500, textAlign:'center' }}>{label}</span>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Footer ── */}
+      <p style={{ fontSize:11, color:'var(--app-text-secondary)', textAlign:'right', opacity:0.6 }}>
+        Actualizado: {format(lastUpdate,'HH:mm:ss')}
       </p>
     </div>
   )
