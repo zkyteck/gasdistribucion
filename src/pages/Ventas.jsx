@@ -179,9 +179,13 @@ export default function Ventas() {
     if(dist) {
       return lotesDistribuidor.filter(l => l.distribuidor_id===dist.id && l.tipo_balon===tipoBalon && !l.cerrado && l.cantidad_restante>0).reduce((s,l) => s+l.cantidad_restante, 0)
     }
-    const s = stockPorTipo.find(s => s.almacen_id===almacenId && s.tipo_balon===tipoBalon)
-    return s?.stock_actual || 0
-  }, [getDistribuidor, lotesDistribuidor, stockPorTipo])
+    // Primero intenta stock_por_tipo
+    const spt = stockPorTipo.find(s => s.almacen_id===almacenId && s.tipo_balon===tipoBalon)
+    if(spt?.stock_actual > 0) return spt.stock_actual
+    // Si no encuentra o es 0, usa almacenes.stock_actual como respaldo
+    const alm = almacenes.find(a => a.id===almacenId)
+    return alm?.stock_actual || 0
+  }, [getDistribuidor, lotesDistribuidor, stockPorTipo, almacenes])
 
   // ─── Buscar deuda existente del cliente ────────────────────────────────────
   const buscarDeudaCliente = useCallback(async (clienteId, clienteNombre) => {

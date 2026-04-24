@@ -75,8 +75,13 @@ export default function VentaRapida({ onClose, onGuardado, almacenes, precioTipo
     if(dist) {
       return lotesDistribuidor.filter(l => l.distribuidor_id===dist.id && l.tipo_balon===tipo && !l.cerrado && l.cantidad_restante>0).reduce((s,l)=>s+l.cantidad_restante,0)
     }
-    return stockPorTipo.find(s => s.almacen_id===almacenId && s.tipo_balon===tipo)?.stock_actual || 0
-  }, [almacenId, distribuidores, lotesDistribuidor, stockPorTipo])
+    // Primero intenta stock_por_tipo
+    const spt = stockPorTipo.find(s => s.almacen_id===almacenId && s.tipo_balon===tipo)
+    if(spt?.stock_actual > 0) return spt.stock_actual
+    // Si no encuentra, usa almacenes.stock_actual como respaldo
+    const alm = almacenes.find(a => a.id===almacenId)
+    return alm?.stock_actual || 0
+  }, [almacenId, distribuidores, lotesDistribuidor, stockPorTipo, almacenes])
 
   const stockActual = getStock(tipoBalon)
   const total = (parseInt(cantidad)||0) * (parseFloat(precioFinal)||0)
