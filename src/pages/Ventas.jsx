@@ -85,7 +85,7 @@ export default function Ventas() {
   // UI
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(false)
-  const [modalRapido, setModalRapido] = useState(true) // abre rápido por defecto
+  const [modalRapido, setModalRapido] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [busqueda, setBusqueda] = useState('')
