@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { hoyPeru, inicioDiaPeru, finDiaPeru, nowPeru } from '../lib/fechas'
 import { Truck, Plus, Edit2, Package, X, AlertCircle, History, ChevronDown, ChevronUp, DollarSign, RefreshCw, Ticket, Clock, CheckCircle, ClipboardList } from 'lucide-react'
@@ -9,13 +9,13 @@ import { useAuth } from '../context/AuthContext'
 
 function Modal({ title, onClose, children, wide }) {
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className={`w-full ${wide ? 'max-w-2xl' : 'max-w-md'} rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto`} style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
-        <div className="flex items-center justify-between px-6 py-4  sticky top-0">
-          <h3 className="text-white font-semibold">{title}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.7)'}}>
+      <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:16,width:'100%',maxWidth:wide?680:480,boxShadow:'0 25px 50px rgba(0,0,0,0.4)',maxHeight:'90vh',display:'flex',flexDirection:'column'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 24px',borderBottom:'1px solid var(--app-card-border)',position:'sticky',top:0,background:'var(--app-card-bg)'}}>
+          <h3 style={{color:'var(--app-text)',fontWeight:600,margin:0}}>{title}</h3>
+          <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'var(--app-text-secondary)'}}><X className="w-5 h-5"/></button>
         </div>
-        <div className="px-6 py-5 overflow-y-auto flex-1">{children}</div>
+        <div style={{padding:'20px 24px',overflowY:'auto',flex:1}}>{children}</div>
       </div>
     </div>
   )
@@ -744,7 +744,36 @@ export default function Distribuidores() {
   const [clienteRapidoForm, setClienteRapidoForm] = useState({ nombre: '', telefono: '' })
   const [subModal, setSubModal] = useState(null) // 'clienteRapido'
 
-  useEffect(() => { cargar() }, [])
+
+  const cargar = useCallback(async () => {
+    setLoading(true)
+    const [{ data: d }, { data: a }, { data: vp }, { data: rp }] = await Promise.all([
+      supabase.from('distribuidores').select('*, almacenes(nombre, stock_actual, balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg)').eq('activo', true).order('nombre'),
+      supabase.from('almacenes').select('id, nombre, stock_actual, balones_vacios').eq('activo', true),
+      supabase.from('vales_distribuidor').select('distribuidor_id').eq('estado', 'pendiente'),
+      supabase.from('cuentas_distribuidor').select('distribuidor_id, balones_faltantes').neq('estado', 'cancelado')
+    ])
+    const distConVales = (d || []).map(dist => ({
+      ...dist,
+      vales_pendientes: (vp || []).filter(v => v.distribuidor_id === dist.id).length,
+      balones_por_cobrar: (rp || []).filter(r => r.distribuidor_id === dist.id).reduce((s, r) => s + (r.balones_faltantes || 0), 0)
+    }))
+    // Enriquecer distribuidores con stock real del almacén asignado
+    const distEnriquecidos = (distConVales).map(dist => {
+      const almacenAsignado = (a || []).find(alm => alm.id === dist.almacen_id)
+      return {
+        ...dist,
+        stock_actual: almacenAsignado?.stock_actual || 0,
+        balones_vacios: almacenAsignado?.balones_vacios || 0,
+        balones_pendientes_devolucion: almacenAsignado?.balones_pendientes_devolucion || 0,
+      }
+    })
+    setDistribuidores(distEnriquecidos)
+    setAlmacenes(a || [])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { cargar() }, [cargar])
 
   async function cargarValesDist(distId) {
     const { data } = await supabase.from('vales_distribuidor')
@@ -969,33 +998,6 @@ export default function Distribuidores() {
 
   // ── Fin funciones cuenta corriente ─────────────────────────────────────
 
-  async function cargar() {
-    setLoading(true)
-    const [{ data: d }, { data: a }, { data: vp }, { data: rp }] = await Promise.all([
-      supabase.from('distribuidores').select('*, almacenes(nombre, stock_actual, balones_vacios, vacios_5kg, vacios_10kg, vacios_45kg)').eq('activo', true).order('nombre'),
-      supabase.from('almacenes').select('id, nombre, stock_actual, balones_vacios').eq('activo', true),
-      supabase.from('vales_distribuidor').select('distribuidor_id').eq('estado', 'pendiente'),
-      supabase.from('cuentas_distribuidor').select('distribuidor_id, balones_faltantes').neq('estado', 'cancelado')
-    ])
-    const distConVales = (d || []).map(dist => ({
-      ...dist,
-      vales_pendientes: (vp || []).filter(v => v.distribuidor_id === dist.id).length,
-      balones_por_cobrar: (rp || []).filter(r => r.distribuidor_id === dist.id).reduce((s, r) => s + (r.balones_faltantes || 0), 0)
-    }))
-    // Enriquecer distribuidores con stock real del almacén asignado
-    const distEnriquecidos = (distConVales).map(dist => {
-      const almacenAsignado = (a || []).find(alm => alm.id === dist.almacen_id)
-      return {
-        ...dist,
-        stock_actual: almacenAsignado?.stock_actual || 0,
-        balones_vacios: almacenAsignado?.balones_vacios || 0,
-        balones_pendientes_devolucion: almacenAsignado?.balones_pendientes_devolucion || 0,
-      }
-    })
-    setDistribuidores(distEnriquecidos)
-    setAlmacenes(a || [])
-    setLoading(false)
-  }
 
   async function cargarHistorial(distId) {
     // Obtener almacen_id del distribuidor seleccionado
@@ -1228,7 +1230,7 @@ export default function Distribuidores() {
     cargar()
   }
 
-  async function guardarDistribuidor() {
+  const guardarDistribuidor = useCallback(async () => {
     if (!form.nombre || !form.precio_base) { setError('Nombre y precio son obligatorios'); return }
     setSaving(true); setError('')
     const data = { nombre: form.nombre, telefono: form.telefono, almacen_id: form.almacen_id || null, precio_base: parseFloat(form.precio_base) }
@@ -1239,7 +1241,7 @@ export default function Distribuidores() {
     setSaving(false)
     if (e) { setError(e.message); return }
     setModal(null); cargar()
-  }
+  }, [form, selected, cargar])
 
   async function guardarReposicion() {
     const cant = parseInt(repoForm.cantidad)
@@ -1482,7 +1484,7 @@ export default function Distribuidores() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-white">Distribuidores</h2>
-          <p className="text-gray-500 text-sm">Control de stock, reposiciones y cuentas</p>
+          <p style={{color:"var(--app-text-secondary)",fontSize:13}}>Control de stock, reposiciones y cuentas</p>
         </div>
         <button onClick={() => { setSelected(null); setForm({ nombre: '', telefono: '', almacen_id: '', precio_base: '' }); setError(''); setModal('nuevo') }} className="btn-primary">
           <Plus className="w-4 h-4" />Nuevo distribuidor
@@ -1494,17 +1496,17 @@ export default function Distribuidores() {
         <div className="stat-card border border-indigo-500/20">
           <div className="w-8 h-8 bg-indigo-500/10 rounded-lg flex items-center justify-center"><Truck className="w-4 h-4 text-indigo-400" /></div>
           <p className="text-2xl font-bold text-white">{distribuidores.length}</p>
-          <p className="text-xs text-gray-500">Distribuidores activos</p>
+          <p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Distribuidores activos</p>
         </div>
         <div className="stat-card border border-emerald-500/20">
           <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center"><Package className="w-4 h-4 text-emerald-400" /></div>
           <p className="text-2xl font-bold text-white">{distribuidores.reduce((s, d) => s + d.stock_actual, 0)}</p>
-          <p className="text-xs text-gray-500">Balones en distribución</p>
+          <p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Balones en distribución</p>
         </div>
         <div className="stat-card border border-yellow-500/20">
           <div className="w-8 h-8 bg-yellow-500/10 rounded-lg flex items-center justify-center"><DollarSign className="w-4 h-4 text-yellow-400" /></div>
           <p className="text-2xl font-bold text-white">S/ {distribuidores.reduce((s, d) => s + (d.stock_actual * d.precio_base), 0).toLocaleString('es-PE')}</p>
-          <p className="text-xs text-gray-500">Valor en campo</p>
+          <p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Valor en campo</p>
         </div>
       </div>
 
@@ -1519,8 +1521,8 @@ export default function Distribuidores() {
                     <Truck className="w-5 h-5 text-indigo-400" />
                   </div>
                   <div>
-                    <p className="text-white font-semibold">{d.nombre}</p>
-                    <p className="text-gray-500 text-xs">{d.telefono || 'Sin teléfono'} · {d.almacenes?.nombre || 'Sin almacén'}</p>
+                    <p style={{color:"var(--app-text)",fontWeight:600}}>{d.nombre}</p>
+                    <p style={{color:"var(--app-text-secondary)",fontSize:11}}>{d.telefono || 'Sin teléfono'} · {d.almacenes?.nombre || 'Sin almacén'}</p>
                   </div>
                 </div>
                 <button onClick={() => { setSelected(d); setForm({ nombre: d.nombre, telefono: d.telefono || '', almacen_id: d.almacen_id || '', precio_base: d.precio_base }); setError(''); setModal('editar') }}
@@ -1547,11 +1549,11 @@ export default function Distribuidores() {
               <div className="grid grid-cols-2 gap-2 mb-4">
                 <div className="bg-transparent rounded-lg p-3 text-center">
                   <p className="text-xl font-bold text-blue-400">S/{d.precio_base}</p>
-                  <p className="text-xs text-gray-500">Precio/bal.</p>
+                  <p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Precio/bal.</p>
                 </div>
                 <div className="bg-transparent rounded-lg p-3 text-center">
                   <p className="text-xl font-bold text-yellow-400">S/{(d.stock_actual * d.precio_base).toLocaleString()}</p>
-                  <p className="text-xs text-gray-500">Total campo</p>
+                  <p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Total campo</p>
                 </div>
               </div>
 
@@ -1622,12 +1624,12 @@ export default function Distribuidores() {
               <div className="bg-emerald-900/20 border border-emerald-700/40 rounded-xl p-3 text-center">
                 <p className="text-xs text-emerald-400 mb-1">🟢 Llenos (distribuidor)</p>
                 <p className="text-2xl font-bold text-emerald-400">{selected.stock_actual}</p>
-                <p className="text-xs text-gray-500">balones listos para vender</p>
+                <p style={{fontSize:11,color:"var(--app-text-secondary)"}}>balones listos para vender</p>
               </div>
               <div className="bg-gray-700/30 border border-gray-600/40 rounded-xl p-3 text-center">
                 <p className="text-xs text-gray-400 mb-1">⚪ Vacíos (distribuidor)</p>
                 <p className="text-2xl font-bold text-gray-300">{almacenes.find(a => a.id === selected.almacen_id)?.balones_vacios || 0}</p>
-                <p className="text-xs text-gray-500">balones vacíos para devolver</p>
+                <p style={{fontSize:11,color:"var(--app-text-secondary)"}}>balones vacíos para devolver</p>
               </div>
             </div>
             <div className="bg-blue-900/20 border border-blue-700/40 rounded-xl p-3 text-center">
@@ -1677,7 +1679,7 @@ export default function Distribuidores() {
                     const devueltos = parseInt(cuentaForm.balones_devueltos) || 0
                     const vendidos = parseInt(cuentaForm.balones_vendidos) || selected.stock_actual
                     const faltantes = vendidos - devueltos
-                    if (!cuentaForm.balones_devueltos) return <span className="text-gray-500 text-xs">de {vendidos} bal. vendidos</span>
+                    if (!cuentaForm.balones_devueltos) return <span style={{color:"var(--app-text-secondary)",fontSize:11}}>de {vendidos} bal. vendidos</span>
                     if (faltantes > 0) return <span className="text-red-400 text-sm font-bold">⚠️ Faltan {faltantes}</span>
                     if (faltantes < 0) return <span className="text-yellow-400 text-sm font-bold">+{Math.abs(faltantes)} extra</span>
                     return <span className="text-emerald-400 text-sm font-bold">✅ Completo</span>
@@ -1699,7 +1701,7 @@ export default function Distribuidores() {
               const saldo = total - v20 - v43 - adel
               return (
                 <div className="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4 space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-gray-400">Total esperado</span><span className="text-white font-semibold">S/ {total.toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-400">Total esperado</span><span style={{color:"var(--app-text)",fontWeight:600}}>S/ {total.toLocaleString()}</span></div>
                   <div className="flex justify-between"><span className="text-gray-400">Vales S/20 ({cuentaForm.vales20||0} × 20)</span><span className="text-yellow-400">- S/ {v20}</span></div>
                   <div className="flex justify-between"><span className="text-gray-400">Vales S/43 ({cuentaForm.vales43||0} × 43)</span><span className="text-yellow-400">- S/ {v43}</span></div>
                   <div className="flex justify-between"><span className="text-gray-400">Adelantos</span><span className="text-yellow-400">- S/ {adel}</span></div>
@@ -1712,7 +1714,7 @@ export default function Distribuidores() {
                     </div>
                   )}
                   <div className="border-t border-[var(--app-card-border)] pt-2 flex justify-between items-center">
-                    <span className="text-white font-semibold">💰 Saldo en efectivo</span>
+                    <span style={{color:"var(--app-text)",fontWeight:600}}>💰 Saldo en efectivo</span>
                     <div className="flex items-center gap-2">
                       <span className={`font-bold text-lg ${saldo >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>S/ {saldo.toFixed(2)}</span>
                       <span className={`text-xs px-2 py-1 rounded-full font-bold ${saldo <= 0 && faltantes <= 0 ? 'bg-emerald-900/50 text-emerald-400 border border-emerald-600/50' : 'bg-yellow-900/50 text-yellow-400 border border-yellow-600/50'}`}>
@@ -1780,7 +1782,7 @@ export default function Distribuidores() {
                       ))}
                       {coincidencias.length === 0 && (
                         <div className="px-3 py-2 flex items-center justify-between">
-                          <span className="text-xs text-gray-500">No encontrado</span>
+                          <span style={{fontSize:11,color:"var(--app-text-secondary)"}}>No encontrado</span>
                           <button type="button"
                             onClick={() => { setClienteRapidoForm({ nombre: valeForm.nombre_cliente, telefono: '' }); setSubModal('clienteRapido') }}
                             className="text-xs bg-blue-600/30 border border-blue-500/50 text-blue-400 px-2 py-1 rounded-lg hover:bg-blue-600/50 transition-all">
@@ -1858,7 +1860,7 @@ export default function Distribuidores() {
             <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
               <div className="w-full max-w-sm rounded-2xl shadow-2xl" style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
                 <div className="flex items-center justify-between px-6 py-4 ">
-                  <h3 className="text-white font-semibold text-sm">Registrar cliente</h3>
+                  <h3 style={{color:"var(--app-text)",fontWeight:600,fontSize:14}}>Registrar cliente</h3>
                   <button onClick={() => setSubModal(null)} className="text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
                 </div>
                 <div className="px-6 py-4 space-y-3">
@@ -2187,7 +2189,7 @@ export default function Distribuidores() {
           <div className="w-full max-w-2xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto" style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
             <div className="flex items-center justify-between px-6 py-4  sticky top-0">
               <div>
-                <h3 className="text-white font-semibold">📋 A Cuenta — {selected.nombre}</h3>
+                <h3 style={{color:"var(--app-text)",fontWeight:600}}>📋 A Cuenta — {selected.nombre}</h3>
                 <p className="text-gray-500 text-xs mt-0.5">Clientes que dejaron vales o balones</p>
               </div>
               <button onClick={() => setAcuentaModal(false)} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
@@ -2274,16 +2276,16 @@ export default function Distribuidores() {
                       ? acuentaDist.filter(r => r.nombre_cliente?.toLowerCase().includes(busquedaAcuenta.toLowerCase()))
                       : acuentaDist
                     return loadingAcuenta ? (
-                      <p className="text-center text-gray-600 text-sm py-4">Cargando...</p>
+                      <p style={{textAlign:"center",color:"var(--app-text-secondary)",fontSize:13,padding:"1rem 0"}}>Cargando...</p>
                     ) : filtrados.length === 0 ? (
-                      <p className="text-center text-gray-600 text-sm py-4">{busquedaAcuenta ? `Sin resultados para "${busquedaAcuenta}"` : 'Sin registros pendientes'}</p>
+                      <p style={{textAlign:"center",color:"var(--app-text-secondary)",fontSize:13,padding:"1rem 0"}}>{busquedaAcuenta ? `Sin resultados para "${busquedaAcuenta}"` : 'Sin registros pendientes'}</p>
                     ) : (
                       <div className="space-y-2">
                         {filtrados.map(r => (
                           <div key={r.id} className="bg-transparent border border-[var(--app-card-border)] rounded-xl p-3">
                             <div className="flex items-start justify-between">
                               <div>
-                                <p className="text-white font-semibold text-sm">{r.nombre_cliente}</p>
+                                <p style={{color:"var(--app-text)",fontWeight:600,fontSize:14}}>{r.nombre_cliente}</p>
                                 <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0'}}>
                                   📅 {r.fecha}{r.fecha_recojo && <span style={{color:'#60a5fa',marginLeft:8}}>📦 Recojo: {r.fecha_recojo}</span>}
                                 </p>
@@ -2339,7 +2341,7 @@ export default function Distribuidores() {
                       ? acuentaEntregados.filter(r => r.nombre_cliente?.toLowerCase().includes(busquedaAcuenta.toLowerCase()))
                       : acuentaEntregados
                     return filtradosEntr.length === 0 ? (
-                    <p className="text-center text-gray-600 text-sm py-4">Sin entregas registradas</p>
+                    <p style={{textAlign:"center",color:"var(--app-text-secondary)",fontSize:13,padding:"1rem 0"}}>Sin entregas registradas</p>
                     ) : (
                       <div className="space-y-2">
                         {filtradosEntr.map(r => {
