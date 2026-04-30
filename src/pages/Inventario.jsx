@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { hoyPeru } from '../lib/fechas'
 import { Package, Plus, X, AlertCircle, TrendingUp, DollarSign, ShoppingCart, Edit2, LayoutList } from 'lucide-react'
@@ -7,13 +7,13 @@ import { es } from 'date-fns/locale'
 
 function Modal({ title, onClose, children, wide }) {
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className={`bg-gray-900 border border-gray-700 rounded-2xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} shadow-2xl max-h-[90vh] overflow-y-auto`}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
-          <h3 className="text-white font-semibold">{title}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.7)'}}>
+      <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:16,width:'100%',maxWidth:wide?680:480,boxShadow:'0 25px 50px rgba(0,0,0,0.4)',maxHeight:'90vh',display:'flex',flexDirection:'column'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 24px',borderBottom:'1px solid var(--app-card-border)',position:'sticky',top:0,background:'var(--app-card-bg)'}}>
+          <h3 style={{color:'var(--app-text)',fontWeight:600,margin:0}}>{title}</h3>
+          <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'var(--app-text-secondary)'}}><X className="w-5 h-5"/></button>
         </div>
-        <div className="px-6 py-5 overflow-y-auto flex-1">{children}</div>
+        <div style={{padding:'20px 24px',overflowY:'auto',flex:1}}>{children}</div>
       </div>
     </div>
   )
@@ -59,20 +59,20 @@ export default function Inventario() {
   const [loadingDetalle, setLoadingDetalle] = useState(false)
   const [editCompraForm, setEditCompraForm] = useState({ fecha: '', notas: '', proveedor_id: '', marca_id: '' })
   const [editDist, setEditDist] = useState([]) // [{almacen_id, nombre, responsable, tipo_balon, cantidad, detalle_id}]
+  const getDistribucionDefault = () => {
+    try {
+      const saved = localStorage.getItem('gasdist_ultima_distribucion')
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  }
   const [compraForm, setCompraForm] = useState({
     proveedor_id: '', marca_id: '', fecha: hoyPeru(),
     cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, precios: { '5kg': '', '10kg': '', '45kg': '' },
-    notas: '', distribucion: [],
+    notas: '', distribucion: getDistribucionDefault(),
     monto_amortizado: '', estado_pago: 'cancelado'
   })
 
-  useEffect(() => { cargar() }, [])
-
-
-  const [balonesEnCalle, setBalonesEnCalle] = useState(0)
-  const [stockPorTipo, setStockPorTipo] = useState([])
-
-  async function cargar() {
+  const cargar = useCallback(async () => {
     setLoading(true)
     const [{ data: a }, { data: p }, { data: m }, { data: c }, { data: mv }, { data: dl }, { data: pdt }, { data: deudasBal }, { data: spt }] = await Promise.all([
       supabase.from('almacenes').select('*').eq('activo', true).order('nombre'),
@@ -106,8 +106,14 @@ export default function Inventario() {
     setCompras(c || [])
     setMovimientos(mv || [])
     setLoading(false)
-  }
+  }, [])
 
+
+  useEffect(() => { cargar() }, [cargar])
+
+
+  const [balonesEnCalle, setBalonesEnCalle] = useState(0)
+  const [stockPorTipo, setStockPorTipo] = useState([])
 
 
   async function abrirLotesModal(almacen) {
@@ -310,7 +316,13 @@ export default function Inventario() {
 
     setSaving(false)
     setModal(null)
-    setCompraForm({ proveedor_id: '', marca_id: '', fecha: hoyPeru(), cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, precios: { '5kg': '', '10kg': '', '45kg': '' }, notas: '', distribucion: [], monto_amortizado: '', estado_pago: 'cancelado' })
+    // Guardar distribución como predeterminada para la próxima compra
+    if (compraForm.distribucion.length > 0) {
+      localStorage.setItem('gasdist_ultima_distribucion', JSON.stringify(
+        compraForm.distribucion.map(d => ({ almacen_id: d.almacen_id, tipo_balon: d.tipo_balon, cantidad: 0 }))
+      ))
+    }
+    setCompraForm({ proveedor_id: '', marca_id: '', fecha: hoyPeru(), cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, precios: { '5kg': '', '10kg': '', '45kg': '' }, notas: '', distribucion: getDistribucionDefault(), monto_amortizado: '', estado_pago: 'cancelado' })
     // Actualizar costos de compra en configuracion
     for (const tipo of ['5kg','10kg','45kg']) {
       if (parseFloat(compraForm.precios[tipo]) > 0) {
@@ -473,8 +485,8 @@ export default function Inventario() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-white">Inventario</h2>
-          <p className="text-gray-500 text-sm">Compras, stock e historial</p>
+          <h2 className="text-xl font-bold" style={{color:"var(--app-text)"}}>Inventario</h2>
+          <p style={{color:"var(--app-text-secondary)",fontSize:13}}>Compras, stock e historial</p>
         </div>
         <button onClick={() => { iniciarDistribucion(); setError(''); setModal('compra') }} className="btn-primary">
           <Plus className="w-4 h-4" />Registrar compra
@@ -509,11 +521,11 @@ export default function Inventario() {
             <div className="flex gap-3 mt-1">
               <div>
                 <p className={`text-2xl font-bold ${a.stock_actual > 100 ? 'text-emerald-400' : a.stock_actual > 30 ? 'text-yellow-400' : 'text-red-400'}`}>{a.stock_actual}</p>
-                <p className="text-xs text-gray-500">🟢 llenos</p>
+                <p style={{color:"var(--app-text-secondary)",fontSize:11}}>🟢 llenos</p>
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-400">{a.balones_vacios || 0}</p>
-                <p className="text-xs text-gray-500">⚪ vacíos</p>
+                <p style={{color:"var(--app-text-secondary)",fontSize:11}}>⚪ vacíos</p>
               </div>
             </div>
             <button onClick={() => abrirLotesModal(a)}
@@ -561,7 +573,7 @@ export default function Inventario() {
         <div className="card p-0 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-white">Stock consolidado</h3>
-            <span className="text-xs text-gray-500">Toca ✏️ para actualizar vacíos</span>
+            <span style={{color:"var(--app-text-secondary)",fontSize:11}}>Toca ✏️ para actualizar vacíos</span>
           </div>
           {/* Vista móvil — cards */}
           <div className="lg:hidden divide-y" style={{borderColor:'var(--app-card-border)'}}>
@@ -687,9 +699,9 @@ export default function Inventario() {
                           <span className="text-gray-300 font-bold text-lg">{a.balones_vacios || 0} bal.</span>
                           {(a.balones_vacios || 0) > 0 && (
                             <div className="flex gap-1 mt-1 flex-wrap">
-                              {(a.vacios_5kg||0) > 0 && <span className="text-xs text-gray-500">5kg:{a.vacios_5kg}</span>}
-                              {(a.vacios_10kg||0) > 0 && <span className="text-xs text-gray-500">10kg:{a.vacios_10kg}</span>}
-                              {(a.vacios_45kg||0) > 0 && <span className="text-xs text-gray-500">45kg:{a.vacios_45kg}</span>}
+                              {(a.vacios_5kg||0) > 0 && <span style={{color:"var(--app-text-secondary)",fontSize:11}}>5kg:{a.vacios_5kg}</span>}
+                              {(a.vacios_10kg||0) > 0 && <span style={{color:"var(--app-text-secondary)",fontSize:11}}>10kg:{a.vacios_10kg}</span>}
+                              {(a.vacios_45kg||0) > 0 && <span style={{color:"var(--app-text-secondary)",fontSize:11}}>45kg:{a.vacios_45kg}</span>}
                             </div>
                           )}
                         </div>
@@ -908,10 +920,10 @@ export default function Inventario() {
       {/* Modal detalle compra */}
       {detalleCompra && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
+          <div style={{background:"var(--app-card-bg)",border:"1px solid var(--app-card-border)",borderRadius:16,width:"100%",maxWidth:580,boxShadow:"0 25px 50px rgba(0,0,0,0.4)",maxHeight:"90vh",overflowY:"auto"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 24px",borderBottom:"1px solid var(--app-card-border)",position:"sticky",top:0,background:"var(--app-card-bg)"}}>
               <div>
-                <h3 className="text-white font-semibold">📦 Detalle de compra</h3>
+                <h3 style={{color:"var(--app-text)",fontWeight:600}}>📦 Detalle de compra</h3>
                 <p className="text-gray-500 text-xs mt-0.5">
                   {format(new Date(detalleCompra.compra.fecha + 'T12:00:00'), "dd 'de' MMMM yyyy", { locale: es })}
                 </p>
@@ -924,11 +936,11 @@ export default function Inventario() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-800/50 rounded-xl p-3">
                   <p className="text-xs text-gray-500 mb-1">Proveedor</p>
-                  <p className="text-white font-medium text-sm">{detalleCompra.compra.proveedores?.nombre || '-'}</p>
+                  <p style={{color:"var(--app-text)",fontWeight:500,fontSize:13}}>{detalleCompra.compra.proveedores?.nombre || '-'}</p>
                 </div>
                 <div className="bg-gray-800/50 rounded-xl p-3">
                   <p className="text-xs text-gray-500 mb-1">Marca</p>
-                  <p className="text-white font-medium text-sm">{detalleCompra.compra.marcas_gas?.nombre || detalleCompra.compra.marca_nombre || '-'}</p>
+                  <p style={{color:"var(--app-text)",fontWeight:500,fontSize:13}}>{detalleCompra.compra.marcas_gas?.nombre || detalleCompra.compra.marca_nombre || '-'}</p>
                 </div>
                 <div className="bg-emerald-900/20 border border-emerald-700/30 rounded-xl p-3 text-center">
                   <p className="text-xs text-gray-500 mb-1">Total balones</p>
@@ -958,7 +970,7 @@ export default function Inventario() {
                       return (
                         <div key={a.id} className="bg-gray-800/40 rounded-xl p-4">
                           <div className="flex items-center justify-between mb-2">
-                            <p className="text-white font-medium text-sm">📦 {a.nombre}</p>
+                            <p style={{color:"var(--app-text)",fontWeight:500,fontSize:13}}>📦 {a.nombre}</p>
                             <span className="text-emerald-400 font-bold text-sm">{totalAlmacen} bal.</span>
                           </div>
                           <div className="flex gap-2 flex-wrap">
@@ -1004,16 +1016,16 @@ export default function Inventario() {
       {/* Modal editar vacíos */}
       {editVaciosModal && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl">
+          <div style={{background:"var(--app-card-bg)",border:"1px solid var(--app-card-border)",borderRadius:16,width:"100%",maxWidth:400,boxShadow:"0 25px 50px rgba(0,0,0,0.4)"}}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
               <div>
-                <h3 className="text-white font-semibold text-sm">⚪ Editar balones vacíos</h3>
+                <h3 style={{color:"var(--app-text)",fontWeight:600,fontSize:13}}>⚪ Editar balones vacíos</h3>
                 <p className="text-gray-500 text-xs mt-0.5">{editVaciosModal.nombre}</p>
               </div>
               <button onClick={() => setEditVaciosModal(null)} className="text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
-              <p className="text-xs text-gray-500">Ingresa la cantidad de balones vacíos por tipo:</p>
+              <p style={{color:"var(--app-text-secondary)",fontSize:11}}>Ingresa la cantidad de balones vacíos por tipo:</p>
               <div className="grid grid-cols-3 gap-3">
                 {[['5kg','🔵','blue'],['10kg','🟡','yellow'],['45kg','🔴','red']].map(([tipo, icon, color]) => (
                   <div key={tipo} className={`bg-gray-800/50 border border-gray-700 rounded-xl p-3 text-center`}>
@@ -1027,7 +1039,7 @@ export default function Inventario() {
               </div>
               {Object.values(editVaciosModalVal).reduce((s,v) => s+(v||0), 0) > 0 && (
                 <p className="text-xs text-gray-400 text-right">
-                  Total: <span className="text-white font-bold">{Object.values(editVaciosModalVal).reduce((s,v) => s+(v||0), 0)} bal. vacíos</span>
+                  Total: <span style={{color:"var(--app-text)",fontWeight:700}}>{Object.values(editVaciosModalVal).reduce((s,v) => s+(v||0), 0)} bal. vacíos</span>
                 </p>
               )}
               <div className="flex gap-3">
@@ -1055,16 +1067,16 @@ export default function Inventario() {
         const distAutonomo = distribuidoresList.find(d => d.almacen_id === editStockAlmacen.id && d.modalidad === 'autonomo')
         return (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl">
+          <div style={{background:"var(--app-card-bg)",border:"1px solid var(--app-card-border)",borderRadius:16,width:"100%",maxWidth:400,boxShadow:"0 25px 50px rgba(0,0,0,0.4)"}}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
               <div>
-                <h3 className="text-white font-semibold text-sm">✏️ Editar stock llenos</h3>
+                <h3 style={{color:"var(--app-text)",fontWeight:600,fontSize:13}}>✏️ Editar stock llenos</h3>
                 <p className="text-gray-500 text-xs mt-0.5">{editStockAlmacen.nombre}</p>
               </div>
               <button onClick={() => setEditStockAlmacen(null)} className="text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
             </div>
             <div className="px-6 py-5 space-y-4">
-              <p className="text-xs text-gray-500">Ingresa el stock actual por tipo de balón:</p>
+              <p style={{color:"var(--app-text-secondary)",fontSize:11}}>Ingresa el stock actual por tipo de balón:</p>
               {distAutonomo ? (
                 <div className="grid grid-cols-1 gap-3">
                   <div className="bg-yellow-900/20 border border-yellow-800/40 rounded-xl p-3 text-center">
@@ -1202,7 +1214,7 @@ export default function Inventario() {
               </div>
               {Object.values(vaciosForm.cantidades).reduce((s,v) => s+(parseInt(v)||0), 0) > 0 && (
                 <p className="text-xs text-gray-400 mt-2 text-right">
-                  Total: <span className="text-white font-bold">{Object.values(vaciosForm.cantidades).reduce((s,v) => s+(parseInt(v)||0), 0)} bal.</span>
+                  Total: <span style={{color:"var(--app-text)",fontWeight:700}}>{Object.values(vaciosForm.cantidades).reduce((s,v) => s+(parseInt(v)||0), 0)} bal.</span>
                 </p>
               )}
             </div>
@@ -1288,7 +1300,7 @@ export default function Inventario() {
                   ))}
                 </div>
                 {totalCompra > 0 && (
-                  <p className="text-xs text-gray-500 mt-2 text-right">Total: <span className="text-white font-semibold">{totalCompra} balones</span></p>
+                  <p className="text-xs text-gray-500 mt-2 text-right">Total: <span style={{color:"var(--app-text)",fontWeight:600}}>{totalCompra} balones</span></p>
                 )}
               </div>
             </div>
@@ -1327,7 +1339,7 @@ export default function Inventario() {
                         <p className="text-gray-300 text-sm font-medium">
                           {distribuidoresList.find(d => d.almacen_id === a.id) ? '🚛' : '📦'} {a.nombre}
                         </p>
-                        {a.responsable && <span className="text-xs text-gray-500">({a.responsable})</span>}
+                        {a.responsable && <span style={{color:"var(--app-text-secondary)",fontSize:11}}>({a.responsable})</span>}
                         {(() => {
                           const distrib = distribuidoresList.find(d => d.almacen_id === a.id)
                           if (!distrib) return null
@@ -1370,19 +1382,19 @@ export default function Inventario() {
                 <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3">
                   <p className="text-xs text-gray-400 font-semibold uppercase">💰 Estado de pago</p>
                   <div className="grid grid-cols-3 gap-3 text-center text-sm">
-                    <div className="bg-gray-900 rounded-lg p-2">
-                      <p className="text-white font-bold">S/ {montoTotal.toLocaleString('es-PE')}</p>
-                      <p className="text-xs text-gray-500">Monto total</p>
+                    <div style={{background:"var(--app-card-bg-alt)",borderRadius:8,padding:8}}>
+                      <p style={{color:"var(--app-text)",fontWeight:700}}>S/ {montoTotal.toLocaleString('es-PE')}</p>
+                      <p style={{color:"var(--app-text-secondary)",fontSize:11}}>Monto total</p>
                     </div>
-                    <div className="bg-gray-900 rounded-lg p-2">
+                    <div style={{background:"var(--app-card-bg-alt)",borderRadius:8,padding:8}}>
                       <p className={`font-bold ${pendiente > 0 ? 'text-red-400' : 'text-emerald-400'}`}>S/ {pendiente.toLocaleString('es-PE')}</p>
-                      <p className="text-xs text-gray-500">Pendiente</p>
+                      <p style={{color:"var(--app-text-secondary)",fontSize:11}}>Pendiente</p>
                     </div>
                     <div className={`rounded-lg p-2 ${pendiente <= 0 ? 'bg-emerald-900/30' : 'bg-orange-900/20'}`}>
                       <p className={`font-bold text-xs ${pendiente <= 0 ? 'text-emerald-400' : 'text-orange-300'}`}>
                         {pendiente <= 0 ? '✅ Cancelado' : '⏳ Por cancelar'}
                       </p>
-                      <p className="text-xs text-gray-500">Estado</p>
+                      <p style={{color:"var(--app-text-secondary)",fontSize:11}}>Estado</p>
                     </div>
                   </div>
                   <div>
@@ -1407,9 +1419,9 @@ export default function Inventario() {
       {/* Quick modal: nueva marca / nuevo proveedor */}
       {quickModal && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl">
+          <div style={{background:"var(--app-card-bg)",border:"1px solid var(--app-card-border)",borderRadius:16,width:"100%",maxWidth:400,boxShadow:"0 25px 50px rgba(0,0,0,0.4)"}}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-              <h3 className="text-white font-semibold text-sm">
+              <h3 style={{color:"var(--app-text)",fontWeight:600,fontSize:13}}>
                 {quickModal === 'marca' ? '🏷️ Nueva marca de gas' : '🏢 Nuevo proveedor'}
               </h3>
               <button onClick={() => setQuickModal(null)} className="text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
@@ -1441,8 +1453,8 @@ export default function Inventario() {
       {/* Modal lotes por almacén */}
       {lotesModal && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-4xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-800 sticky top-0 bg-gray-900">
+          <div style={{background:"var(--app-card-bg)",border:"1px solid var(--app-card-border)",borderRadius:16,width:"100%",maxWidth:900,boxShadow:"0 25px 50px rgba(0,0,0,0.4)",maxHeight:"90vh",overflowY:"auto"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 24px",borderBottom:"1px solid var(--app-card-border)",position:"sticky",top:0,background:"var(--app-card-bg)"}}>
               <div>
                 <h3 style={{color:'var(--app-text)',fontWeight:700,fontSize:18,margin:0}}>📦 Lotes — {lotesModal.nombre}</h3>
                 <p style={{color:'var(--app-text-secondary)',fontSize:13,marginTop:3}}>{lotesModal.stock_actual} llenos · {lotesModal.balones_vacios || 0} vacíos</p>
@@ -1566,10 +1578,10 @@ export default function Inventario() {
       {/* Modal editar compra */}
       {modal === 'editCompra' && editCompraSelected && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl">
+          <div style={{background:"var(--app-card-bg)",border:"1px solid var(--app-card-border)",borderRadius:16,width:"100%",maxWidth:480,boxShadow:"0 25px 50px rgba(0,0,0,0.4)"}}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
               <div>
-                <h3 className="text-white font-semibold">✏️ Editar compra</h3>
+                <h3 style={{color:"var(--app-text)",fontWeight:600}}>✏️ Editar compra</h3>
                 <p className="text-gray-500 text-xs mt-0.5">{editCompraSelected.cantidad_total} bal. · S/{editCompraSelected.precio_unitario}/bal.</p>
               </div>
               <button onClick={() => setModal(null)} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
