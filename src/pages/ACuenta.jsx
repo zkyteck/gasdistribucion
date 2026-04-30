@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { hoyPeru } from '../lib/fechas'
 import { ClipboardList, Plus, X, AlertCircle, Search, Printer, CheckCircle, Clock } from 'lucide-react'
@@ -8,13 +8,13 @@ import { useAuth } from '../context/AuthContext'
 
 function Modal({ title, onClose, children, wide }) {
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className={`w-full ${wide ? 'max-w-2xl' : 'max-w-md'} rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto`} style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
-        <div className="flex items-center justify-between px-6 py-4  sticky top-0">
-          <h3 className="text-white font-semibold">{title}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.7)'}}>
+      <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:16,width:'100%',maxWidth:wide?680:480,boxShadow:'0 25px 50px rgba(0,0,0,0.4)',maxHeight:'90vh',display:'flex',flexDirection:'column'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 24px',borderBottom:'1px solid var(--app-card-border)',position:'sticky',top:0,background:'var(--app-card-bg)'}}>
+          <h3 style={{color:'var(--app-text)',fontWeight:600,margin:0}}>{title}</h3>
+          <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'var(--app-text-secondary)'}}><X className="w-5 h-5"/></button>
         </div>
-        <div className="px-6 py-5 overflow-y-auto flex-1">{children}</div>
+        <div style={{padding:'20px 24px',overflowY:'auto',flex:1}}>{children}</div>
       </div>
     </div>
   )
@@ -247,12 +247,12 @@ export default function ACuenta() {
     setDistribuidores(data || [])
   }
 
-  async function cargar() {
+  const cargar = useCallback(async () => {
     setLoading(true)
     const { data } = await supabase.from('a_cuenta').select('*').order('created_at', { ascending: false })
     setRegistros(data || [])
     setLoading(false)
-  }
+  }, [])
 
   async function guardarRegistro(imprimir = false, forzarNuevo = false) {
     if (!form.nombre_cliente) { setError('Ingresa el nombre del cliente'); return }
@@ -264,7 +264,8 @@ export default function ACuenta() {
       const { data: pendientes } = await supabase.from('a_cuenta')
         .select('*').eq('estado', 'pendiente')
       const encontrado = (pendientes || []).find(r =>
-        r.nombre_cliente.trim().toLowerCase() === form.nombre_cliente.trim().toLowerCase()
+        r.nombre_cliente.trim().toLowerCase() === form.nombre_cliente.trim().toLowerCase() ||
+        (form.telefono && r.telefono && r.telefono === form.telefono.trim())
       )
       if (encontrado) {
         setRegistroPendiente(encontrado)
@@ -354,7 +355,7 @@ export default function ACuenta() {
       setClienteRapidoForm({ nombre: '', telefono: '' })
       setModal('nuevo')
     } else {
-      alert('Error al registrar: ' + e.message)
+      setError('Error al registrar: ' + e.message)
     }
   }
 
@@ -497,8 +498,8 @@ export default function ACuenta() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-white">A Cuenta</h2>
-          <p className="text-gray-500 text-sm">Clientes que dejan depósito para recoger después</p>
+          <h2 style={{fontSize:20,fontWeight:700,color:"var(--app-text)"}}>A Cuenta</h2>
+          <p style={{color:"var(--app-text-secondary)",fontSize:13}}>Clientes que dejan depósito para recoger después</p>
         </div>
         <button onClick={() => { setForm(emptyForm); setError(''); cargarClientes(); setModal('nuevo') }} className="btn-primary">
           <Plus className="w-4 h-4" />Nuevo registro
@@ -510,12 +511,12 @@ export default function ACuenta() {
         <div className="stat-card border border-yellow-500/20">
           <div className="w-8 h-8 bg-yellow-500/10 rounded-lg flex items-center justify-center"><Clock className="w-4 h-4 text-yellow-400" /></div>
           <p className="text-2xl font-bold text-yellow-400">{pendientes}</p>
-          <p className="text-xs text-gray-500">Pendientes de entrega</p>
+          <p style={{color:"var(--app-text-secondary)",fontSize:11}}>Pendientes de entrega</p>
         </div>
         <div className="stat-card border border-emerald-500/20">
           <div className="w-8 h-8 bg-emerald-500/10 rounded-lg flex items-center justify-center"><CheckCircle className="w-4 h-4 text-emerald-400" /></div>
           <p className="text-2xl font-bold text-emerald-400">{entregados}</p>
-          <p className="text-xs text-gray-500">Entregados</p>
+          <p style={{color:"var(--app-text-secondary)",fontSize:11}}>Entregados</p>
         </div>
       </div>
 
@@ -536,14 +537,14 @@ export default function ACuenta() {
       </div>
       {/* Filtro por fecha */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-gray-500 text-xs">Desde</span>
+        <span style={{color:"var(--app-text-secondary)",fontSize:11}}>Desde</span>
         <input
           type="date"
           className="input py-1 text-xs w-36"
           value={filtroFechaDesde}
           onChange={e => setFiltroFechaDesde(e.target.value)}
         />
-        <span className="text-gray-500 text-xs">Hasta</span>
+        <span style={{color:"var(--app-text-secondary)",fontSize:11}}>Hasta</span>
         <input
           type="date"
           className="input py-1 text-xs w-36"
@@ -584,7 +585,7 @@ export default function ACuenta() {
                         <span className="text-gray-400 font-mono text-xs font-bold">#{String(r.numero).padStart(3,'0')}</span>
                       </div>
                       <div>
-                        <p className="text-white font-semibold text-sm">{r.nombre_cliente}</p>
+                        <p style={{color:"var(--app-text)",fontWeight:600,fontSize:13}}>{r.nombre_cliente}</p>
                         <p className="text-blue-400 text-xs font-medium mt-0.5">{resumenItems(r)}</p>
                         <p className="text-gray-400 text-xs mt-0.5">Registrado: {format(new Date(r.fecha + 'T12:00:00'), 'dd/MM/yyyy', { locale: es })}</p>
                         {r.fecha_actualizacion && <p className="text-blue-400 text-xs">Editado: {format(new Date(r.fecha_actualizacion + 'T12:00:00'), 'dd/MM/yyyy', { locale: es })}</p>}
@@ -661,7 +662,7 @@ export default function ACuenta() {
                     </button>
                   ))}
                   <div className="px-3 py-2 flex items-center justify-between border-t border-[var(--app-card-border)]">
-                    <span className="text-xs text-gray-500">
+                    <span style={{color:"var(--app-text-secondary)",fontSize:11}}>
                       {clientes.filter(c => c.nombre.toLowerCase().includes(form.nombre_cliente.toLowerCase())).length === 0 ? 'No encontrado' : 'o crear nuevo'}
                     </span>
                     <button type="button"
@@ -772,7 +773,7 @@ export default function ACuenta() {
               <p className="text-xs text-gray-500 mb-1">Pendiente en custodia:</p>
               <p className="text-blue-300 font-semibold">{resumenItems(selected)}</p>
             </div>
-            <p className="text-xs text-gray-500">Ingresa cuánto está retirando ahora (puede ser parcial):</p>
+            <p style={{color:"var(--app-text-secondary)",fontSize:11}}>Ingresa cuánto está retirando ahora (puede ser parcial):</p>
             <div className="grid grid-cols-2 gap-3">
               {(selected.vales_20 > 0) && (
                 <div>
@@ -857,7 +858,7 @@ export default function ACuenta() {
                 <p className="text-blue-300 font-semibold mt-2">{resumenItems(registroPendiente)}</p>
               </div>
             </div>
-            <p className="text-gray-400 text-sm">¿Qué quieres hacer?</p>
+            <p style={{color:"var(--app-text-secondary)",fontSize:13}}>¿Qué quieres hacer?</p>
             <div className="space-y-2">
               <button onClick={agregarAlPendiente} disabled={saving}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl transition-all">
@@ -905,7 +906,7 @@ export default function ACuenta() {
                       <div className="flex justify-between items-center">
                         <div>
                           <p className="text-xs font-semibold text-blue-300">Depósito inicial</p>
-                          <p className="text-xs text-gray-500">{format(new Date(selected.fecha + 'T12:00:00'), "dd 'de' MMMM yyyy", { locale: es })}</p>
+                          <p style={{color:"var(--app-text-secondary)",fontSize:11}}>{format(new Date(selected.fecha + 'T12:00:00'), "dd 'de' MMMM yyyy", { locale: es })}</p>
                         </div>
                         <p className="text-blue-300 font-bold text-sm">{resumenItems(selected)}</p>
                       </div>
@@ -1006,11 +1007,11 @@ export default function ACuenta() {
       {ticketData && <Ticket data={ticketData} onClose={() => setTicketData(null)} />}
       {/* Modal editar registro */}
       {modal === 'editAC' && selected && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:"rgba(0,0,0,0.7)"}}>
           <div className="w-full max-w-md rounded-2xl shadow-2xl" style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
             <div className="flex items-center justify-between px-6 py-4 ">
               <div>
-                <h3 className="text-white font-semibold">✏️ Editar registro</h3>
+                <h3 style={{color:"var(--app-text)",fontWeight:600}}>✏️ Editar registro</h3>
                 <p className="text-gray-500 text-xs mt-0.5">{selected.nombre_cliente} — #{String(selected.numero).padStart(3,'0')}</p>
                 <p className="text-gray-600 text-xs">Registro original: {selected.fecha}</p>
                 {selected.fecha_actualizacion && (

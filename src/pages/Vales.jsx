@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { hoyPeru } from '../lib/fechas'
 import { Ticket, Plus, X, AlertCircle, DollarSign, CheckCircle, RefreshCw } from 'lucide-react'
@@ -8,13 +8,13 @@ import { useAuth } from '../context/AuthContext'
 
 function Modal({ title, onClose, children }) {
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 sticky top-0 bg-gray-900">
-          <h3 className="text-white font-semibold">{title}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.7)'}}>
+      <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:16,width:'100%',maxWidth:480,boxShadow:'0 25px 50px rgba(0,0,0,0.4)',maxHeight:'90vh',overflowY:'auto'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 24px',borderBottom:'1px solid var(--app-card-border)',position:'sticky',top:0,background:'var(--app-card-bg)'}}>
+          <h3 style={{color:'var(--app-text)',fontWeight:600,margin:0}}>{title}</h3>
+          <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'var(--app-text-secondary)'}}><X className="w-5 h-5"/></button>
         </div>
-        <div className="px-6 py-5">{children}</div>
+        <div style={{padding:'20px 24px'}}>{children}</div>
       </div>
     </div>
   )
@@ -39,16 +39,7 @@ export default function Vales() {
   const [modalSms, setModalSms] = useState(false)
   const [retiroForm, setRetiroForm] = useState({ monto: '', motivo: '', fecha: hoyPeru() })
 
-  useEffect(() => {
-    cargar()
-    cargarValorVales()
-    const canal = supabase.channel('vales-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'vales_fise' }, () => cargar())
-      .subscribe()
-    return () => supabase.removeChannel(canal)
-  }, [filtroFecha])
-
-  async function cargarValorVales() {
+  const cargarValorVales = useCallback(async () => {
     const { data } = await supabase.from('configuracion').select('*')
       .in('clave', ['valor_vale_pequeno', 'valor_vale_grande'])
     const mapa = { pequeno: 20, grande: 43 }
@@ -57,9 +48,9 @@ export default function Vales() {
       if (r.clave === 'valor_vale_grande') mapa.grande = parseFloat(r.valor) || 43
     })
     setValorVales(mapa)
-  }
+  }, [])
 
-  async function cargar() {
+  const cargar = useCallback(async () => {
     setLoading(true)
     const hoy = new Date()
     const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().split('T')[0]
@@ -87,7 +78,17 @@ export default function Vales() {
     setValesMes(totalMes || 0)
     setLoading(false)
     setReloadKey(k => k + 1)
-  }
+  }, [filtroFecha])
+
+  useEffect(() => {
+    cargar()
+    cargarValorVales()
+    const canal = supabase.channel('vales-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vales_fise' }, () => cargar())
+      .subscribe()
+    return () => supabase.removeChannel(canal)
+  }, [cargar, cargarValorVales])
+
 
   async function guardarLote() {
     const cp = parseInt(form.cantidad_pequeno) || 0
@@ -164,16 +165,16 @@ export default function Vales() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-white">Vales FISE</h2>
-          <p className="text-gray-500 text-sm">Control de vales S/20 y S/43</p>
+          <h2 style={{fontSize:20,fontWeight:700,color:"var(--app-text)"}}>Vales FISE</h2>
+          <p style={{fontSize:13,color:"var(--app-text-secondary)"}}>Control de vales S/20 y S/43</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button onClick={consultarSaldo}
-            className="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/40 text-blue-400 text-sm font-medium px-3 py-2 rounded-xl transition-all flex items-center gap-2">
+            className="btn-secondary">
             💰 Consultar saldo FISE
           </button>
           <button onClick={() => setModalSms(true)}
-            className="bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/40 text-emerald-400 text-sm font-medium px-3 py-2 rounded-xl transition-all flex items-center gap-2">
+            className="btn-secondary">
             📱 Procesar vale FISE
           </button>
           <button onClick={() => { setRetiroForm({ monto: '', motivo: '', fecha: hoyPeru() }); setError(''); setModal('retiro') }} className="btn-secondary">
@@ -211,7 +212,7 @@ export default function Vales() {
 
       {/* Selector de fecha */}
       <div className="flex items-center gap-3">
-        <label className="text-gray-400 text-sm">Ver día:</label>
+        <label style={{fontSize:13,color:"var(--app-text-secondary)"}}>Ver día:</label>
         <input type="date" className="input w-auto" value={filtroFecha} onChange={e => setFiltroFecha(e.target.value)} />
         <button onClick={cargar} className="btn-secondary py-1.5"><RefreshCw className="w-3.5 h-3.5" /></button>
       </div>
@@ -221,7 +222,7 @@ export default function Vales() {
         <div className="card flex items-center justify-center h-32 text-gray-500 text-sm">Cargando...</div>
       ) : (
         <div className="card">
-          <h3 className="text-sm font-semibold text-white mb-4">
+          <h3 style={{fontSize:13,fontWeight:600,color:"var(--app-text)",marginBottom:16}}>
             Vales procesados — {format(new Date(filtroFecha + 'T12:00:00'), "dd 'de' MMMM, yyyy", { locale: es })}
           </h3>
 
@@ -260,7 +261,7 @@ export default function Vales() {
               {/* Total del día */}
               <div className="bg-emerald-900/20 border border-emerald-700/40 rounded-xl p-4 flex items-center justify-between">
                 <div>
-                  <p className="text-gray-400 text-sm">Total del día</p>
+                  <p style={{fontSize:13,color:"var(--app-text-secondary)"}}>Total del día</p>
                   <p className="text-xs text-gray-500 mt-0.5">
                     {lote.vales?.length || 0} vales · {Object.entries(lote.porTipo || {}).map(([t, d]) => `${d.cant} de S/${t}`).join(' + ')}
                   </p>
@@ -275,9 +276,9 @@ export default function Vales() {
       {/* Historial SMS FISE enviados */}
       {smsHistorial.length > 0 && (
         <div className="card p-0 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-white">📱 Vales FISE enviados por SMS (esta sesión)</h3>
-            <span className="text-xs text-gray-500">{smsHistorial.length} enviados</span>
+          <div style={{padding:"14px 20px",borderBottom:"1px solid var(--app-card-border)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <h3 style={{fontSize:13,fontWeight:600,color:"var(--app-text)",margin:0}}>📱 Vales FISE enviados por SMS (esta sesión)</h3>
+            <span style={{fontSize:11,color:"var(--app-text-secondary)"}}>{smsHistorial.length} enviados</span>
           </div>
           <div className="divide-y divide-gray-800/50">
             {smsHistorial.map(s => (
@@ -285,7 +286,7 @@ export default function Vales() {
                 <div className="flex items-center gap-3">
                   <div className={`w-2 h-2 rounded-full flex-shrink-0 ${s.estado === 'procesado' ? 'bg-emerald-400' : s.estado === 'rechazado' ? 'bg-red-400' : 'bg-yellow-400'}`} />
                   <div>
-                    <p className="text-white text-sm font-medium">DNI: {s.dni} · Cupón: {s.cupon}</p>
+                    <p style={{fontSize:13,fontWeight:500,color:"var(--app-text)"}}>DNI: {s.dni} · Cupón: {s.cupon}</p>
                     <p className="text-gray-500 text-xs">{s.fecha} {s.hora} · Vale S/{s.tipo}</p>
                   </div>
                 </div>
@@ -357,7 +358,7 @@ export default function Vales() {
 
             {(parseInt(form.cantidad_pequeno) > 0 || parseInt(form.cantidad_grande) > 0) && (
               <div className="bg-emerald-900/20 border border-emerald-700/40 rounded-xl p-3 flex justify-between items-center">
-                <span className="text-gray-400 text-sm">Total a registrar:</span>
+                <span style={{fontSize:13,color:"var(--app-text-secondary)"}}>Total a registrar:</span>
                 <span className="text-emerald-400 font-bold text-xl">
                   S/ {((parseInt(form.cantidad_pequeno)||0) * valorVales.pequeno + (parseInt(form.cantidad_grande)||0) * valorVales.grande).toFixed(0)}
                 </span>
@@ -421,7 +422,7 @@ export default function Vales() {
             {smsForm.dni && smsForm.cupon && (
               <div className="bg-gray-800/50 rounded-xl p-4">
                 <p className="text-xs text-gray-500 mb-1">Mensaje que se enviará al 58996:</p>
-                <p className="text-white font-mono text-sm bg-gray-900 rounded-lg px-3 py-2">
+                <p style={{color:"var(--app-text)",fontFamily:"monospace",fontSize:13,background:"var(--app-card-bg-alt)",borderRadius:8,padding:"8px 12px"}}>
                   Fise ah01 {smsForm.dni} {smsForm.cupon}
                 </p>
               </div>
@@ -531,8 +532,8 @@ function HistorialVales({ filtroFecha, onFechaClick }) {
 
   return (
     <div className="card p-0 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-800">
-        <h3 className="text-sm font-semibold text-white">Historial de días</h3>
+      <div style={{padding:"14px 20px",borderBottom:"1px solid var(--app-card-border)"}}>
+        <h3 style={{fontSize:13,fontWeight:600,color:"var(--app-text)",margin:0}}>Historial de días</h3>
       </div>
       {/* Móvil — cards */}
       <div className="lg:hidden divide-y" style={{borderColor:'var(--app-card-border)'}}>
@@ -568,9 +569,9 @@ function HistorialVales({ filtroFecha, onFechaClick }) {
       {/* Desktop — tabla */}
       <div className="hidden lg:block overflow-x-auto">
         <table className="w-full">
-          <thead><tr className="border-b border-gray-800">
+          <thead><tr style={{borderBottom:"1px solid var(--app-card-border)"}}>
             {['Fecha','Detalle vales','Total vales','Monto total',''].map(h => (
-              <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase px-5 py-3">{h}</th>
+              <th key={h} className="text-left text-xs font-semibold uppercase px-5 py-3" style={{color:"var(--app-text-secondary)"}}>{h}</th>
             ))}
           </tr></thead>
           <tbody className="divide-y divide-gray-800/50">
@@ -617,11 +618,11 @@ function HistorialVales({ filtroFecha, onFechaClick }) {
       </div>
 
       {editDia && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-              <h3 className="text-white font-semibold text-sm">✏️ Editar vales — {format(new Date(editDia.fecha + 'T12:00:00'), 'dd/MM/yyyy', { locale: es })}</h3>
-              <button onClick={() => setEditDia(null)} className="text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:"rgba(0,0,0,0.7)"}}>
+          <div style={{background:"var(--app-card-bg)",border:"1px solid var(--app-card-border)",borderRadius:16,width:"100%",maxWidth:400,boxShadow:"0 25px 50px rgba(0,0,0,0.4)"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 24px",borderBottom:"1px solid var(--app-card-border)"}}>
+              <h3 style={{color:"var(--app-text)",fontWeight:600,fontSize:13,margin:0}}>✏️ Editar vales — {format(new Date(editDia.fecha + 'T12:00:00'), 'dd/MM/yyyy', { locale: es })}</h3>
+              <button onClick={() => setEditDia(null)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--app-text-secondary)"}}><X className="w-4 h-4"/></button>
             </div>
             <div className="px-6 py-5 space-y-4">
               <div className="grid grid-cols-2 gap-4">
