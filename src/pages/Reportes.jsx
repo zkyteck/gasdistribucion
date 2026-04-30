@@ -383,9 +383,9 @@ export default function Reportes() {
                   </span>
                   <span style={{fontSize:11,color:'var(--app-text-secondary)',marginLeft:6}}>vs mes anterior</span>
                 </div>
-                {ingCredito>0&&(
+                {data.ingCredito>0&&(
                   <div style={{borderLeft:'1px solid var(--app-card-border)',paddingLeft:24}}>
-                    <p style={{fontSize:18,fontWeight:600,color:'#fb923c',margin:0}}>S/{ingCredito.toLocaleString('es-PE',{maximumFractionDigits:0})}</p>
+                    <p style={{fontSize:18,fontWeight:600,color:'#fb923c',margin:0}}>S/{data.ingCredito.toLocaleString('es-PE',{maximumFractionDigits:0})}</p>
                     <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Por cobrar (crédito)</p>
                   </div>
                 )}
