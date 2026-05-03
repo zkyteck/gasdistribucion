@@ -15,7 +15,10 @@ self.addEventListener('push', event => {
     badge: '/favicon.svg',
     tag: data.tag || 'centrogas',
     renotify: true,
-    requireInteraction: false,
+    requireInteraction: true,
+    vibrate: [200, 100, 200],
+    silent: false,
+    priority: 'high',
     data: { url: data.url || '/ventas' },
     actions: [
       { action: 'ver', title: 'Ver' },
