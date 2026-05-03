@@ -194,7 +194,8 @@ export default function Deudas() {
     if(e) { setError(e.message); return }
     setDeudaPendiente(null); setModal(null); setDeudaForm(emptyDeudaForm)
     toast('Deuda registrada'); cargar()
-    Notif.nuevaDeuda(deudaForm.nombre_deudor.trim(), monto, perfil?.nombre || 'Admin')
+    const resumenNotif = monto > 0 ? `S/${monto}` : balones > 0 ? `${balones} balón(es)` : ''
+    Notif.nuevaDeuda(deudaForm.nombre_deudor.trim(), resumenNotif, perfil?.nombre || 'Admin')
   }, [deudaForm, perfil, cargar, toast])
 
   // ─── Agregar a deuda pendiente ───────────────────────────────────────────────

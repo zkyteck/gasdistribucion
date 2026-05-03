@@ -305,6 +305,7 @@ export default function ACuenta() {
     if (imprimir) {
       setTicketData({ ...form, numero, vales_20: parseInt(form.vales_20)||0, vales_43: parseInt(form.vales_43)||0, balones: parseInt(form.balones)||0, dinero: parseFloat(form.dinero)||0 })
     }
+    Notif.nuevaACuenta(form.nombre_cliente || 'Cliente', form.dinero || form.balones || 0, perfil?.nombre || 'Un usuario')
     setRegistroPendiente(null)
     setModal(null)
     setForm(emptyForm)
@@ -401,6 +402,7 @@ export default function ACuenta() {
     }).eq('id', selected.id)
     setSaving(false)
     if (e) { setError(e.message); return }
+    Notif.recojoACuenta(selected?.nombre_cliente || 'Cliente', perfil?.nombre || 'Un usuario')
     setModal(null); cargar()
   }
 

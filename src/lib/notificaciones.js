@@ -81,7 +81,7 @@ export async function notificar({ titulo, cuerpo, url = '/', tag = 'default', ac
 // Helpers para cada evento del negocio
 export const Notif = {
   nuevaDeuda: (nombreCliente, monto, actor) =>
-    notificar({ titulo: '🔴 Nueva deuda registrada', cuerpo: `${actor} registró deuda de ${nombreCliente} — S/${monto}`, url: '/deudas', tag: 'deuda' }),
+    notificar({ titulo: '🔴 Nueva deuda registrada', cuerpo: `${actor} registró deuda de ${nombreCliente}${monto ? ' — ' + monto : ''}`, url: '/deudas', tag: 'deuda' }),
 
   pagoDeuda: (nombreCliente, montoPagado, montoRestante, actor) =>
     notificar({ titulo: '💰 Pago registrado', cuerpo: `${actor} registró pago de ${nombreCliente} — S/${montoPagado}${montoRestante > 0 ? ` (quedan S/${montoRestante})` : ' — Liquidada'}`, url: '/deudas', tag: 'pago' }),

@@ -482,11 +482,13 @@ export default function Ventas() {
 
     setSaving(false); setModal(false); toast('Venta registrada'); cargar()
     // Notificar si fue venta al crédito
-    if(esCred && debeDinero) {
+    if(esCred) {
       const actor = perfil?.nombre || 'Un usuario'
       const cliente = form.cliente_nombre || 'Cliente Varios'
-      const monto = ((parseInt(form.cantidad)||0)*(parseFloat(form.precio_unitario)||0)-parseFloat(form.pago_al_momento||0)).toFixed(0)
-      Notif.nuevaVentaCredito(cliente, monto, actor)
+      const montoCred = Math.max(0,(parseInt(form.cantidad)||0)*(parseFloat(form.precio_unitario)||0)-(parseFloat(form.pago_al_momento)||0))
+      const balonesCredito = parseInt(form.balones_credito)||0
+      const resumen = debeDinero ? `S/${montoCred.toFixed(0)}` : debeBalon ? `${balonesCredito} balón(es)` : ''
+      Notif.nuevaVentaCredito(cliente, resumen, actor)
     }
   }, [form, getStock, aplicarFIFO, perfil, cargar, toast])
 
