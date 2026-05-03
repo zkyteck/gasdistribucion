@@ -34,11 +34,18 @@ export async function inicializarNotificaciones(userId) {
     })
 
     // Guardar suscripción en Supabase
-    await supabase.from('push_subscriptions').upsert({
+    const subData = {
       user_id: userId,
       subscription: JSON.parse(JSON.stringify(subscription)),
       updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id' })
+    }
+    // Intentar actualizar primero, si no existe insertar
+    const { data: existing } = await supabase.from('push_subscriptions').select('id').eq('user_id', userId).maybeSingle()
+    if (existing) {
+      await supabase.from('push_subscriptions').update({ subscription: subData.subscription, updated_at: subData.updated_at }).eq('user_id', userId)
+    } else {
+      await supabase.from('push_subscriptions').insert(subData)
+    }
 
     console.log('Notificaciones activadas')
     return true
