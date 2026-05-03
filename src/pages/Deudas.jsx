@@ -233,6 +233,8 @@ export default function Deudas() {
     if(e) { setError(e.message); return }
     setDeudaPendiente(null); setModal(null); setDeudaForm(emptyDeudaForm)
     toast('Deuda actualizada'); cargar()
+    const resumenNotifAdd = monto > 0 ? `S/${monto}` : balones > 0 ? `${balones} balón(es)` : ''
+    Notif.nuevaDeuda(deudaForm.nombre_deudor.trim(), resumenNotifAdd, perfil?.nombre || 'Admin')
   }, [deudaPendiente, deudaForm, perfil, cargar, toast])
 
   // ─── Registrar pago ──────────────────────────────────────────────────────────

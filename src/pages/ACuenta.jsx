@@ -337,6 +337,7 @@ export default function ACuenta() {
     }).eq('id', registroPendiente.id)
     setSaving(false)
     if (e) { setError(e.message); return }
+    Notif.nuevaACuenta(form.nombre_cliente || registroPendiente?.nombre_cliente || 'Cliente', din || bal || 0, perfil?.nombre || 'Un usuario')
     setRegistroPendiente(null)
     setModal(null)
     setForm(emptyForm)
