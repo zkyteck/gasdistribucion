@@ -3,6 +3,16 @@ import { supabase } from './supabase'
 
 const VAPID_PUBLIC_KEY = 'BFuYMcf6IK0qQWQhvIk1F5nY8GP9WDLBCc-sRTa0yOrqFnxty-fxgUhNs7Ga93yIHXFPgIkJBdsz6q2VWtQ5REE'
 
+// Generar o recuperar ID único del dispositivo
+function getDeviceId() {
+  let deviceId = localStorage.getItem('gasdist_device_id')
+  if (!deviceId) {
+    deviceId = crypto.randomUUID()
+    localStorage.setItem('gasdist_device_id', deviceId)
+  }
+  return deviceId
+}
+
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4)
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
@@ -33,16 +43,18 @@ export async function inicializarNotificaciones(userId) {
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
     })
 
-    // Guardar suscripción en Supabase
+    // Guardar suscripción en Supabase con device_id
+    const deviceId = getDeviceId()
     const subData = {
       user_id: userId,
+      device_id: deviceId,
       subscription: JSON.parse(JSON.stringify(subscription)),
       updated_at: new Date().toISOString()
     }
     // Intentar actualizar primero, si no existe insertar
-    const { data: existing } = await supabase.from('push_subscriptions').select('id').eq('user_id', userId).maybeSingle()
+    const { data: existing } = await supabase.from('push_subscriptions').select('id').eq('user_id', userId).eq('device_id', deviceId).maybeSingle()
     if (existing) {
-      await supabase.from('push_subscriptions').update({ subscription: subData.subscription, updated_at: subData.updated_at }).eq('user_id', userId)
+      await supabase.from('push_subscriptions').update({ subscription: subData.subscription, updated_at: subData.updated_at }).eq('id', existing.id)
     } else {
       await supabase.from('push_subscriptions').insert(subData)
     }
