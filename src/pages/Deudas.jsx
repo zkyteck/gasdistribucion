@@ -318,8 +318,14 @@ export default function Deudas() {
       Notif.deudaLiquidada(selected.nombre_deudor, actor)
     } else {
       toast(`Pago registrado para ${selected.nombre_deudor}`)
+      const detallesPago = []
+      if(monto > 0) detallesPago.push(`S/${monto}`)
+      if(balones > 0) detallesPago.push(`${balones} balón(es)`)
+      if(vales20 > 0) detallesPago.push(`${vales20} vale(s) S/20`)
+      if(vales43 > 0) detallesPago.push(`${vales43} vale(s) S/43`)
       const montoRestante = Math.max(0,(parseFloat(selected.monto_pendiente)||0)-totalPago)
-      Notif.pagoDeuda(selected.nombre_deudor, totalPago, montoRestante, actor)
+      const quedaStr = montoRestante > 0 ? `S/${montoRestante}` : (nuevoBal > 0 ? `${nuevoBal} balón(es)` : '')
+      Notif.pagoDeuda(selected.nombre_deudor, detallesPago.join(' + '), quedaStr, actor)
     }
     cargar()
   }, [selected, pagoForm, perfil, cargar, toast])

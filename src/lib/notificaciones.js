@@ -80,27 +80,27 @@ export async function notificar({ titulo, cuerpo, url = '/', tag = 'default', ac
 
 // Helpers para cada evento del negocio
 export const Notif = {
-  nuevaDeuda: (nombreCliente, monto, actor) =>
-    notificar({ titulo: '🔴 Nueva deuda registrada', cuerpo: `${actor} registró deuda de ${nombreCliente}${monto ? ' — ' + monto : ''}`, url: '/deudas', tag: 'deuda' }),
+  nuevaDeuda: (nombreCliente, detalle, actor) =>
+    notificar({ titulo: `🔴 Nueva deuda de ${nombreCliente}`, cuerpo: detalle ? `${detalle} — por ${actor}` : `Registrado por ${actor}`, url: '/deudas', tag: 'deuda' }),
 
-  pagoDeuda: (nombreCliente, montoPagado, montoRestante, actor) =>
-    notificar({ titulo: '💰 Pago registrado', cuerpo: `${actor} registró pago de ${nombreCliente} — S/${montoPagado}${montoRestante > 0 ? ` (quedan S/${montoRestante})` : ' — Liquidada'}`, url: '/deudas', tag: 'pago' }),
+  pagoDeuda: (nombreCliente, detallePago, detalleRestante, actor) =>
+    notificar({ titulo: `💰 Pago de ${nombreCliente}`, cuerpo: detalleRestante ? `Abonó ${detallePago} — quedan ${detalleRestante}` : `Pagó ${detallePago} — deuda liquidada`, url: '/deudas', tag: 'pago' }),
 
   deudaLiquidada: (nombreCliente, actor) =>
-    notificar({ titulo: '✅ Deuda liquidada', cuerpo: `${actor} liquidó la deuda de ${nombreCliente}`, url: '/deudas', tag: 'liquidada' }),
+    notificar({ titulo: `✅ ${nombreCliente} liquidó su deuda`, cuerpo: `Registrado por ${actor}`, url: '/deudas', tag: 'liquidada' }),
 
-  nuevaVentaCredito: (nombreCliente, monto, actor) =>
-    notificar({ titulo: '🛒 Venta al crédito', cuerpo: `${actor} registró venta a crédito para ${nombreCliente} — S/${monto}`, url: '/ventas', tag: 'venta-credito' }),
+  nuevaVentaCredito: (nombreCliente, detalle, actor) =>
+    notificar({ titulo: `🛒 Crédito — ${nombreCliente}`, cuerpo: detalle ? `${detalle} — por ${actor}` : `Registrado por ${actor}`, url: '/ventas', tag: 'venta-credito' }),
 
-  nuevaACuenta: (nombreCliente, monto, actor) =>
-    notificar({ titulo: '📦 A cuenta registrada', cuerpo: `${actor} registró a cuenta para ${nombreCliente} — S/${monto}`, url: '/a-cuenta', tag: 'acuenta' }),
+  nuevaACuenta: (nombreCliente, detalle, actor) =>
+    notificar({ titulo: `📦 A cuenta — ${nombreCliente}`, cuerpo: detalle ? `${detalle} — por ${actor}` : `Registrado por ${actor}`, url: '/a-cuenta', tag: 'acuenta' }),
 
-  recojoACuenta: (nombreCliente, actor) =>
-    notificar({ titulo: '✅ A cuenta recogida', cuerpo: `${actor} registró recojo de ${nombreCliente}`, url: '/a-cuenta', tag: 'recojo' }),
+  recojoACuenta: (nombreCliente, detalle, actor) =>
+    notificar({ titulo: `✅ ${nombreCliente} recogió su a cuenta`, cuerpo: detalle ? `${detalle} — por ${actor}` : `Registrado por ${actor}`, url: '/a-cuenta', tag: 'recojo' }),
 
   valeRecogido: (nombreCliente, actor) =>
-    notificar({ titulo: '🎫 Vale FISE recogido', cuerpo: `${actor} registró recojo de vale de ${nombreCliente}`, url: '/vales', tag: 'vale' }),
+    notificar({ titulo: `🎫 Vale recogido — ${nombreCliente}`, cuerpo: `Registrado por ${actor}`, url: '/vales', tag: 'vale' }),
 
   stockBajo: (almacenNombre, cantidad) =>
-    notificar({ titulo: '⚠️ Stock bajo', cuerpo: `${almacenNombre}: solo ${cantidad} balones disponibles`, url: '/almacenes', tag: 'stock' }),
+    notificar({ titulo: `⚠️ Stock bajo — ${almacenNombre}`, cuerpo: `Solo ${cantidad} balones disponibles`, url: '/almacenes', tag: 'stock' }),
 }

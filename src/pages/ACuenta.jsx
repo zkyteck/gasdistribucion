@@ -305,7 +305,12 @@ export default function ACuenta() {
     if (imprimir) {
       setTicketData({ ...form, numero, vales_20: parseInt(form.vales_20)||0, vales_43: parseInt(form.vales_43)||0, balones: parseInt(form.balones)||0, dinero: parseFloat(form.dinero)||0 })
     }
-    Notif.nuevaACuenta(form.nombre_cliente || 'Cliente', form.dinero || form.balones || 0, perfil?.nombre || 'Un usuario')
+    const detalleACuenta = []
+    if(parseInt(form.vales_20) > 0) detalleACuenta.push(`${form.vales_20} vale(s) S/20`)
+    if(parseInt(form.vales_43) > 0) detalleACuenta.push(`${form.vales_43} vale(s) S/43`)
+    if(parseInt(form.balones) > 0) detalleACuenta.push(`${form.balones} balón(es)`)
+    if(parseFloat(form.dinero) > 0) detalleACuenta.push(`S/${form.dinero}`)
+    Notif.nuevaACuenta(form.nombre_cliente || 'Cliente', detalleACuenta.join(' + '), perfil?.nombre || 'Un usuario')
     setRegistroPendiente(null)
     setModal(null)
     setForm(emptyForm)
@@ -337,7 +342,12 @@ export default function ACuenta() {
     }).eq('id', registroPendiente.id)
     setSaving(false)
     if (e) { setError(e.message); return }
-    Notif.nuevaACuenta(form.nombre_cliente || registroPendiente?.nombre_cliente || 'Cliente', din || bal || 0, perfil?.nombre || 'Un usuario')
+    const detalleAdd = []
+    if(v20 > 0) detalleAdd.push(`${v20} vale(s) S/20`)
+    if(v43 > 0) detalleAdd.push(`${v43} vale(s) S/43`)
+    if(bal > 0) detalleAdd.push(`${bal} balón(es)`)
+    if(din > 0) detalleAdd.push(`S/${din}`)
+    Notif.nuevaACuenta(form.nombre_cliente || registroPendiente?.nombre_cliente || 'Cliente', detalleAdd.join(' + '), perfil?.nombre || 'Un usuario')
     setRegistroPendiente(null)
     setModal(null)
     setForm(emptyForm)
@@ -403,7 +413,12 @@ export default function ACuenta() {
     }).eq('id', selected.id)
     setSaving(false)
     if (e) { setError(e.message); return }
-    Notif.recojoACuenta(selected?.nombre_cliente || 'Cliente', perfil?.nombre || 'Un usuario')
+    const detalleRecojo = []
+    if(selected?.vales_20 > 0) detalleRecojo.push(`${selected.vales_20} vale(s) S/20`)
+    if(selected?.vales_43 > 0) detalleRecojo.push(`${selected.vales_43} vale(s) S/43`)
+    if(selected?.balones > 0) detalleRecojo.push(`${selected.balones} balón(es)`)
+    if(parseFloat(selected?.dinero) > 0) detalleRecojo.push(`S/${selected.dinero}`)
+    Notif.recojoACuenta(selected?.nombre_cliente || 'Cliente', detalleRecojo.join(' + '), perfil?.nombre || 'Un usuario')
     setModal(null); cargar()
   }
 
