@@ -169,14 +169,6 @@ export default function Vales() {
           <p style={{fontSize:13,color:"var(--app-text-secondary)"}}>Control de vales S/20 y S/43</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <button onClick={consultarSaldo}
-            className="btn-secondary">
-            💰 Consultar saldo FISE
-          </button>
-          <button onClick={() => setModalSms(true)}
-            className="btn-secondary">
-            📱 Procesar vale FISE
-          </button>
           <button onClick={() => { setRetiroForm({ monto: '', motivo: '', fecha: hoyPeru() }); setError(''); setModal('retiro') }} className="btn-secondary">
             <DollarSign className="w-4 h-4" />Registrar retiro
           </button>
