@@ -338,7 +338,7 @@ export default function Clientes() {
                             </div>
                           </div>
                           <div className="text-right flex-shrink-0">
-                            <p className={`font-bold text-sm`} style={{color:d.estado==='liquidada'?'#22c55e':'var(--app-text)'}>{pendiente}</p>
+                            <p className="font-bold text-sm" style={{color:d.estado==='liquidada'?'#22c55e':'var(--app-text)'}}>{pendiente}</p>
                             {original !== pendiente && <p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Original: {original}</p>}
                             <div className="flex gap-2 mt-2 justify-end">
                               <button onClick={async () => { setSelected(d); await cargarPagos(d.id); setModal('historial') }}

@@ -532,10 +532,9 @@ export default function Ventas() {
 
   const csTab = (id) => ({
     padding:'8px 14px', fontSize:13, fontWeight:500,
-    borderBottom:tabActivo===id?'2px solid var(--app-accent)':'2px solid transparent',
     color:tabActivo===id?'var(--app-accent)':'var(--app-text-secondary)',
     background:'none', border:'none',
-    borderBottom:tabActivo===id?`2px solid var(--app-accent)`:'2px solid transparent',
+    borderBottom:tabActivo===id?'2px solid var(--app-accent)':'2px solid transparent',
     cursor:'pointer', whiteSpace:'nowrap', transition:'all 0.15s'
   })
 
