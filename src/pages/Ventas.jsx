@@ -5,6 +5,7 @@ import { ShoppingCart, Plus, X, AlertCircle, Trash2, Search, Printer, CheckCircl
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useAuth } from '../context/AuthContext'
+import { Notif } from '../lib/notificaciones'
 import VentaRapida from './VentaRapida'
 
 const TIPOS_BALON = ['5kg', '10kg', '45kg']
@@ -480,6 +481,13 @@ export default function Ventas() {
     }
 
     setSaving(false); setModal(false); toast('Venta registrada'); cargar()
+    // Notificar si fue venta al crédito
+    if(esCred && debeDinero) {
+      const actor = perfil?.nombre || 'Un usuario'
+      const cliente = form.cliente_nombre || 'Cliente Varios'
+      const monto = ((parseInt(form.cantidad)||0)*(parseFloat(form.precio_unitario)||0)-parseFloat(form.pago_al_momento||0)).toFixed(0)
+      Notif.nuevaVentaCredito(cliente, monto, actor)
+    }
   }, [form, getStock, aplicarFIFO, perfil, cargar, toast])
 
   // ─── Cálculos del día ──────────────────────────────────────────────────────

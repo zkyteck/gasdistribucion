@@ -1,10 +1,12 @@
 // src/components/layout/Layout.jsx
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import { LogOut, MoreHorizontal, X, Mail } from 'lucide-react'
+import BotonNotificaciones from '../BotonNotificaciones'
+import { inicializarNotificaciones } from '../../lib/notificaciones'
 import { useItemsVisibles, BOTTOM_FIXED } from './navConfig'
 
 // ── Drawer "Más" ──────────────────────────────────────────────────────────────
@@ -145,6 +147,11 @@ function BottomDrawer({ open, onClose, extraItems }) {
           </div>
         )}
 
+        {/* Notificaciones */}
+        <div style={{ padding: '4px 16px 8px' }}>
+          <BotonNotificaciones />
+        </div>
+
         {/* Cerrar sesión */}
         <div style={{ padding: '4px 16px 20px' }}>
           <button
@@ -260,6 +267,15 @@ function BottomNav() {
 
 // ── Layout principal ──────────────────────────────────────────────────────────
 export default function Layout() {
+  const { perfil } = useAuth()
+
+  // Auto-inicializar notificaciones si ya tiene permiso
+  useEffect(() => {
+    if (perfil?.id && 'Notification' in window && Notification.permission === 'granted') {
+      inicializarNotificaciones(perfil.id)
+    }
+  }, [perfil?.id])
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--app-bg)', display: 'flex' }}>
 

@@ -5,6 +5,7 @@ import { Users, X, AlertCircle, Search, Clock, CheckCircle, AlertTriangle, Trend
 import { format, differenceInDays } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useAuth } from '../context/AuthContext'
+import { Notif } from '../lib/notificaciones'
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 function Toast({ toasts }) {
@@ -193,6 +194,7 @@ export default function Deudas() {
     if(e) { setError(e.message); return }
     setDeudaPendiente(null); setModal(null); setDeudaForm(emptyDeudaForm)
     toast('Deuda registrada'); cargar()
+    Notif.nuevaDeuda(deudaForm.nombre_deudor.trim(), monto, perfil?.nombre || 'Admin')
   }, [deudaForm, perfil, cargar, toast])
 
   // ─── Agregar a deuda pendiente ───────────────────────────────────────────────
@@ -307,7 +309,15 @@ export default function Deudas() {
     await Promise.all(ops)
     setSaving(false)
     setModal(null)
-    toast(liquidada?`Deuda de ${selected.nombre_deudor} liquidada completamente`:`Pago registrado para ${selected.nombre_deudor}`)
+    const actor = perfil?.nombre || 'Un usuario'
+    if(liquidada) {
+      toast(`Deuda de ${selected.nombre_deudor} liquidada completamente`)
+      Notif.deudaLiquidada(selected.nombre_deudor, actor)
+    } else {
+      toast(`Pago registrado para ${selected.nombre_deudor}`)
+      const montoRestante = Math.max(0,(parseFloat(selected.monto_pendiente)||0)-totalPago)
+      Notif.pagoDeuda(selected.nombre_deudor, totalPago, montoRestante, actor)
+    }
     cargar()
   }, [selected, pagoForm, perfil, cargar, toast])
 

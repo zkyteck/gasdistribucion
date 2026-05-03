@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { Users, Plus, X, AlertCircle, Search, DollarSign, Package, Ticket, Clock, Edit2, Trash2, Phone, MapPin } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
@@ -7,13 +7,13 @@ import { useAuth } from '../context/AuthContext'
 
 function Modal({ title, onClose, children, wide }) {
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-      <div className={`rounded-2xl w-full ${wide ? 'max-w-2xl' : 'max-w-md'} shadow-2xl max-h-[90vh] overflow-y-auto`} style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
-        <div className="flex items-center justify-between px-6 py-4 sticky top-0" style={{borderBottom:"1px solid var(--app-modal-header-border)", background:"var(--app-modal-bg)"}}>
-          <h3 className="text-white font-semibold">{title}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.7)'}}>
+      <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:16,width:'100%',maxWidth:wide?680:480,boxShadow:'0 25px 50px rgba(0,0,0,0.4)',maxHeight:'90vh',display:'flex',flexDirection:'column'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 24px',borderBottom:'1px solid var(--app-card-border)',position:'sticky',top:0,background:'var(--app-card-bg)'}}>
+          <h3 style={{color:'var(--app-text)',fontWeight:600,margin:0}}>{title}</h3>
+          <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'var(--app-text-secondary)'}}><X className="w-5 h-5"/></button>
         </div>
-        <div className="px-6 py-5 overflow-y-auto flex-1">{children}</div>
+        <div style={{padding:'20px 24px',overflowY:'auto',flex:1}}>{children}</div>
       </div>
     </div>
   )
@@ -46,16 +46,7 @@ export default function Clientes() {
   const [clienteForm, setClienteForm] = useState({ nombre: '', dni: '', telefono: '', tipo: 'general', direccion: '', precio_personalizado: '', tipo_balon_personalizado: '10kg' })
   const [deudaClienteModal, setDeudaClienteModal] = useState(null) // deuda activa a mostrar
 
-  useEffect(() => {
-    cargar()
-    const canal = supabase.channel('clientes-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'clientes' }, () => cargar())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'deudas' }, () => cargar())
-      .subscribe()
-    return () => supabase.removeChannel(canal)
-  }, [filtroEstado, tab])
-
-  async function cargar() {
+  const cargar = useCallback(async () => {
     setLoading(true)
     let q = supabase.from('deudas').select('*, clientes(nombre, telefono)').order('fecha_deuda', { ascending: true })
     if (filtroEstado === 'activas') q = q.in('estado', ['activa', 'pagada_parcial'])
@@ -67,7 +58,18 @@ export default function Clientes() {
     setDeudas(d || [])
     setClientes(c || [])
     setLoading(false)
-  }
+  }, [filtroEstado])
+
+
+  useEffect(() => {
+    cargar()
+    const canal = supabase.channel('clientes-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'clientes' }, () => cargar())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'deudas' }, () => cargar())
+      .subscribe()
+    return () => supabase.removeChannel(canal)
+  }, [cargar, filtroEstado, tab])
+
 
   async function cargarPagos(deudaId) {
     const { data } = await supabase.from('pagos_deuda').select('*').eq('deuda_id', deudaId).order('fecha_pago', { ascending: false })
@@ -163,8 +165,8 @@ export default function Clientes() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-white">Clientes</h2>
-          <p className="text-gray-500 text-sm">Clientes registrados en el sistema</p>
+          <h2 style={{fontSize:20,fontWeight:700,color:"var(--app-text)"}}>Clientes</h2>
+          <p style={{fontSize:13,color:"var(--app-text-secondary)"}}>Clientes registrados en el sistema</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => { setSelected(null); setClienteForm({ nombre: '', dni: '', telefono: '', tipo: 'general', direccion: '' }); setError(''); setModal('cliente') }} className="btn-primary">
@@ -201,15 +203,15 @@ export default function Clientes() {
           <div className="grid grid-cols-3 gap-4 mb-2">
             <div className="stat-card border border-blue-500/20">
               <p className="text-2xl font-bold text-blue-400">{clientes.length}</p>
-              <p className="text-xs text-gray-500">Clientes registrados</p>
+              <p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Clientes registrados</p>
             </div>
             <div className="stat-card border border-emerald-500/20">
               <p className="text-2xl font-bold text-emerald-400">{clientes.filter(c => c.tipo === 'restaurante').length}</p>
-              <p className="text-xs text-gray-500">Restaurantes</p>
+              <p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Restaurantes</p>
             </div>
             <div className="stat-card border border-purple-500/20">
               <p className="text-2xl font-bold text-purple-400">{clientes.filter(c => c.tipo === 'mayorista').length}</p>
-              <p className="text-xs text-gray-500">Mayoristas</p>
+              <p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Mayoristas</p>
             </div>
           </div>
 
@@ -226,12 +228,12 @@ export default function Clientes() {
                     <div key={c.id} className="card">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3 flex-1 min-w-0">
-                          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                          <div style={{width:40,height:40,background:"var(--app-accent)",borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:13,flexShrink:0}}>
                             {c.nombre?.charAt(0)?.toUpperCase()}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-white font-semibold text-sm">{c.nombre}</p>
+                              <p style={{color:"var(--app-text)",fontWeight:600,fontSize:13}}>{c.nombre}</p>
                               <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${c.tipo === 'restaurante' ? 'bg-orange-900/40 text-orange-400' : c.tipo === 'mayorista' ? 'bg-purple-900/40 text-purple-400' : ''}`} style={c.tipo !== 'restaurante' && c.tipo !== 'mayorista' ? { background: 'var(--app-card-border)', color: 'var(--app-text-secondary)' } : {}}>
                                 {tipoLabel[c.tipo] || c.tipo}
                               </span>
@@ -272,15 +274,15 @@ export default function Clientes() {
           <div className="grid grid-cols-3 gap-4">
             <div className="stat-card border border-red-500/20">
               <p className="text-2xl font-bold text-red-400">S/ {totalDeudaDinero.toLocaleString('es-PE')}</p>
-              <p className="text-xs text-gray-500">Deudas en dinero</p>
+              <p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Deudas en dinero</p>
             </div>
             <div className="stat-card border border-orange-500/20">
               <p className="text-2xl font-bold text-orange-400">{totalDeudaBalones} bal.</p>
-              <p className="text-xs text-gray-500">Balones prestados</p>
+              <p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Balones prestados</p>
             </div>
             <div className="stat-card border border-yellow-500/20">
               <p className="text-2xl font-bold text-yellow-400">{deudas.length}</p>
-              <p className="text-xs text-gray-500">{filtroEstado === 'liquidadas' ? 'Liquidadas' : 'Deudores activos'}</p>
+              <p style={{fontSize:11,color:"var(--app-text-secondary)"}}>{filtroEstado === 'liquidadas' ? 'Liquidadas' : 'Deudores activos'}</p>
             </div>
           </div>
 
@@ -295,7 +297,7 @@ export default function Clientes() {
 
           <div className="card p-0 overflow-hidden">
             <div className="px-6 py-4 flex items-center justify-between" style={{borderBottom:'1px solid var(--app-card-border)'}}>
-              <h3 className="text-sm font-semibold text-white">
+              <h3 style={{fontSize:13,fontWeight:600,color:"var(--app-text)"}}>
                 {filtroEstado === 'activas' ? 'Deudas activas' : filtroEstado === 'liquidadas' ? 'Liquidadas' : 'Todas'}
               </h3>
               <span className={filtroEstado === 'liquidadas' ? 'badge-green' : 'badge-red'}>{deudasFiltradas.length} registros</span>
@@ -321,7 +323,7 @@ export default function Clientes() {
                               <Icon className={`w-4 h-4 ${d.tipo_deuda === 'dinero' ? 'text-red-400' : d.tipo_deuda === 'balones' ? 'text-orange-400' : 'text-yellow-400'}`} />
                             </div>
                             <div>
-                              <p className="text-white font-semibold text-sm">{d.nombre_deudor}</p>
+                              <p style={{color:"var(--app-text)",fontWeight:600,fontSize:13}}>{d.nombre_deudor}</p>
                               <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                 <span className={d.estado === 'liquidada' ? 'badge-green' : d.estado === 'pagada_parcial' ? 'badge-yellow' : 'badge-red'}>
                                   {d.estado === 'liquidada' ? '✅ Liquidada' : d.estado === 'pagada_parcial' ? 'Parcial' : 'Activa'}
@@ -336,8 +338,8 @@ export default function Clientes() {
                             </div>
                           </div>
                           <div className="text-right flex-shrink-0">
-                            <p className={`font-bold text-sm ${d.estado === 'liquidada' ? 'text-emerald-400' : 'text-white'}`}>{pendiente}</p>
-                            {original !== pendiente && <p className="text-gray-600 text-xs">Original: {original}</p>}
+                            <p className={`font-bold text-sm`} style={{color:d.estado==='liquidada'?'#22c55e':'var(--app-text)'}>{pendiente}</p>
+                            {original !== pendiente && <p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Original: {original}</p>}
                             <div className="flex gap-2 mt-2 justify-end">
                               <button onClick={async () => { setSelected(d); await cargarPagos(d.id); setModal('historial') }}
                                 className="text-xs bg-blue-600/20 border border-blue-600/30 text-blue-400 px-2 py-1 rounded-lg">Historial</button>
@@ -381,7 +383,7 @@ export default function Clientes() {
             {/* Precio personalizado */}
             <div className="bg-blue-900/20 border border-blue-800/40 rounded-xl p-3 space-y-3">
               <p className="text-xs text-blue-300 font-medium">💰 Precio especial (opcional)</p>
-              <p className="text-xs text-gray-500">Si este cliente siempre compra a un precio fijo, ingrésalo aquí. Se usará automáticamente al vender.</p>
+              <p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Si este cliente siempre compra a un precio fijo, ingrésalo aquí. Se usará automáticamente al vender.</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Precio S/</label>
@@ -440,7 +442,7 @@ export default function Clientes() {
                     ))}
                     {coincidencias.length === 0 && (
                       <div className="px-3 py-2 flex items-center justify-between">
-                        <span className="text-xs text-gray-500">No registrado</span>
+                        <span style={{fontSize:11,color:"var(--app-text-secondary)"}}>No registrado</span>
                         <button type="button" onClick={() => { setClienteForm({ nombre: deudaForm.nombre_deudor, dni: '', telefono: '', tipo: 'general', direccion: '' }); setModal('clienteDesdeDeuda') }}
                           className="text-xs bg-blue-600/30 border border-blue-500/50 text-blue-400 px-2 py-1 rounded-lg">+ Registrar cliente</button>
                       </div>
@@ -513,8 +515,8 @@ export default function Clientes() {
           <div className="space-y-4">
             {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
             <div className="rounded-lg p-4 grid grid-cols-2 gap-4" style={{background:"var(--app-table-hover)"}}>
-              <div><p className="text-xs text-gray-500">Tipo</p><p className="text-sm font-bold text-white capitalize">{selected.tipo_deuda === 'dinero' ? '💰 Dinero' : selected.tipo_deuda === 'balones' ? '🔵 Balones' : '🎫 Vales'}</p></div>
-              <div><p className="text-xs text-gray-500">Pendiente</p>
+              <div><p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Tipo</p><p style={{fontSize:13,fontWeight:700,color:"var(--app-text)",textTransform:"capitalize"}}>{selected.tipo_deuda === 'dinero' ? '💰 Dinero' : selected.tipo_deuda === 'balones' ? '🔵 Balones' : '🎫 Vales'}</p></div>
+              <div><p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Pendiente</p>
                 <p className="text-lg font-bold text-red-400">{selected.tipo_deuda === 'dinero' ? `S/ ${Number(selected.monto_pendiente).toLocaleString()}` : `${selected.cantidad_pendiente} ${selected.tipo_deuda}`}</p>
               </div>
             </div>
@@ -540,7 +542,7 @@ export default function Clientes() {
             <div><label className="label">Notas</label><input className="input" value={pagoForm.notas} onChange={e => setPagoForm(f => ({...f, notas: e.target.value}))} /></div>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setModal(null)} className="btn-secondary flex-1">Cancelar</button>
-              <button onClick={guardarPago} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg flex-1 justify-center flex items-center gap-2">{saving ? 'Guardando...' : '✓ Registrar pago'}</button>
+              <button onClick={guardarPago} disabled={saving} className="btn-primary flex-1 justify-center">{saving ? 'Guardando...' : '✓ Registrar pago'}</button>
             </div>
           </div>
         </Modal>
@@ -551,18 +553,18 @@ export default function Clientes() {
         <Modal title={`Historial — ${selected.nombre_deudor}`} onClose={() => setModal(null)} wide>
           <div className="space-y-4">
             <div className="rounded-lg p-4 grid grid-cols-2 gap-4" style={{background:"var(--app-table-hover)"}}>
-              <div><p className="text-xs text-gray-500">Fecha de la deuda</p><p className="text-sm font-semibold text-white">{format(new Date(selected.fecha_deuda + 'T12:00:00'), "dd 'de' MMMM yyyy", { locale: es })}</p></div>
-              <div><p className="text-xs text-gray-500">Estado</p><span className={selected.estado === 'liquidada' ? 'badge-green' : selected.estado === 'pagada_parcial' ? 'badge-yellow' : 'badge-red'}>{selected.estado === 'liquidada' ? '✅ Liquidada' : selected.estado === 'pagada_parcial' ? 'Pago parcial' : 'Activa'}</span></div>
-              <div><p className="text-xs text-gray-500">Deuda original</p><p className="text-lg font-bold text-white">{selected.tipo_deuda === 'dinero' ? `S/ ${Number(selected.monto_original).toLocaleString()}` : `${selected.cantidad_original} ${selected.tipo_deuda}`}</p></div>
-              <div><p className="text-xs text-gray-500">Pendiente</p><p className="text-lg font-bold text-red-400">{selected.tipo_deuda === 'dinero' ? `S/ ${Number(selected.monto_pendiente).toLocaleString()}` : `${selected.cantidad_pendiente} ${selected.tipo_deuda}`}</p></div>
+              <div><p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Fecha de la deuda</p><p style={{fontSize:13,fontWeight:600,color:"var(--app-text)"}}>{format(new Date(selected.fecha_deuda + 'T12:00:00'), "dd 'de' MMMM yyyy", { locale: es })}</p></div>
+              <div><p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Estado</p><span className={selected.estado === 'liquidada' ? 'badge-green' : selected.estado === 'pagada_parcial' ? 'badge-yellow' : 'badge-red'}>{selected.estado === 'liquidada' ? '✅ Liquidada' : selected.estado === 'pagada_parcial' ? 'Pago parcial' : 'Activa'}</span></div>
+              <div><p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Deuda original</p><p style={{fontSize:18,fontWeight:700,color:"var(--app-text)"}}>{selected.tipo_deuda === 'dinero' ? `S/ ${Number(selected.monto_original).toLocaleString()}` : `${selected.cantidad_original} ${selected.tipo_deuda}`}</p></div>
+              <div><p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Pendiente</p><p className="text-lg font-bold text-red-400">{selected.tipo_deuda === 'dinero' ? `S/ ${Number(selected.monto_pendiente).toLocaleString()}` : `${selected.cantidad_pendiente} ${selected.tipo_deuda}`}</p></div>
             </div>
-            <h4 className="text-sm font-semibold text-white">Pagos registrados</h4>
-            {pagos.length === 0 ? <p className="text-center text-gray-600 text-sm py-4">Sin pagos registrados</p> : (
+            <h4 style={{fontSize:13,fontWeight:600,color:"var(--app-text)"}}>Pagos registrados</h4>
+            {pagos.length === 0 ? <p style={{textAlign:"center",color:"var(--app-text-secondary)",fontSize:13,padding:"1rem 0"}}>Sin pagos registrados</p> : (
               <div className="space-y-2">
                 {pagos.map(p => (
-                  <div key={p.id} className="flex items-center justify-between bg-gray-800/40 rounded-lg px-4 py-3">
+                  <div key={p.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"var(--app-card-bg-alt)",borderRadius:8,padding:"10px 14px",border:"1px solid var(--app-card-border)"}}>
                     <div>
-                      <p className="text-white text-sm font-medium">{selected.tipo_deuda === 'dinero' ? `S/ ${Number(p.monto_pagado).toLocaleString()}` : `${p.cantidad_pagada} ${selected.tipo_deuda}`}</p>
+                      <p style={{color:"var(--app-text)",fontSize:13,fontWeight:500}}>{selected.tipo_deuda === 'dinero' ? `S/ ${Number(p.monto_pagado).toLocaleString()}` : `${p.cantidad_pagada} ${selected.tipo_deuda}`}</p>
                       <p className="text-gray-500 text-xs mt-0.5">📅 {format(new Date(p.fecha_pago + 'T12:00:00'), "dd 'de' MMMM yyyy", { locale: es })}{p.metodo_pago && ` · ${p.metodo_pago}`}</p>
                       {p.notas && <p className="text-gray-600 text-xs mt-0.5">{p.notas}</p>}
                     </div>
@@ -579,26 +581,26 @@ export default function Clientes() {
       {deudaClienteModal && (
         <Modal title={`Deuda — ${deudaClienteModal.nombre_deudor}`} onClose={() => setDeudaClienteModal(null)}>
           <div className="space-y-4">
-            <div className="bg-red-900/20 border border-red-800/40 rounded-xl p-4">
+            <div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.25)",borderRadius:10,padding:16}}>
               <p className="text-xs text-gray-500 mb-2">Deuda pendiente:</p>
               <div className="flex flex-wrap gap-2">
                 {parseFloat(deudaClienteModal.monto_pendiente) > 0 && (
-                  <span className="text-sm bg-red-900/40 text-red-300 px-3 py-1 rounded-lg font-bold">
+                  <span style={{fontSize:13,background:"rgba(239,68,68,0.12)",color:"#f87171",padding:"3px 12px",borderRadius:8,fontWeight:700}}>
                     💰 S/ {Number(deudaClienteModal.monto_pendiente).toLocaleString('es-PE')}
                   </span>
                 )}
                 {parseInt(deudaClienteModal.balones_pendiente) > 0 && (
-                  <span className="text-sm bg-orange-900/40 text-orange-300 px-3 py-1 rounded-lg font-bold">
+                  <span style={{fontSize:13,background:"rgba(251,146,60,0.12)",color:"#fb923c",padding:"3px 12px",borderRadius:8,fontWeight:700}}>
                     🔵 {deudaClienteModal.balones_pendiente} bal.
                   </span>
                 )}
                 {parseInt(deudaClienteModal.vales_20_pendiente) > 0 && (
-                  <span className="text-sm bg-yellow-900/40 text-yellow-300 px-3 py-1 rounded-lg font-bold">
+                  <span style={{fontSize:13,background:"rgba(234,179,8,0.12)",color:"#eab308",padding:"3px 12px",borderRadius:8,fontWeight:700}}>
                     🎫 {deudaClienteModal.vales_20_pendiente}×S/20
                   </span>
                 )}
                 {parseInt(deudaClienteModal.vales_43_pendiente) > 0 && (
-                  <span className="text-sm bg-yellow-900/40 text-yellow-300 px-3 py-1 rounded-lg font-bold">
+                  <span style={{fontSize:13,background:"rgba(234,179,8,0.12)",color:"#eab308",padding:"3px 12px",borderRadius:8,fontWeight:700}}>
                     🎫 {deudaClienteModal.vales_43_pendiente}×S/43
                   </span>
                 )}
@@ -631,10 +633,10 @@ export default function Clientes() {
                               <p className={`text-xs font-semibold ${esPago ? 'text-emerald-300' : 'text-red-300'}`}>
                                 {esPago ? `Pagó${h.metodo_pago ? ' · ' + h.metodo_pago : ''}` : (i === 0 ? 'Deuda inicial' : 'Deuda adicional')}
                               </p>
-                              <p className="text-xs text-gray-500">
+                              <p style={{fontSize:11,color:"var(--app-text-secondary)"}}>
                                 {h.fecha ? format(new Date(h.fecha + 'T12:00:00'), "dd/MM/yyyy", { locale: es }) : '—'}
                               </p>
-                              {h.notas && <p className="text-gray-600 text-xs italic">"{h.notas}"</p>}
+                              {h.notas && <p style={{fontSize:11,color:"var(--app-text-secondary)",fontStyle:"italic"}}>"{h.notas}"</p>}
                             </div>
                             <p className={`text-sm font-bold flex-shrink-0 ${esPago ? 'text-emerald-300' : 'text-red-300'}`}>
                               {esPago ? '-' : '+'}{items.join(' + ')}

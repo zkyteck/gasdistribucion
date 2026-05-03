@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { LogOut, Flame, Mail, ChevronLeft, ChevronRight } from 'lucide-react'
+import BotonNotificaciones from '../BotonNotificaciones'
 import { useItemsVisibles } from './navConfig'
 
 export default function Sidebar() {
@@ -199,6 +200,13 @@ export default function Sidebar() {
           <LogOut style={{ width: 14, height: 14, flexShrink: 0 }} />
           {!collapsed && 'Cerrar sesión'}
         </button>
+
+        {/* Notificaciones — solo expandido */}
+        {!collapsed && (
+          <div style={{ marginBottom: 6 }}>
+            <BotonNotificaciones />
+          </div>
+        )}
 
         {/* Botón expandir — solo cuando está colapsado */}
         {collapsed && (

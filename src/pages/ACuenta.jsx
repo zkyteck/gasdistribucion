@@ -5,6 +5,7 @@ import { ClipboardList, Plus, X, AlertCircle, Search, Printer, CheckCircle, Cloc
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useAuth } from '../context/AuthContext'
+import { Notif } from '../lib/notificaciones'
 
 function Modal({ title, onClose, children, wide }) {
   return (
