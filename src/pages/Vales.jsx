@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { hoyPeru } from '../lib/fechas'
-import { Ticket, Plus, X, AlertCircle, DollarSign, CheckCircle, RefreshCw } from 'lucide-react'
+import { Ticket, Plus, X, AlertCircle, DollarSign, CheckCircle, RefreshCw, Camera } from 'lucide-react'
+import EscanerVales from '../components/EscanerVales'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useAuth } from '../context/AuthContext'
@@ -38,6 +39,7 @@ export default function Vales() {
   const [smsHistorial, setSmsHistorial] = useState([])
   const [modalSms, setModalSms] = useState(false)
   const [retiroForm, setRetiroForm] = useState({ monto: '', motivo: '', fecha: hoyPeru() })
+  const [mostrarEscaner, setMostrarEscaner] = useState(false)
 
   const cargarValorVales = useCallback(async () => {
     const { data } = await supabase.from('configuracion').select('*')
@@ -169,6 +171,9 @@ export default function Vales() {
           <p style={{fontSize:13,color:"var(--app-text-secondary)"}}>Control de vales S/20 y S/43</p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <button onClick={() => setMostrarEscaner(true)} className="btn-secondary">
+            <Camera className="w-4 h-4"/>📷 Escanear vales
+          </button>
           <button onClick={() => { setRetiroForm({ monto: '', motivo: '', fecha: hoyPeru() }); setError(''); setModal('retiro') }} className="btn-secondary">
             <DollarSign className="w-4 h-4" />Registrar retiro
           </button>
