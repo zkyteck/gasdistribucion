@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { hoyPeru } from '../lib/fechas'
-import { Users, X, AlertCircle, Search, Clock, CheckCircle, AlertTriangle, TrendingDown } from 'lucide-react'
+import { Users, X, AlertCircle, Search, Clock, CheckCircle, AlertTriangle, TrendingDown, Printer } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useAuth } from '../context/AuthContext'
@@ -383,6 +383,66 @@ export default function Deudas() {
   const totalDeudores = useMemo(() => new Set(deudas.filter(d=>d.estado!=='liquidada').map(d=>d.nombre_deudor)).size, [deudas])
   const urgentes      = useMemo(() => deudas.filter(d=>d.estado!=='liquidada'&&differenceInDays(new Date(),new Date(d.fecha_deuda))>=30).length, [deudas])
 
+  const imprimirReporte = () => {
+    const hoy = new Date().toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric' })
+    const filas = deudasFiltradas.map((d, i) => {
+      const dias = differenceInDays(new Date(), new Date(d.fecha_deuda))
+      const importancia = dias >= 60 ? '🔴 Urgente' : dias >= 30 ? '🟠 Atrasado' : dias >= 7 ? '🟡 Reciente' : '⚪ Normal'
+      const debe = resumenDeuda(d)
+      const anotadoPor = d.notas ? d.notas : '—'
+      return `<tr style="border-bottom:1px solid #ddd">
+        <td style="padding:8px 10px;text-align:center">${i+1}</td>
+        <td style="padding:8px 10px;font-weight:600">${d.nombre_deudor}</td>
+        <td style="padding:8px 10px;color:${dias>=60?'#c0392b':dias>=30?'#e67e22':'#333'};font-weight:600">${debe}</td>
+        <td style="padding:8px 10px;text-align:center;font-weight:600;color:${dias>=60?'#c0392b':dias>=30?'#e67e22':dias>=7?'#f39c12':'#333'}">${dias}d</td>
+        <td style="padding:8px 10px;font-size:11px;color:#666;word-wrap:break-word;white-space:normal">${d.notas||'—'}</td>
+        <td style="padding:8px 10px;font-size:12px">${format(new Date(d.fecha_deuda+'T12:00:00'),'dd/MM/yyyy',{locale:es})}</td>
+      </tr>`
+    }).join('')
+
+    const totalDineroImp = deudasFiltradas.reduce((a,d)=>a+(parseFloat(d.monto_pendiente)||0),0)
+    const totalBalonesImp = deudasFiltradas.reduce((a,d)=>a+(parseInt(d.balones_pendiente)||0),0)
+
+    const win = window.open('', '_blank')
+    win.document.write(`
+      <html><head><title>Reporte de Deudas — ${hoy}</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:20px;color:#333;max-width:900px;margin:0 auto}
+        h1{font-size:18px;margin:0 0 4px}
+        .sub{font-size:13px;color:#666;margin:0 0 16px}
+        table{width:100%;border-collapse:collapse;font-size:13px}
+        thead{background:#f5f5f5}
+        th{padding:10px;text-align:left;font-size:12px;text-transform:uppercase;color:#666;border-bottom:2px solid #ddd}
+        .totales{margin-top:16px;padding:12px 16px;background:#f9f9f9;border-radius:8px;display:flex;gap:32px}
+        .totales div{font-size:13px}
+        .totales strong{font-size:16px;display:block}
+        @media print{button{display:none}}
+      </style>
+      </head><body>
+      <h1>📋 Reporte de Deudas — Centro Gas Paucara</h1>
+      <p class="sub">Generado el ${hoy} · ${deudasFiltradas.length} deudores · Filtro: ${filtroEstado==='activas'?'Con deuda':filtroEstado==='liquidadas'?'Liquidadas':'Todas'} · Orden: ${ordenar==='dias_desc'?'Más días primero':ordenar==='monto_desc'?'Mayor monto':ordenar==='nombre'?'Por nombre':'Más reciente'}</p>
+      <table>
+        <thead><tr>
+          <th style="width:40px">#</th>
+          <th>Cliente</th>
+          <th>Debe</th>
+          <th style="width:60px">Días</th>
+          <th>Notas</th>
+          <th style="width:90px">Fecha deuda</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+      </table>
+      <div class="totales">
+        <div><strong style="color:#c0392b">S/${totalDineroImp.toLocaleString('es-PE',{maximumFractionDigits:0})}</strong>Total en dinero</div>
+        ${totalBalonesImp>0?`<div><strong style="color:#e67e22">${totalBalonesImp} bal.</strong>Total balones</div>`:''}
+        <div><strong>${deudasFiltradas.length}</strong>Deudores</div>
+      </div>
+      <script>window.print()</script>
+      </body></html>
+    `)
+    win.document.close()
+  }
+
   const cardStyle = { background:'var(--app-card-bg)', border:'1px solid var(--app-card-border)', borderRadius:12, padding:'14px 16px' }
 
   return (
@@ -395,11 +455,16 @@ export default function Deudas() {
           <h2 style={{fontSize:20,fontWeight:700,color:'var(--app-text)',margin:0}}>Deudas</h2>
           <p style={{fontSize:13,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Control de deudas en dinero, balones y vales</p>
         </div>
-        {isAdmin && (
-          <button onClick={()=>{setDeudaForm(emptyDeudaForm);setDeudaPendiente(null);setSelected(null);setError('');cargarClientes();setModal('deuda')}} className="btn-secondary" style={{fontSize:12}}>
-            + Registrar deuda manual
+        <div style={{display:'flex',gap:8}}>
+          <button onClick={imprimirReporte} className="btn-secondary" style={{fontSize:12}}>
+            <Printer style={{width:13,height:13}}/> Imprimir reporte
           </button>
-        )}
+          {isAdmin && (
+            <button onClick={()=>{setDeudaForm(emptyDeudaForm);setDeudaPendiente(null);setSelected(null);setError('');cargarClientes();setModal('deuda')}} className="btn-secondary" style={{fontSize:12}}>
+              + Registrar deuda manual
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Alerta urgentes */}
