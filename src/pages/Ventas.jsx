@@ -579,7 +579,8 @@ export default function Ventas() {
               </tbody>
             </table>
           </div>
-        </div>
+        </>)}
+      </div>
 
       {/* ── MODAL VENTA ── */}
       {modal&&(
