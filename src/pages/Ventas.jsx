@@ -92,7 +92,6 @@ export default function Ventas() {
   const [busqueda, setBusqueda] = useState('')
   const [busquedaCliente, setBusquedaCliente] = useState('')
   const [filtroFecha, setFiltroFecha] = useState(hoyPeru())
-  const [tabActivo, setTabActivo] = useState('ventas')
   const [subModal, setSubModal] = useState(null)
   const [clienteRapidoForm, setClienteRapidoForm] = useState({ nombre:'', telefono:'' })
   const [deudaExistente, setDeudaExistente] = useState(null)
@@ -100,13 +99,6 @@ export default function Ventas() {
   const [modalReporte, setModalReporte] = useState(false)
 
   // Cierre/apertura
-  const [filtroCierreAlmacen, setFiltroCierreAlmacen] = useState('')
-  const [cierreHoy, setCierreHoy] = useState(null)
-  const [loadingCierre, setLoadingCierre] = useState(false)
-  const [savingCierre, setSavingCierre] = useState(false)
-  const [errorCierre, setErrorCierre] = useState('')
-  const [aperturaForm, setAperturaForm] = useState({ '5kg':'','10kg':'','45kg':'','v_5kg':'','v_10kg':'','v_45kg':'' })
-  const [cierreForm, setCierreForm] = useState({ '5kg':'','10kg':'','45kg':'' })
 
   // Formulario venta
   const [form, setForm] = useState({
@@ -139,26 +131,8 @@ export default function Ventas() {
     setLoading(false)
   }, [filtroFecha])
 
-  const cargarCierre = useCallback(async () => {
-    if(!filtroCierreAlmacen) return
-    setLoadingCierre(true)
-    const { data } = await supabase.from('cierres_dia').select('*').eq('almacen_id',filtroCierreAlmacen).eq('fecha',hoyPeru()).maybeSingle()
-    setCierreHoy(data||null)
-    if(data?.llenos_apertura) {
-      setAperturaForm({
-        '5kg': data.llenos_apertura['5kg']||'',
-        '10kg': data.llenos_apertura['10kg']||'',
-        '45kg': data.llenos_apertura['45kg']||'',
-        'v_5kg': data.llenos_apertura?.v_5kg||'',
-        'v_10kg': data.llenos_apertura?.v_10kg||'',
-        'v_45kg': data.llenos_apertura?.v_45kg||''
-      })
-    }
-    setLoadingCierre(false)
-  }, [filtroCierreAlmacen])
 
   useEffect(() => { cargar() }, [cargar])
-  useEffect(() => { if(filtroCierreAlmacen) cargarCierre() }, [cargarCierre, filtroCierreAlmacen])
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
   const getPrecio = useCallback((precioTipoId, tipoBalon) => {
@@ -284,71 +258,8 @@ export default function Ventas() {
   }, [getStock, almacenes, cargar, toast])
 
   // ─── Guardar apertura ──────────────────────────────────────────────────────
-  const guardarApertura = useCallback(async () => {
-    if(!filtroCierreAlmacen) { setErrorCierre('Selecciona un almacén'); return }
-    setSavingCierre(true); setErrorCierre('')
-    const llenos = { '5kg':parseInt(aperturaForm['5kg'])||0, '10kg':parseInt(aperturaForm['10kg'])||0, '45kg':parseInt(aperturaForm['45kg'])||0 }
-    const vacios5=parseInt(aperturaForm['v_5kg'])||0, vacios10=parseInt(aperturaForm['v_10kg'])||0, vacios45=parseInt(aperturaForm['v_45kg'])||0
-    const vacios = vacios5+vacios10+vacios45
-    const totalLlenos = llenos['5kg']+llenos['10kg']+llenos['45kg']
-    // Actualizar almacén y stock_por_tipo en paralelo
-    await Promise.all([
-      supabase.from('almacenes').update({ stock_actual:totalLlenos, balones_vacios:vacios, vacios_5kg:vacios5, vacios_10kg:vacios10, vacios_45kg:vacios45, updated_at:new Date().toISOString() }).eq('id',filtroCierreAlmacen),
-      ...TIPOS_BALON.map(tipo =>
-        supabase.from('stock_por_tipo').update({ stock_actual:llenos[tipo] }).eq('almacen_id',filtroCierreAlmacen).eq('tipo_balon',tipo)
-      )
-    ])
-    const { error:e } = await supabase.from('cierres_dia').upsert({
-      almacen_id:filtroCierreAlmacen, fecha:hoyPeru(),
-      llenos_apertura:llenos, vacios_apertura:vacios,
-      apertura_registrada:true, usuario_id:perfil?.id||null,
-      updated_at:new Date().toISOString()
-    }, { onConflict:'almacen_id,fecha' })
-    setSavingCierre(false)
-    if(e) { setErrorCierre(e.message); return }
-    toast('Apertura registrada'); await cargarCierre(); cargar()
-  }, [filtroCierreAlmacen, aperturaForm, perfil, cargarCierre, cargar, toast])
 
   // ─── Guardar cierre ────────────────────────────────────────────────────────
-  const guardarCierre = useCallback(async () => {
-    if(!filtroCierreAlmacen) { setErrorCierre('Selecciona un almacén'); return }
-    if(!cierreHoy?.apertura_registrada) { setErrorCierre('Primero registra la apertura del día'); return }
-    setSavingCierre(true); setErrorCierre('')
-    const llenos_cierre = { '5kg':parseInt(cierreForm['5kg'])||0, '10kg':parseInt(cierreForm['10kg'])||0, '45kg':parseInt(cierreForm['45kg'])||0 }
-    const llenos_apertura = cierreHoy.llenos_apertura||{}
-    const hoyInicio = hoyPeru()+'T00:00:00-05:00', hoyFin = hoyPeru()+'T23:59:59-05:00'
-    // Cargar créditos y precios en paralelo
-    const creditosDinero = { '5kg':0,'10kg':0,'45kg':0 }
-    const { data:ventasHoy } = await supabase.from('ventas').select('cantidad,tipo_balon,metodo_pago,precio_unitario').eq('almacen_id',filtroCierreAlmacen).gte('fecha',hoyInicio).lte('fecha',hoyFin)
-    ;(ventasHoy||[]).filter(v=>v.metodo_pago==='credito').forEach(v => { creditosDinero[v.tipo_balon||'10kg']=(creditosDinero[v.tipo_balon||'10kg']||0)+v.cantidad })
-    // Calcular ventas efectivo
-    const ventas_efectivo = {}, preciosPorTipoHoy = {}
-    ;(ventasHoy||[]).filter(v=>v.metodo_pago==='efectivo').forEach(v => { preciosPorTipoHoy[v.tipo_balon||'10kg']=v.precio_unitario })
-    let monto_efectivo = 0
-    for(const tipo of TIPOS_BALON) {
-      const vendido = Math.max(0,(llenos_apertura[tipo]||0)-(llenos_cierre[tipo]||0)-(creditosDinero[tipo]||0))
-      ventas_efectivo[tipo] = vendido
-      monto_efectivo += vendido*(preciosPorTipoHoy[tipo]||0)
-    }
-    // Registrar ventas efectivo y actualizar stock en paralelo
-    const inserts = TIPOS_BALON.filter(tipo => ventas_efectivo[tipo]>0 && preciosPorTipoHoy[tipo]).map(tipo =>
-      supabase.from('ventas').insert({ almacen_id:filtroCierreAlmacen, tipo_balon:tipo, fecha:hoyPeru()+'T20:00:00-05:00', cantidad:ventas_efectivo[tipo], precio_unitario:preciosPorTipoHoy[tipo], metodo_pago:'efectivo', notas:`Cierre del día — ${ventas_efectivo[tipo]} bal. ${tipo}`, usuario_id:perfil?.id||null })
-    )
-    const totalCierre = llenos_cierre['5kg']+llenos_cierre['10kg']+llenos_cierre['45kg']
-    await Promise.all([
-      ...inserts,
-      supabase.from('almacenes').update({ stock_actual:totalCierre, updated_at:new Date().toISOString() }).eq('id',filtroCierreAlmacen),
-      ...TIPOS_BALON.map(tipo => supabase.from('stock_por_tipo').update({ stock_actual:llenos_cierre[tipo] }).eq('almacen_id',filtroCierreAlmacen).eq('tipo_balon',tipo))
-    ])
-    const { error:e } = await supabase.from('cierres_dia').upsert({
-      almacen_id:filtroCierreAlmacen, fecha:hoyPeru(),
-      llenos_cierre, ventas_efectivo, ventas_credito_dinero:creditosDinero,
-      monto_efectivo, cierre_registrado:true, updated_at:new Date().toISOString()
-    }, { onConflict:'almacen_id,fecha' })
-    setSavingCierre(false)
-    if(e) { setErrorCierre(e.message); return }
-    toast('Cierre del día registrado'); await cargarCierre(); cargar()
-  }, [filtroCierreAlmacen, cierreHoy, cierreForm, perfil, cargarCierre, cargar, toast])
 
   // ─── GUARDAR VENTA ─────────────────────────────────────────────────────────
   const guardar = useCallback(async () => {
@@ -532,13 +443,6 @@ export default function Ventas() {
     win.document.close()
   }, [ventas, ventasFiltradas, filtroFecha, totalDia, totalBalones, totalEfectivo, totalCredito, totalCreditos])
 
-  const csTab = (id) => ({
-    padding:'8px 14px', fontSize:13, fontWeight:500,
-    color:tabActivo===id?'var(--app-accent)':'var(--app-text-secondary)',
-    background:'none', border:'none',
-    borderBottom:tabActivo===id?'2px solid var(--app-accent)':'2px solid transparent',
-    cursor:'pointer', whiteSpace:'nowrap', transition:'all 0.15s'
-  })
 
   // ─── RENDER ────────────────────────────────────────────────────────────────
   return (
@@ -553,105 +457,7 @@ export default function Ventas() {
         </div>
         <button onClick={()=>setModalRapido(true)} className="btn-primary"><Plus className="w-4 h-4"/>Nueva venta</button>
       </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 overflow-x-auto" style={{borderBottom:'1px solid var(--app-card-border)'}}>
-        {[['ventas','📋 Ventas'],['cierre','🌙 Apertura / Cierre']].map(([id,label]) => (
-          <button key={id} onClick={()=>setTabActivo(id)} style={csTab(id)}>{label}</button>
-        ))}
-      </div>
-
-      {/* ── TAB APERTURA/CIERRE ── */}
-      {tabActivo==='cierre' && (
-        <div className="space-y-5">
-          <div className="flex items-center gap-3">
-            <div>
-              <label className="label">Almacén</label>
-              <select className="input" value={filtroCierreAlmacen} onChange={e=>setFiltroCierreAlmacen(e.target.value)}>
-                <option value="">— Selecciona almacén —</option>
-                {almacenes.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}
-              </select>
-            </div>
-            {filtroCierreAlmacen&&<button onClick={cargarCierre} className="btn-secondary mt-5 text-xs">🔄</button>}
-          </div>
-          {filtroCierreAlmacen&&(
-            loadingCierre?<div style={{color:'var(--app-text-secondary)',fontSize:13}}>Cargando...</div>:(
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {/* APERTURA */}
-              <div className="card p-5 space-y-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">🌅</span>
-                  <h3 style={{color:'var(--app-text)',fontWeight:600,margin:0}}>Apertura del día</h3>
-                  {cierreHoy?.apertura_registrada&&<span style={{fontSize:11,padding:'2px 8px',borderRadius:20,background:'rgba(34,197,94,0.12)',color:'#22c55e',border:'1px solid rgba(34,197,94,0.3)'}}>✅ Registrada</span>}
-                </div>
-                <p style={{fontSize:12,color:'var(--app-text-secondary)'}}>Cuenta físicamente los balones al inicio del día.</p>
-                {errorCierre&&<div style={{color:'#f87171',fontSize:12,background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:8,padding:'8px 12px'}}>{errorCierre}</div>}
-                <div className="space-y-3">
-                  {TIPOS_BALON.map(tipo=>(
-                    <div key={tipo} className="flex items-center gap-3">
-                      <span style={{fontSize:13,color:'var(--app-text-secondary)',width:36}}>{tipo}</span>
-                      <input type="number" min="0" className="input flex-1" placeholder="0 llenos" value={aperturaForm[tipo]} onChange={e=>setAperturaForm(f=>({...f,[tipo]:e.target.value}))}/>
-                      <span style={{fontSize:11,color:'var(--app-text-secondary)'}}>llenos</span>
-                    </div>
-                  ))}
-                  {[['v_5kg','5kg'],['v_10kg','10kg'],['v_45kg','45kg']].map(([key,tipo])=>(
-                    <div key={key} className="flex items-center gap-3">
-                      <span style={{fontSize:13,color:'var(--app-text-secondary)',width:36}}>{tipo}</span>
-                      <input type="number" min="0" className="input flex-1" placeholder="0 vacíos" value={aperturaForm[key]} onChange={e=>setAperturaForm(f=>({...f,[key]:e.target.value}))}/>
-                      <span style={{fontSize:11,color:'var(--app-text-secondary)'}}>vacíos</span>
-                    </div>
-                  ))}
-                </div>
-                <button onClick={guardarApertura} disabled={savingCierre} className="btn-primary w-full justify-center">
-                  {savingCierre?'Guardando...':'✓ Registrar apertura y ajustar stock'}
-                </button>
-              </div>
-              {/* CIERRE */}
-              <div className="card p-5 space-y-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">🌙</span>
-                  <h3 style={{color:'var(--app-text)',fontWeight:600,margin:0}}>Cierre del día</h3>
-                  {cierreHoy?.cierre_registrado&&<span style={{fontSize:11,padding:'2px 8px',borderRadius:20,background:'rgba(59,130,246,0.12)',color:'#60a5fa',border:'1px solid rgba(59,130,246,0.3)'}}>✅ Cerrado</span>}
-                </div>
-                <p style={{fontSize:12,color:'var(--app-text-secondary)'}}>Cuenta los llenos al final. Se calcularán las ventas en efectivo.</p>
-                {cierreHoy?.apertura_registrada&&(
-                  <div style={{background:'var(--app-card-bg-alt)',borderRadius:8,padding:'10px 12px',fontSize:12}}>
-                    <p style={{color:'var(--app-text-secondary)',fontWeight:600,margin:'0 0 6px'}}>Apertura registrada:</p>
-                    {TIPOS_BALON.map(t=>(cierreHoy.llenos_apertura?.[t]||0)>0&&<p key={t} style={{color:'var(--app-text-secondary)',margin:'2px 0'}}>{t}: <span style={{color:'var(--app-text)',fontWeight:700}}>{cierreHoy.llenos_apertura[t]}</span> llenos</p>)}
-                  </div>
-                )}
-                {!cierreHoy?.apertura_registrada&&<div style={{background:'rgba(234,179,8,0.08)',border:'1px solid rgba(234,179,8,0.3)',borderRadius:8,padding:'10px 12px',fontSize:12,color:'#eab308'}}>⚠️ Primero registra la apertura del día</div>}
-                <div className="space-y-3">
-                  {TIPOS_BALON.map(tipo=>(
-                    <div key={tipo} className="flex items-center gap-3">
-                      <span style={{fontSize:13,color:'var(--app-text-secondary)',width:36}}>{tipo}</span>
-                      <input type="number" min="0" className="input flex-1" placeholder="0 llenos" value={cierreForm[tipo]} onChange={e=>setCierreForm(f=>({...f,[tipo]:e.target.value}))} disabled={!cierreHoy?.apertura_registrada}/>
-                      <span style={{fontSize:11,color:'var(--app-text-secondary)'}}>llenos</span>
-                    </div>
-                  ))}
-                </div>
-                {cierreHoy?.apertura_registrada&&(cierreForm['5kg']||cierreForm['10kg']||cierreForm['45kg'])&&(()=>{
-                  const apertura=cierreHoy.llenos_apertura||{}
-                  const credPorTipo={'5kg':0,'10kg':0,'45kg':0}
-                  ventas.filter(v=>v.metodo_pago==='credito').forEach(v=>{credPorTipo[v.tipo_balon||'10kg']+=v.cantidad})
-                  return(
-                    <div style={{background:'rgba(34,197,94,0.08)',border:'1px solid rgba(34,197,94,0.2)',borderRadius:8,padding:'10px 12px',fontSize:12}}>
-                      <p style={{color:'#22c55e',fontWeight:600,margin:'0 0 6px'}}>📊 Ventas efectivo estimadas:</p>
-                      {TIPOS_BALON.map(tipo=>{const v=Math.max(0,(apertura[tipo]||0)-(parseInt(cierreForm[tipo])||0)-(credPorTipo[tipo]||0));return v>0?<p key={tipo} style={{color:'var(--app-text-secondary)',margin:'2px 0'}}>{tipo}: <span style={{color:'#22c55e',fontWeight:700}}>{v} bal.</span></p>:null})}
-                    </div>
-                  )
-                })()}
-                <button onClick={guardarCierre} disabled={savingCierre||!cierreHoy?.apertura_registrada} className="btn-primary w-full justify-center disabled:opacity-40">
-                  {savingCierre?'Guardando...':'🌙 Registrar cierre del día'}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* ── TAB VENTAS ── */}
-      {tabActivo==='ventas'&&(<>
 
       {/* Resumen del día */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -770,9 +576,7 @@ export default function Ventas() {
               </tbody>
             </table>
           </div>
-        </>)}
-      </div>
-      </>)}
+        </div>
 
       {/* ── MODAL VENTA ── */}
       {modal&&(
