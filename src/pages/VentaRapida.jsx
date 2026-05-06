@@ -44,6 +44,7 @@ export default function VentaRapida({ onClose, onGuardado, almacenes, precioTipo
   const [busqueda, setBusqueda] = useState('')
   const [modoCliente, setModoCliente] = useState('rapido') // 'rapido' | 'buscar'
   const [saving, setSaving] = useState(false)
+  const [guardado, setGuardado] = useState(false)
   const [error, setError] = useState('')
   const [precioManual, setPrecioManual] = useState('')
   const [mostrarAlmacen, setMostrarAlmacen] = useState(false)
@@ -183,10 +184,13 @@ export default function VentaRapida({ onClose, onGuardado, almacenes, precioTipo
     }
 
     setSaving(false)
-    // Resetear para siguiente venta rápida — no cerrar
-    setCantidad('1'); setMetodoPago('efectivo')
-    selVarios(); setPrecioManual('')
+    setGuardado(true)
     onGuardado()
+    // Mostrar confirmación 1.5s y cerrar
+    setTimeout(() => {
+      setGuardado(false)
+      onClose()
+    }, 1500)
   }, [cantidad, precioFinal, almacenId, stockActual, tipoBalon, clienteId, precioTipoId, metodoPago, perfil, distribuidores, stockPorTipo, aplicarFIFO, selVarios, onGuardado])
 
   const TIPOS_BALON = ['5kg','10kg','45kg']
