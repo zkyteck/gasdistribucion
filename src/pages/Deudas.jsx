@@ -100,6 +100,7 @@ export default function Deudas() {
   const cargar = useCallback(async () => {
     setLoading(true)
     let query = supabase.from('deudas').select('*').order('fecha_deuda', {ascending:false})
+      .or('eliminado.is.null,eliminado.eq.false')
     if(filtroEstado==='activas') query = query.in('estado',['activa','pagada_parcial'])
     else if(filtroEstado==='liquidadas') query = query.eq('estado','liquidada')
     const { data } = await query
@@ -353,12 +354,15 @@ export default function Deudas() {
   // ─── Eliminar deuda ───────────────────────────────────────────────────────────
   const eliminarDeuda = useCallback(async (id) => {
     if(!confirm('¿Eliminar esta deuda? Esta acción no se puede deshacer.')) return
+    const deuda = deudas.find(d => d.id === id)
     await Promise.all([
-      supabase.from('pagos_deuda').delete().eq('deuda_id',id),
-      supabase.from('deudas').delete().eq('id',id)
+      // Soft delete
+      supabase.from('deudas').update({ eliminado:true, eliminado_por:perfil?.id||null, eliminado_at:new Date().toISOString() }).eq('id',id),
+      // Guardar en historial
+      deuda ? supabase.from('historial_eliminaciones').insert({ tabla:'deudas', registro_id:id, datos_anteriores:deuda, eliminado_por:perfil?.id||null }) : Promise.resolve()
     ])
     toast('Deuda eliminada'); cargar()
-  }, [cargar, toast])
+  }, [cargar, toast, deudas, perfil])
 
   // ─── Filtros y ordenamiento ───────────────────────────────────────────────────
   const deudasFiltradas = useMemo(() => {

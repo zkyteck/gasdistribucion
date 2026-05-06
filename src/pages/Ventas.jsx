@@ -252,10 +252,13 @@ export default function Ventas() {
     await Promise.all([
       supabase.from('stock_por_tipo').update({ stock_actual:stockActual+venta.cantidad, updated_at:new Date().toISOString() }).eq('almacen_id',venta.almacen_id).eq('tipo_balon',tipo),
       almacen ? supabase.from('almacenes').update({ stock_actual:(almacen.stock_actual||0)+venta.cantidad, balones_vacios:Math.max(0,(almacen.balones_vacios||0)-venta.cantidad), [campoVacios]:Math.max(0,(almacen[campoVacios]||0)-venta.cantidad) }).eq('id',venta.almacen_id) : Promise.resolve(),
-      supabase.from('ventas').delete().eq('id',venta.id)
+      // Soft delete — no borra, marca como eliminado
+      supabase.from('ventas').update({ eliminado:true, eliminado_por:perfil?.id||null, eliminado_at:new Date().toISOString() }).eq('id',venta.id),
+      // Guardar en historial
+      supabase.from('historial_eliminaciones').insert({ tabla:'ventas', registro_id:venta.id, datos_anteriores:venta, eliminado_por:perfil?.id||null })
     ])
     toast('Venta eliminada'); cargar()
-  }, [getStock, almacenes, cargar, toast])
+  }, [getStock, almacenes, cargar, toast, perfil])
 
   // ─── Guardar apertura ──────────────────────────────────────────────────────
 

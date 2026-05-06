@@ -145,7 +145,7 @@ export default function Clientes() {
 
   async function eliminarCliente(id) {
     if (!confirm('¿Eliminar este cliente? Esta acción no se puede deshacer.')) return
-    await supabase.from('clientes').delete().eq('id', id)
+    await supabase.from('clientes').update({eliminado:true, eliminado_por:perfil?.id||null, eliminado_at:new Date().toISOString()}).eq('id', id)
     cargar()
   }
 
