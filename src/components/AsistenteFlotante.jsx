@@ -193,10 +193,11 @@ Responde de forma práctica. Si recomiendas opciones usa A,B,C. Usa emojis. Resp
         <div style={{
           position: 'fixed', bottom: 24, right: 24, zIndex: 100,
           width: 360, height: 520,
-          background: 'var(--app-card-bg)',
+          background: 'var(--app-modal-bg, var(--app-card-bg))',
           border: '1px solid var(--app-card-border)',
           borderRadius: 20,
-          boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+          backdropFilter: 'none',
           display: 'flex', flexDirection: 'column',
           overflow: 'hidden',
         }}
@@ -229,7 +230,7 @@ Responde de forma práctica. Si recomiendas opciones usa A,B,C. Usa emojis. Resp
           </div>
 
           {/* Mensajes */}
-          <div ref={chatRef} style={{ flex: 1, overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div ref={chatRef} style={{ flex: 1, overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--app-main-bg, var(--app-card-bg))' }}>
             {mensajes.map(m => (
               <div key={m.id} style={{ display: 'flex', justifyContent: m.rol === 'usuario' ? 'flex-end' : 'flex-start', gap: 6 }}>
                 {m.rol === 'ia' && (
