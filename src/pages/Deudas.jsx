@@ -733,81 +733,137 @@ export default function Deudas() {
       {modal==='historial'&&selected&&(
         <Modal title={`📋 Historial — ${selected.nombre_deudor}`} onClose={()=>setModal(null)} wide>
           <div className="space-y-4">
-            <div style={{background:selected.estado==='liquidada'?'rgba(34,197,94,0.08)':'rgba(239,68,68,0.08)',border:`1px solid ${selected.estado==='liquidada'?'rgba(34,197,94,0.3)':'rgba(239,68,68,0.3)'}`,borderRadius:10,padding:'12px 16px'}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8}}>
-                <span style={{fontSize:13,fontWeight:600,color:selected.estado==='liquidada'?'#22c55e':'#f87171'}}>
-                  {selected.estado==='liquidada'?'✅ Liquidada':selected.estado==='pagada_parcial'?'⚠️ Pagada parcialmente':'🔴 Activa'}
+
+            {/* Resumen estado actual */}
+            <div style={{background:selected.estado==='liquidada'?'rgba(34,197,94,0.08)':'rgba(239,68,68,0.06)',border:`1px solid ${selected.estado==='liquidada'?'rgba(34,197,94,0.3)':'rgba(239,68,68,0.25)'}`,borderRadius:12,padding:'14px 16px'}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8,marginBottom:8}}>
+                <span style={{fontSize:14,fontWeight:700,color:'var(--app-text)'}}>{selected.nombre_deudor}</span>
+                <span style={{fontSize:12,fontWeight:600,padding:'3px 10px',borderRadius:20,
+                  background:selected.estado==='liquidada'?'rgba(34,197,94,0.12)':selected.estado==='pagada_parcial'?'rgba(234,179,8,0.12)':'rgba(239,68,68,0.12)',
+                  color:selected.estado==='liquidada'?'#22c55e':selected.estado==='pagada_parcial'?'#eab308':'#f87171'}}>
+                  {selected.estado==='liquidada'?'✅ Deuda saldada':selected.estado==='pagada_parcial'?'⚠️ Pagó parcialmente':'🔴 Debe todavía'}
                 </span>
-                <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                  {parseFloat(selected.monto_pendiente)>0&&<span style={{fontSize:12,background:'rgba(239,68,68,0.12)',color:'#f87171',padding:'3px 10px',borderRadius:20,fontWeight:600}}>S/{Number(selected.monto_pendiente).toLocaleString('es-PE')}</span>}
-                  {parseInt(selected.balones_pendiente)>0&&<span style={{fontSize:12,background:'rgba(251,146,60,0.12)',color:'#fb923c',padding:'3px 10px',borderRadius:20,fontWeight:600}}>{selected.balones_pendiente} bal.</span>}
-                </div>
               </div>
+              {selected.estado!=='liquidada'&&(
+                <div>
+                  <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 6px'}}>Pendiente por cobrar:</p>
+                  <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                    {parseFloat(selected.monto_pendiente)>0&&(
+                      <span style={{fontSize:16,fontWeight:700,color:'#f87171',background:'rgba(239,68,68,0.1)',padding:'4px 12px',borderRadius:8}}>
+                        💵 S/{Number(selected.monto_pendiente).toLocaleString('es-PE')}
+                      </span>
+                    )}
+                    {parseInt(selected.balones_pendiente)>0&&(
+                      <span style={{fontSize:16,fontWeight:700,color:'#fb923c',background:'rgba(251,146,60,0.1)',padding:'4px 12px',borderRadius:8}}>
+                        🔵 {selected.balones_pendiente} balón{parseInt(selected.balones_pendiente)>1?'es':''}
+                      </span>
+                    )}
+                    {parseInt(selected.vales_20_pendiente)>0&&(
+                      <span style={{fontSize:15,fontWeight:700,color:'#eab308',background:'rgba(234,179,8,0.1)',padding:'4px 12px',borderRadius:8}}>
+                        🎫 {selected.vales_20_pendiente}×S/20
+                      </span>
+                    )}
+                    {parseInt(selected.vales_43_pendiente)>0&&(
+                      <span style={{fontSize:15,fontWeight:700,color:'#eab308',background:'rgba(234,179,8,0.1)',padding:'4px 12px',borderRadius:8}}>
+                        🎫 {selected.vales_43_pendiente}×S/43
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {historialCompleto?.deudas&&(
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  {label:'Deudas totales',value:historialCompleto.deudas.length,color:'var(--app-text)'},
-                  {label:'Liquidadas',value:historialCompleto.deudas.filter(d=>d.estado==='liquidada').length,color:'#22c55e'},
-                  {label:'Activas',value:historialCompleto.deudas.filter(d=>d.estado!=='liquidada').length,color:'#f87171'},
-                ].map(({label,value,color})=>(
-                  <div key={label} style={{background:'var(--app-card-bg-alt)',borderRadius:8,padding:'10px',textAlign:'center'}}>
-                    <p style={{fontSize:22,fontWeight:700,color,margin:0}}>{value}</p>
-                    <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>{label}</p>
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* Estadísticas del cliente */}
+            {historialCompleto?.deudas&&(()=>{
+              const totalDeudado = historialCompleto.deudas.reduce((s,d)=>s+(parseFloat(d.monto_original)||0),0)
+              const totalPagado = historialCompleto.deudas.reduce((s,d)=>s+(parseFloat(d.monto_original||0)-parseFloat(d.monto_pendiente||0)),0)
+              return(
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+                  {[
+                    {label:'Veces que debió',value:historialCompleto.deudas.length,color:'var(--app-text)',icon:'📋'},
+                    {label:'Veces que saldó',value:historialCompleto.deudas.filter(d=>d.estado==='liquidada').length,color:'#22c55e',icon:'✅'},
+                    {label:'Deudas activas',value:historialCompleto.deudas.filter(d=>d.estado!=='liquidada').length,color:'#f87171',icon:'🔴'},
+                  ].map(({label,value,color,icon})=>(
+                    <div key={label} style={{background:'var(--app-card-bg-alt)',borderRadius:10,padding:'10px',textAlign:'center',border:'1px solid var(--app-card-border)'}}>
+                      <p style={{fontSize:10,margin:'0 0 2px'}}>{icon}</p>
+                      <p style={{fontSize:20,fontWeight:700,color,margin:0}}>{value}</p>
+                      <p style={{fontSize:10,color:'var(--app-text-secondary)',margin:'2px 0 0',lineHeight:1.2}}>{label}</p>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
 
+            {/* Movimientos */}
             <div>
-              <p style={{fontSize:12,color:'var(--app-text-secondary)',fontWeight:600,textTransform:'uppercase',marginBottom:12}}>Movimientos</p>
+              <p style={{fontSize:12,color:'var(--app-text-secondary)',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:10}}>
+                Historial de movimientos
+              </p>
               {loadingHistorial?(
-                <div style={{textAlign:'center',color:'var(--app-text-secondary)',padding:'20px 0'}}>Cargando historial...</div>
+                <div style={{textAlign:'center',color:'var(--app-text-secondary)',padding:'20px 0'}}>Cargando...</div>
               ):(
-                <div style={{maxHeight:380,overflowY:'auto'}} className="space-y-3 pr-1">
+                <div style={{maxHeight:400,overflowY:'auto',display:'flex',flexDirection:'column',gap:6}}>
                   {(historialCompleto?.deudas||[selected]).map(deuda=>(
-                    <div key={deuda.id} style={{marginBottom:16}}>
-                      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-                        <span style={{fontSize:11,padding:'2px 8px',borderRadius:20,fontWeight:600,background:deuda.estado==='liquidada'?'rgba(34,197,94,0.12)':'rgba(239,68,68,0.12)',color:deuda.estado==='liquidada'?'#22c55e':'#f87171'}}>
-                          {deuda.estado==='liquidada'?'✅ Liquidada':'🔴 Activa'}
-                        </span>
-                        <span style={{fontSize:11,color:'var(--app-text-secondary)'}}>
-                          {deuda.fecha_deuda?format(new Date(deuda.fecha_deuda+'T12:00:00'),'dd/MM/yyyy',{locale:es}):'—'}
-                        </span>
-                      </div>
-                      <div style={{marginLeft:8,borderLeft:'2px solid var(--app-card-border)',paddingLeft:12}} className="space-y-2">
-                        {!(deuda.historial||[]).length&&<p style={{fontSize:12,color:'var(--app-text-secondary)',padding:'8px 0'}}>Sin movimientos</p>}
-                        {(deuda.historial||[]).map((h,i)=>{
-                          const esPago = h.tipo==='pago'
-                          const items=[]
-                          if(parseFloat(h.monto)>0) items.push(`S/${Number(h.monto).toLocaleString('es-PE')}`)
-                          if(parseInt(h.balones)>0) items.push(`${h.balones} bal.`)
-                          if(parseInt(h.vales_20)>0) items.push(`${h.vales_20}×S/20`)
-                          if(parseInt(h.vales_43)>0) items.push(`${h.vales_43}×S/43`)
-                          return(
-                            <div key={i} style={{display:'flex',gap:10,padding:'10px 12px',borderRadius:8,background:esPago?'rgba(34,197,94,0.08)':'rgba(239,68,68,0.06)',border:`1px solid ${esPago?'rgba(34,197,94,0.2)':'rgba(239,68,68,0.15)'}`,fontSize:12}}>
-                              <span style={{fontSize:14,flexShrink:0}}>{esPago?'💚':'🔴'}</span>
-                              <div style={{flex:1}}>
-                                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
-                                  <div>
-                                    <span style={{fontWeight:600,color:esPago?'#22c55e':'#f87171'}}>
-                                      {esPago?`Pagó${h.metodo_pago?' · '+h.metodo_pago:''}`:i===0?'Deuda inicial':'Cargo adicional'}
-                                    </span>
-                                    <span style={{color:'var(--app-text-secondary)',marginLeft:8}}>
-                                      {h.fecha?format(new Date(h.fecha+'T12:00:00'),'dd/MM/yyyy',{locale:es}):'—'}
-                                    </span>
-                                  </div>
-                                  <span style={{fontWeight:700,color:esPago?'#22c55e':'#f87171'}}>
-                                    {esPago?'−':'+' }{items.join(' + ')}
-                                  </span>
+                    <div key={deuda.id}>
+                      {/* Separador por deuda si hay varias */}
+                      {historialCompleto?.deudas?.length>1&&(
+                        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6,marginTop:4}}>
+                          <div style={{flex:1,height:1,background:'var(--app-card-border)'}}/>
+                          <span style={{fontSize:10,color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>
+                            Deuda del {deuda.fecha_deuda?format(new Date(deuda.fecha_deuda+'T12:00:00'),'dd/MM/yyyy',{locale:es}):'—'}
+                          </span>
+                          <div style={{flex:1,height:1,background:'var(--app-card-border)'}}/>
+                        </div>
+                      )}
+                      {!(deuda.historial||[]).length&&(
+                        <p style={{fontSize:12,color:'var(--app-text-secondary)',padding:'8px 0',textAlign:'center'}}>Sin movimientos registrados</p>
+                      )}
+                      {(deuda.historial||[]).map((h,i)=>{
+                        const esPago = h.tipo==='pago'
+                        const items=[]
+                        if(parseFloat(h.monto)>0) items.push(`S/${Number(h.monto).toLocaleString('es-PE')}`)
+                        if(parseInt(h.balones)>0) items.push(`${h.balones} balón${parseInt(h.balones)>1?'es':''}`)
+                        if(parseInt(h.vales_20)>0) items.push(`${h.vales_20} vale${parseInt(h.vales_20)>1?'s':''} S/20`)
+                        if(parseInt(h.vales_43)>0) items.push(`${h.vales_43} vale${parseInt(h.vales_43)>1?'s':''} S/43`)
+
+                        // Etiqueta clara del tipo de movimiento
+                        let etiqueta, colorEtiqueta, bgEtiqueta, icono
+                        if(esPago) {
+                          const metodos = {efectivo:'💵 Pagó en efectivo',yape:'📱 Pagó por Yape',transferencia:'🏦 Pagó por transferencia',vale:'🎫 Pagó con vale',mixto:'💰 Pagó mixto',cobro_credito:'✅ Crédito cobrado'}
+                          etiqueta = metodos[h.metodo_pago] || '✅ Realizó un pago'
+                          colorEtiqueta = '#22c55e'; bgEtiqueta = 'rgba(34,197,94,0.08)'; icono = '✅'
+                        } else if(i===0) {
+                          etiqueta = '🔴 Se registró la deuda'
+                          colorEtiqueta = '#f87171'; bgEtiqueta = 'rgba(239,68,68,0.06)'; icono = '🔴'
+                        } else {
+                          etiqueta = '➕ Se le agregó más deuda'
+                          colorEtiqueta = '#fb923c'; bgEtiqueta = 'rgba(251,146,60,0.06)'; icono = '➕'
+                        }
+
+                        return(
+                          <div key={i} style={{display:'flex',gap:10,padding:'10px 12px',borderRadius:10,background:bgEtiqueta,border:`1px solid ${esPago?'rgba(34,197,94,0.2)':i===0?'rgba(239,68,68,0.2)':'rgba(251,146,60,0.2)'}`,fontSize:12}}>
+                            <span style={{fontSize:16,flexShrink:0,marginTop:1}}>{icono}</span>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8,flexWrap:'wrap'}}>
+                                <div>
+                                  <p style={{fontWeight:600,color:colorEtiqueta,margin:0,fontSize:13}}>{etiqueta}</p>
+                                  <p style={{color:'var(--app-text-secondary)',margin:'2px 0 0',fontSize:11}}>
+                                    📅 {h.fecha?format(new Date(h.fecha+'T12:00:00'),'dd 'de' MMMM yyyy',{locale:es}):'—'}
+                                  </p>
                                 </div>
-                                {h.notas&&<p style={{color:'#eab308',fontStyle:'italic',margin:'3px 0 0'}}>📝 {h.notas}</p>}
+                                <span style={{fontWeight:700,color:colorEtiqueta,fontSize:14,whiteSpace:'nowrap'}}>
+                                  {esPago?'− ':'+ '}{items.join(' + ') || '—'}
+                                </span>
                               </div>
+                              {h.notas&&(
+                                <div style={{marginTop:6,padding:'5px 8px',background:'rgba(234,179,8,0.08)',borderRadius:6,border:'1px solid rgba(234,179,8,0.2)'}}>
+                                  <p style={{color:'#eab308',fontSize:11,margin:0}}>📝 Nota: {h.notas}</p>
+                                </div>
+                              )}
                             </div>
-                          )
-                        })}
-                      </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   ))}
                 </div>
