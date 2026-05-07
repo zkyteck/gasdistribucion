@@ -848,7 +848,7 @@ export default function Deudas() {
                                 <div>
                                   <p style={{fontWeight:600,color:colorEtiqueta,margin:0,fontSize:13}}>{etiqueta}</p>
                                   <p style={{color:'var(--app-text-secondary)',margin:'2px 0 0',fontSize:11}}>
-                                    📅 {h.fecha?format(new Date(h.fecha+'T12:00:00'),'dd 'de' MMMM yyyy',{locale:es}):'—'}
+                                    📅 {h.fecha?format(new Date(h.fecha+'T12:00:00'),"dd 'de' MMMM yyyy",{locale:es}):'—'}
                                   </p>
                                 </div>
                                 <span style={{fontWeight:700,color:colorEtiqueta,fontSize:14,whiteSpace:'nowrap'}}>
