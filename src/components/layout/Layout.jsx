@@ -6,6 +6,7 @@ import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import { LogOut, MoreHorizontal, X, Mail } from 'lucide-react'
 import BotonNotificaciones from '../BotonNotificaciones'
+import AsistenteFlotante from '../AsistenteFlotante'
 import { inicializarNotificaciones } from '../../lib/notificaciones'
 import { useItemsVisibles, BOTTOM_FIXED } from './navConfig'
 
@@ -305,6 +306,9 @@ export default function Layout() {
       <div className="lg:hidden">
         <BottomNav />
       </div>
+
+      {/* Asistente IA flotante */}
+      <AsistenteFlotante />
     </div>
   )
 }
