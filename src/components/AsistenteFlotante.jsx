@@ -289,13 +289,13 @@ Responde de forma práctica. Si recomiendas opciones usa A,B,C. Usa emojis. Resp
         </div>
       )}
 
-      <style>{\`
+      <style>{`
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
         @media(max-width:640px){
           .chat-flotante{width:calc(100vw - 32px)!important;right:16px!important;bottom:80px!important}
         }
-      \`}</style>
+      `}</style>
     </>
   )
 }
