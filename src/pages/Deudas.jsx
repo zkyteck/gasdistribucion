@@ -95,6 +95,7 @@ export default function Deudas() {
   const [editForm, setEditForm] = useState({ monto_pendiente:'', balones_pendiente:'', vales_20_pendiente:'', vales_43_pendiente:'', fecha_deuda:'', notas:'' })
   const [historialCompleto, setHistorialCompleto] = useState(null)
   const [loadingHistorial, setLoadingHistorial] = useState(false)
+  const [tabHistorial, setTabHistorial] = useState('movimientos')
 
   // ─── Carga ──────────────────────────────────────────────────────────────────
   const cargar = useCallback(async () => {
@@ -730,149 +731,205 @@ export default function Deudas() {
       )}
 
       {/* ── Modal historial ── */}
-      {modal==='historial'&&selected&&(
-        <Modal title={`📋 Historial — ${selected.nombre_deudor}`} onClose={()=>setModal(null)} wide>
+      {modal==='historial'&&selected&&(()=>{
+        const deudas = historialCompleto?.deudas || [selected]
+        const deudaActivas = deudas.filter(d=>d.estado!=='liquidada')
+        const deudasSaldadas = deudas.filter(d=>d.estado==='liquidada')
+        const totalAcumulado = deudas.reduce((s,d)=>s+(parseFloat(d.monto_original)||0),0)
+        const totalPendiente = deudas.reduce((s,d)=>s+(parseFloat(d.monto_pendiente)||0),0)
+        const totalPagado = totalAcumulado - totalPendiente
+        const pct = totalAcumulado>0?Math.round((totalPagado/totalAcumulado)*100):0
+        // Todos los movimientos ordenados por fecha
+        const todosMovimientos = []
+        deudaActivas.forEach(d=>{
+          (d.historial||[]).forEach((h,i)=>todosMovimientos.push({...h,_deudaId:d.id,_idx:i}))
+        })
+        todosMovimientos.sort((a,b)=>new Date(a.fecha||'2000-01-01')-new Date(b.fecha||'2000-01-01'))
+        return(
+        <Modal title={`📋 Historial — ${selected.nombre_deudor}`} onClose={()=>{setModal(null);setTabHistorial('movimientos')}} wide>
           <div className="space-y-4">
 
-            {/* Resumen estado actual */}
-            <div style={{background:selected.estado==='liquidada'?'rgba(34,197,94,0.08)':'rgba(239,68,68,0.06)',border:`1px solid ${selected.estado==='liquidada'?'rgba(34,197,94,0.3)':'rgba(239,68,68,0.25)'}`,borderRadius:12,padding:'14px 16px'}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8,marginBottom:8}}>
-                <span style={{fontSize:14,fontWeight:700,color:'var(--app-text)'}}>{selected.nombre_deudor}</span>
-                <span style={{fontSize:12,fontWeight:600,padding:'3px 10px',borderRadius:20,
-                  background:selected.estado==='liquidada'?'rgba(34,197,94,0.12)':selected.estado==='pagada_parcial'?'rgba(234,179,8,0.12)':'rgba(239,68,68,0.12)',
-                  color:selected.estado==='liquidada'?'#22c55e':selected.estado==='pagada_parcial'?'#eab308':'#f87171'}}>
-                  {selected.estado==='liquidada'?'✅ Deuda saldada':selected.estado==='pagada_parcial'?'⚠️ Pagó parcialmente':'🔴 Debe todavía'}
-                </span>
-              </div>
-              {selected.estado!=='liquidada'&&(
-                <div>
-                  <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 6px'}}>Pendiente por cobrar:</p>
-                  <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                    {parseFloat(selected.monto_pendiente)>0&&(
-                      <span style={{fontSize:16,fontWeight:700,color:'#f87171',background:'rgba(239,68,68,0.1)',padding:'4px 12px',borderRadius:8}}>
-                        💵 S/{Number(selected.monto_pendiente).toLocaleString('es-PE')}
-                      </span>
-                    )}
-                    {parseInt(selected.balones_pendiente)>0&&(
-                      <span style={{fontSize:16,fontWeight:700,color:'#fb923c',background:'rgba(251,146,60,0.1)',padding:'4px 12px',borderRadius:8}}>
-                        🔵 {selected.balones_pendiente} balón{parseInt(selected.balones_pendiente)>1?'es':''}
-                      </span>
-                    )}
-                    {parseInt(selected.vales_20_pendiente)>0&&(
-                      <span style={{fontSize:15,fontWeight:700,color:'#eab308',background:'rgba(234,179,8,0.1)',padding:'4px 12px',borderRadius:8}}>
-                        🎫 {selected.vales_20_pendiente}×S/20
-                      </span>
-                    )}
-                    {parseInt(selected.vales_43_pendiente)>0&&(
-                      <span style={{fontSize:15,fontWeight:700,color:'#eab308',background:'rgba(234,179,8,0.1)',padding:'4px 12px',borderRadius:8}}>
-                        🎫 {selected.vales_43_pendiente}×S/43
-                      </span>
-                    )}
-                  </div>
+            {/* Header cliente */}
+            <div style={{background:'var(--app-card-bg-alt)',border:'1px solid var(--app-card-border)',borderRadius:12,padding:'14px 16px'}}>
+              {/* Barra progreso */}
+              <div style={{marginBottom:10}}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+                  <span style={{fontSize:11,color:'var(--app-text-secondary)'}}>Pagado hasta ahora</span>
+                  <span style={{fontSize:11,color:'var(--app-text-secondary)'}}>S/{totalPagado.toLocaleString('es-PE')} de S/{totalAcumulado.toLocaleString('es-PE')}</span>
                 </div>
-              )}
+                <div style={{height:8,background:'var(--app-card-border)',borderRadius:20,overflow:'hidden'}}>
+                  <div style={{height:'100%',width:`${pct}%`,background:'#22c55e',borderRadius:20,transition:'width 0.3s'}}/>
+                </div>
+              </div>
+              {/* 3 cifras */}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+                <div style={{background:'var(--app-card-bg)',borderRadius:8,padding:'10px',textAlign:'center',border:'1px solid var(--app-card-border)'}}>
+                  <p style={{fontSize:16,fontWeight:700,color:'var(--app-text)',margin:0}}>S/{totalAcumulado.toLocaleString('es-PE')}</p>
+                  <p style={{fontSize:10,color:'var(--app-text-secondary)',margin:'3px 0 0',lineHeight:1.3}}>Total acumulado</p>
+                </div>
+                <div style={{background:'rgba(34,197,94,0.08)',borderRadius:8,padding:'10px',textAlign:'center',border:'1px solid rgba(34,197,94,0.2)'}}>
+                  <p style={{fontSize:16,fontWeight:700,color:'#22c55e',margin:0}}>S/{totalPagado.toLocaleString('es-PE')}</p>
+                  <p style={{fontSize:10,color:'#22c55e',margin:'3px 0 0',lineHeight:1.3,opacity:0.8}}>Ya pagó</p>
+                </div>
+                <div style={{background:totalPendiente>0?'rgba(239,68,68,0.08)':'rgba(34,197,94,0.08)',borderRadius:8,padding:'10px',textAlign:'center',border:`1px solid ${totalPendiente>0?'rgba(239,68,68,0.2)':'rgba(34,197,94,0.2)'}`}}>
+                  <p style={{fontSize:16,fontWeight:700,color:totalPendiente>0?'#f87171':'#22c55e',margin:0}}>S/{totalPendiente.toLocaleString('es-PE')}</p>
+                  <p style={{fontSize:10,color:totalPendiente>0?'#f87171':'#22c55e',margin:'3px 0 0',lineHeight:1.3,opacity:0.8}}>{totalPendiente>0?'Falta cobrar':'Todo saldado'}</p>
+                </div>
+              </div>
             </div>
 
-            {/* Estadísticas del cliente */}
-            {historialCompleto?.deudas&&(()=>{
-              const totalDeudado = historialCompleto.deudas.reduce((s,d)=>s+(parseFloat(d.monto_original)||0),0)
-              const totalPagado = historialCompleto.deudas.reduce((s,d)=>s+(parseFloat(d.monto_original||0)-parseFloat(d.monto_pendiente||0)),0)
-              return(
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
-                  {[
-                    {label:'Veces que debió',value:historialCompleto.deudas.length,color:'var(--app-text)',icon:'📋'},
-                    {label:'Veces que saldó',value:historialCompleto.deudas.filter(d=>d.estado==='liquidada').length,color:'#22c55e',icon:'✅'},
-                    {label:'Deudas activas',value:historialCompleto.deudas.filter(d=>d.estado!=='liquidada').length,color:'#f87171',icon:'🔴'},
-                  ].map(({label,value,color,icon})=>(
-                    <div key={label} style={{background:'var(--app-card-bg-alt)',borderRadius:10,padding:'10px',textAlign:'center',border:'1px solid var(--app-card-border)'}}>
-                      <p style={{fontSize:10,margin:'0 0 2px'}}>{icon}</p>
-                      <p style={{fontSize:20,fontWeight:700,color,margin:0}}>{value}</p>
-                      <p style={{fontSize:10,color:'var(--app-text-secondary)',margin:'2px 0 0',lineHeight:1.2}}>{label}</p>
-                    </div>
-                  ))}
-                </div>
-              )
-            })()}
+            {/* Tabs */}
+            <div style={{display:'flex',gap:0,background:'var(--app-card-bg-alt)',borderRadius:10,padding:3,border:'1px solid var(--app-card-border)'}}>
+              {[
+                {id:'movimientos',label:'Movimientos',count:todosMovimientos.length,color:'var(--app-text)'},
+                {id:'saldadas',label:'Períodos saldados',count:deudasSaldadas.length,color:'#22c55e'},
+              ].map(tab=>(
+                <button key={tab.id} onClick={()=>setTabHistorial(tab.id)} style={{
+                  flex:1,padding:'8px',border:'none',borderRadius:8,fontSize:13,fontWeight:500,cursor:'pointer',
+                  background:tabHistorial===tab.id?'var(--app-card-bg)':'transparent',
+                  color:tabHistorial===tab.id?tab.color:'var(--app-text-secondary)',
+                  display:'flex',alignItems:'center',justifyContent:'center',gap:6,transition:'all 0.15s'
+                }}>
+                  {tab.label}
+                  <span style={{fontSize:11,padding:'1px 7px',borderRadius:20,
+                    background:tabHistorial===tab.id?'var(--app-card-bg-alt)':'transparent',
+                    color:'var(--app-text-secondary)'}}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
 
-            {/* Movimientos */}
-            <div>
-              <p style={{fontSize:12,color:'var(--app-text-secondary)',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:10}}>
-                Historial de movimientos
-              </p>
-              {loadingHistorial?(
-                <div style={{textAlign:'center',color:'var(--app-text-secondary)',padding:'20px 0'}}>Cargando...</div>
-              ):(
-                <div style={{maxHeight:400,overflowY:'auto',display:'flex',flexDirection:'column',gap:6}}>
-                  {(historialCompleto?.deudas||[selected]).map(deuda=>(
-                    <div key={deuda.id}>
-                      {/* Separador por deuda si hay varias */}
-                      {historialCompleto?.deudas?.length>1&&(
-                        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6,marginTop:4}}>
-                          <div style={{flex:1,height:1,background:'var(--app-card-border)'}}/>
-                          <span style={{fontSize:10,color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>
-                            Deuda del {deuda.fecha_deuda?format(new Date(deuda.fecha_deuda+'T12:00:00'),'dd/MM/yyyy',{locale:es}):'—'}
-                          </span>
-                          <div style={{flex:1,height:1,background:'var(--app-card-border)'}}/>
+            {/* Panel movimientos */}
+            {tabHistorial==='movimientos'&&(
+              <div style={{maxHeight:400,overflowY:'auto',display:'flex',flexDirection:'column',gap:6}}>
+                {loadingHistorial?(
+                  <div style={{textAlign:'center',color:'var(--app-text-secondary)',padding:'20px 0'}}>Cargando...</div>
+                ):todosMovimientos.length===0?(
+                  <p style={{textAlign:'center',color:'var(--app-text-secondary)',fontSize:13,padding:'20px 0'}}>Sin movimientos registrados</p>
+                ):(
+                  <>
+                  {todosMovimientos.map((h,i)=>{
+                    const esPago = h.tipo==='pago'
+                    const items=[]
+                    if(parseFloat(h.monto)>0) items.push(`S/${Number(h.monto).toLocaleString('es-PE')}`)
+                    if(parseInt(h.balones)>0) items.push(`${h.balones} balón${parseInt(h.balones)>1?'es':''}`)
+                    if(parseInt(h.vales_20)>0) items.push(`${h.vales_20} vale${parseInt(h.vales_20)>1?'s':''} S/20`)
+                    if(parseInt(h.vales_43)>0) items.push(`${h.vales_43} vale${parseInt(h.vales_43)>1?'s':''} S/43`)
+                    let etiqueta, colorEtiqueta, bgEtiqueta, borderColor
+                    if(esPago) {
+                      const metodos={efectivo:'💵 Pagó en efectivo',yape:'📱 Pagó por Yape',transferencia:'🏦 Pagó por transferencia',vale:'🎫 Pagó con vale',mixto:'💰 Pagó mixto',cobro_credito:'✅ Crédito cobrado'}
+                      etiqueta=metodos[h.metodo_pago]||'✅ Realizó un pago'
+                      colorEtiqueta='#22c55e'; bgEtiqueta='rgba(34,197,94,0.08)'; borderColor='rgba(34,197,94,0.2)'
+                    } else if(h._idx===0) {
+                      etiqueta='🔴 Se registró la deuda'
+                      colorEtiqueta='#f87171'; bgEtiqueta='rgba(239,68,68,0.06)'; borderColor='rgba(239,68,68,0.2)'
+                    } else {
+                      etiqueta='➕ Se le agregó más deuda'
+                      colorEtiqueta='#fb923c'; bgEtiqueta='rgba(251,146,60,0.06)'; borderColor='rgba(251,146,60,0.2)'
+                    }
+                    return(
+                      <div key={i} style={{display:'flex',gap:10,padding:'10px 12px',borderRadius:10,background:bgEtiqueta,border:`1px solid ${borderColor}`}}>
+                        <span style={{fontSize:16,flexShrink:0,marginTop:1}}>{esPago?'✅':h._idx===0?'🔴':'➕'}</span>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8,flexWrap:'wrap'}}>
+                            <div>
+                              <p style={{fontWeight:600,color:colorEtiqueta,margin:0,fontSize:13}}>{etiqueta}</p>
+                              <p style={{color:'var(--app-text-secondary)',margin:'2px 0 0',fontSize:11}}>
+                                📅 {h.fecha?format(new Date(h.fecha+'T12:00:00'),"dd 'de' MMMM yyyy",{locale:es}):'—'}
+                              </p>
+                            </div>
+                            <span style={{fontWeight:700,color:colorEtiqueta,fontSize:14,whiteSpace:'nowrap'}}>
+                              {esPago?'− ':'+ '}{items.join(' + ')||'—'}
+                            </span>
+                          </div>
+                          {h.notas&&(
+                            <div style={{marginTop:6,padding:'5px 8px',background:'rgba(234,179,8,0.08)',borderRadius:6,border:'1px solid rgba(234,179,8,0.2)'}}>
+                              <p style={{color:'#eab308',fontSize:11,margin:0}}>📝 Nota: {h.notas}</p>
+                            </div>
+                          )}
                         </div>
-                      )}
-                      {!(deuda.historial||[]).length&&(
-                        <p style={{fontSize:12,color:'var(--app-text-secondary)',padding:'8px 0',textAlign:'center'}}>Sin movimientos registrados</p>
-                      )}
+                      </div>
+                    )
+                  })}
+                  {/* Saldo actual */}
+                  {totalPendiente>0&&(
+                    <div style={{display:'flex',gap:10,padding:'10px 12px',borderRadius:10,background:'rgba(239,68,68,0.06)',border:'1px solid rgba(239,68,68,0.2)'}}>
+                      <span style={{fontSize:16,flexShrink:0}}>⏳</span>
+                      <div style={{flex:1,display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:4}}>
+                        <div>
+                          <p style={{fontWeight:600,color:'#f87171',margin:0,fontSize:13}}>Saldo pendiente hoy</p>
+                          <p style={{color:'var(--app-text-secondary)',fontSize:11,margin:'2px 0 0'}}>Falta cobrar este monto</p>
+                        </div>
+                        <span style={{fontWeight:700,color:'#f87171',fontSize:14}}>S/{totalPendiente.toLocaleString('es-PE')}</span>
+                      </div>
+                    </div>
+                  )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Panel saldadas */}
+            {tabHistorial==='saldadas'&&(
+              <div style={{maxHeight:400,overflowY:'auto',display:'flex',flexDirection:'column',gap:10}}>
+                {deudasSaldadas.length===0?(
+                  <p style={{textAlign:'center',color:'var(--app-text-secondary)',fontSize:13,padding:'20px 0'}}>
+                    Este cliente no tiene períodos saldados aún
+                  </p>
+                ):deudasSaldadas.map(deuda=>(
+                  <div key={deuda.id} style={{background:'var(--app-card-bg)',border:'1px solid rgba(34,197,94,0.3)',borderRadius:12,overflow:'hidden'}}>
+                    <div style={{padding:'10px 14px',background:'rgba(34,197,94,0.08)',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:6}}>
+                      <div>
+                        <p style={{fontSize:12,fontWeight:600,color:'#22c55e',margin:0}}>
+                          ✅ Saldado el {deuda.fecha_deuda?format(new Date(deuda.fecha_deuda+'T12:00:00'),'dd/MM/yyyy',{locale:es}):'—'}
+                        </p>
+                        <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>
+                          Debía S/{parseFloat(deuda.monto_original||0).toLocaleString('es-PE')} · Pagó todo · Quedó en S/0
+                        </p>
+                      </div>
+                      <span style={{fontSize:11,padding:'2px 8px',borderRadius:20,background:'rgba(34,197,94,0.12)',color:'#22c55e',border:'1px solid rgba(34,197,94,0.3)'}}>
+                        Pagado completo
+                      </span>
+                    </div>
+                    <div style={{padding:'10px 14px',display:'flex',flexDirection:'column',gap:6}}>
                       {(deuda.historial||[]).map((h,i)=>{
-                        const esPago = h.tipo==='pago'
+                        const esPago=h.tipo==='pago'
                         const items=[]
                         if(parseFloat(h.monto)>0) items.push(`S/${Number(h.monto).toLocaleString('es-PE')}`)
-                        if(parseInt(h.balones)>0) items.push(`${h.balones} balón${parseInt(h.balones)>1?'es':''}`)
-                        if(parseInt(h.vales_20)>0) items.push(`${h.vales_20} vale${parseInt(h.vales_20)>1?'s':''} S/20`)
-                        if(parseInt(h.vales_43)>0) items.push(`${h.vales_43} vale${parseInt(h.vales_43)>1?'s':''} S/43`)
-
-                        // Etiqueta clara del tipo de movimiento
-                        let etiqueta, colorEtiqueta, bgEtiqueta, icono
-                        if(esPago) {
-                          const metodos = {efectivo:'💵 Pagó en efectivo',yape:'📱 Pagó por Yape',transferencia:'🏦 Pagó por transferencia',vale:'🎫 Pagó con vale',mixto:'💰 Pagó mixto',cobro_credito:'✅ Crédito cobrado'}
-                          etiqueta = metodos[h.metodo_pago] || '✅ Realizó un pago'
-                          colorEtiqueta = '#22c55e'; bgEtiqueta = 'rgba(34,197,94,0.08)'; icono = '✅'
-                        } else if(i===0) {
-                          etiqueta = '🔴 Se registró la deuda'
-                          colorEtiqueta = '#f87171'; bgEtiqueta = 'rgba(239,68,68,0.06)'; icono = '🔴'
-                        } else {
-                          etiqueta = '➕ Se le agregó más deuda'
-                          colorEtiqueta = '#fb923c'; bgEtiqueta = 'rgba(251,146,60,0.06)'; icono = '➕'
-                        }
-
+                        if(parseInt(h.balones)>0) items.push(`${h.balones} bal.`)
                         return(
-                          <div key={i} style={{display:'flex',gap:10,padding:'10px 12px',borderRadius:10,background:bgEtiqueta,border:`1px solid ${esPago?'rgba(34,197,94,0.2)':i===0?'rgba(239,68,68,0.2)':'rgba(251,146,60,0.2)'}`,fontSize:12}}>
-                            <span style={{fontSize:16,flexShrink:0,marginTop:1}}>{icono}</span>
-                            <div style={{flex:1,minWidth:0}}>
-                              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8,flexWrap:'wrap'}}>
-                                <div>
-                                  <p style={{fontWeight:600,color:colorEtiqueta,margin:0,fontSize:13}}>{etiqueta}</p>
-                                  <p style={{color:'var(--app-text-secondary)',margin:'2px 0 0',fontSize:11}}>
-                                    📅 {h.fecha?format(new Date(h.fecha+'T12:00:00'),"dd 'de' MMMM yyyy",{locale:es}):'—'}
-                                  </p>
-                                </div>
-                                <span style={{fontWeight:700,color:colorEtiqueta,fontSize:14,whiteSpace:'nowrap'}}>
-                                  {esPago?'− ':'+ '}{items.join(' + ') || '—'}
-                                </span>
+                          <div key={i} style={{display:'flex',gap:8,padding:'8px 10px',borderRadius:8,
+                            background:esPago?'rgba(34,197,94,0.08)':'rgba(239,68,68,0.06)',
+                            border:`1px solid ${esPago?'rgba(34,197,94,0.2)':'rgba(239,68,68,0.2)'}`}}>
+                            <span style={{fontSize:14,flexShrink:0}}>{esPago?'✅':'🔴'}</span>
+                            <div style={{flex:1,display:'flex',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
+                              <div>
+                                <p style={{fontSize:12,fontWeight:600,color:esPago?'#22c55e':'#f87171',margin:0}}>
+                                  {esPago?'Pagó en efectivo':i===0?'Se registró la deuda':'Se le agregó más deuda'}
+                                </p>
+                                <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>
+                                  {h.fecha?format(new Date(h.fecha+'T12:00:00'),'dd/MM/yyyy',{locale:es}):'—'}
+                                </p>
                               </div>
-                              {h.notas&&(
-                                <div style={{marginTop:6,padding:'5px 8px',background:'rgba(234,179,8,0.08)',borderRadius:6,border:'1px solid rgba(234,179,8,0.2)'}}>
-                                  <p style={{color:'#eab308',fontSize:11,margin:0}}>📝 Nota: {h.notas}</p>
-                                </div>
-                              )}
+                              <span style={{fontSize:12,fontWeight:600,color:esPago?'#22c55e':'#f87171'}}>
+                                {esPago?'− ':'+ '}{items.join(' + ')||'—'}
+                              </span>
                             </div>
                           </div>
                         )
                       })}
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <button onClick={()=>setModal(null)} className="btn-secondary w-full">Cerrar</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button onClick={()=>{setModal(null);setTabHistorial('movimientos')}} className="btn-secondary w-full">Cerrar</button>
           </div>
         </Modal>
-      )}
+        )
+      })()}
 
       {/* ── Modal editar (solo admin) ── */}
       {modal==='editar'&&selected&&isAdmin&&(
