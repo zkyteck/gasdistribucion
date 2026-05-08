@@ -3,7 +3,7 @@
 
 import {
   LayoutDashboard, ShoppingCart, Ticket, ClipboardList, Users,
-  CreditCard, Package, Truck, Warehouse, BarChart3, Settings, Palette, Bot,
+  CreditCard, Package, Truck, Warehouse, BarChart3, Settings, Palette, ShoppingBag, Bot,
 } from 'lucide-react'
 import { useMemo } from 'react'
 import { useAuth } from '../../context/AuthContext'
@@ -16,12 +16,12 @@ export const ALL_ITEMS = [
   { to: '/clientes',       icon: Users,           label: 'Clientes',       permiso: 'clientes' },
   { to: '/deudas',         icon: CreditCard,      label: 'Deudas',         permiso: 'deudas' },
   { to: '/inventario',     icon: Package,         label: 'Inventario',     permiso: 'inventario',     adminOnly: true },
+  { to: '/compras',        icon: ShoppingBag,     label: 'Compras',        permiso: 'compras',        adminOnly: true },
   { to: '/distribuidores', icon: Truck,           label: 'Distribuidores', permiso: 'distribuidores', adminOnly: true },
   { to: '/almacenes',      icon: Warehouse,       label: 'Almacenes',      permiso: 'almacenes',      adminOnly: true },
   { to: '/reportes',       icon: BarChart3,       label: 'Reportes',       permiso: 'reportes',       adminOnly: true },
   { to: '/configuracion',  icon: Settings,        label: 'Configuración',  permiso: 'configuracion',  adminOnly: true },
   { to: '/apariencia',     icon: Palette,         label: 'Apariencia',     permiso: null },
-  { to: '/asistente',     icon: Bot,             label: 'Asistente IA',   permiso: 'asistente',      adminOnly: true },
 ]
 
 // Items fijos en la barra inferior móvil

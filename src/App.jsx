@@ -16,6 +16,7 @@ import ACuenta from './pages/ACuenta'
 import Reportes from './pages/Reportes'
 import Configuracion from './pages/Configuracion'
 import Apariencia, { aplicarTemaAlDOM, TEMAS } from './pages/Apariencia'
+import Compras from './pages/Compras'
 import Asistente from './pages/Asistente'
 
 // ── Aplicar tema guardado ANTES de renderizar (evita flash) ──────────────────
@@ -59,7 +60,8 @@ export default function App() {
             <Route path="almacenes"      element={<ProtectedRoute adminOnly><Almacenes /></ProtectedRoute>} />
             <Route path="reportes"       element={<ProtectedRoute adminOnly><Reportes /></ProtectedRoute>} />
             <Route path="configuracion"  element={<ProtectedRoute adminOnly><Configuracion /></ProtectedRoute>} />
-            <Route path="asistente"      element={<ProtectedRoute adminOnly><Asistente /></ProtectedRoute>} />
+            <Route path="compras"         element={<ProtectedRoute adminOnly><Compras /></ProtectedRoute>} />
+            <Route path="asistente"       element={<ProtectedRoute adminOnly><Asistente /></ProtectedRoute>} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
