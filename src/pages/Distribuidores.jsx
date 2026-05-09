@@ -193,6 +193,7 @@ function abrirVentanaImpresion(html) {
 // ── Componente ModalHistorial ─────────────────────────────────────────────
 function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, cuentasCerradas, lotesDistribuidor, ventasDistribuidor, rendiciones, supabase, onClose, cargarHistorial, format, es, hoyPeru }) {
   const esCuentaCorriente = selected.modalidad === 'cuenta_corriente'
+  const [loteFiltro, setLoteFiltro] = useState(null)
 
   if (esCuentaCorriente) {
     // Vista cuenta corriente (Cristian)
@@ -206,7 +207,7 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
     const montoConSaldo = montoTotal + saldoAnterior
     const saldoPendiente = Math.max(0, montoConSaldo - totalAbonado)
     const lotesActivos = lotesDistribuidor.filter(l => !l.cerrado && l.cantidad_restante > 0)
-    const valorCampo = lotesActivos.reduce((s,l) => s + l.cantidad_restante * l.precio_unitario, 0)
+    const valorCampo = lotesActivos.reduce((s,l) => s + l.cantidad_restante * (l.precio_venta || l.precio_unitario), 0)
     const loteActivo = lotesActivos[0]
 
     return (
@@ -416,8 +417,24 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
   }
 
   // Vista Alazan (ventas autónomas)
+
+  // ── Filtrado por lote ──────────────────────────────────────────────────────
+  const ventasFiltradas = loteFiltro
+    ? (() => {
+        const idx = lotesDistribuidor.findIndex(l => l.id === loteFiltro.id)
+        const fechaInicio = loteFiltro.fecha
+        const loteMasReciente = lotesDistribuidor[idx - 1]
+        const fechaFin = loteMasReciente ? loteMasReciente.fecha : null
+        return ventasDistribuidor.filter(v => {
+          const fv = (v.fecha || '').substring(0, 10)
+          if (fechaFin) return fv >= fechaInicio && fv < fechaFin
+          return fv >= fechaInicio
+        })
+      })()
+    : ventasDistribuidor
+
   const ventasPorDia = {}
-  ventasDistribuidor.forEach(v => {
+  ventasFiltradas.forEach(v => {
     const dia = new Date(v.fecha).toLocaleDateString('en-CA', {timeZone:'America/Lima'})
     if (!ventasPorDia[dia]) ventasPorDia[dia] = { cantidad: 0, monto: 0, v20: 0, v30: 0, v43: 0, efectivo: 0 }
     ventasPorDia[dia].cantidad += v.cantidad || 0
@@ -429,8 +446,10 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
   })
   const diasOrdenados = Object.keys(ventasPorDia).sort((a,b) => b.localeCompare(a))
   const lotesActivos = lotesDistribuidor.filter(l => !l.cerrado && l.cantidad_restante > 0)
-  const valorCampo = lotesActivos.reduce((s,l) => s + l.cantidad_restante * l.precio_unitario, 0)
+  const valorCampo = lotesActivos.reduce((s,l) => s + l.cantidad_restante * (l.precio_venta || l.precio_unitario), 0)
   const loteActivo = lotesActivos[0]
+  const cantVentasFiltradas = ventasFiltradas.reduce((s,v) => s + (v.cantidad||0), 0)
+  const cuadra = loteFiltro ? cantVentasFiltradas === loteFiltro.cantidad_vendida : false
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
@@ -446,7 +465,7 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
             {[
               {label:'🟢 Llenos', value:`${selected.stock_actual} bal.`, color:'#34d399'},
               {label:'⚪ Vacíos', value:`${selected.balones_vacios||0} bal.`, color:'var(--app-text)'},
-              {label:'💰 Precio FIFO', value:loteActivo?`S/${loteActivo.precio_unitario}`:`S/${selected.precio_base}`, color:'#fb923c'},
+              {label:'💰 Precio FIFO', value:loteActivo?`S/${loteActivo.precio_venta||loteActivo.precio_unitario}`:`S/${selected.precio_base}`, color:'#fb923c'},
               {label:'📦 Valor campo', value:`S/${valorCampo.toLocaleString('es-PE')}`, color:'#60a5fa'},
             ].map(({label,value,color}) => (
               <div key={label} style={{background:'var(--app-card-bg-alt)',border:'1px solid var(--app-card-border)',borderRadius:10,padding:'10px',textAlign:'center'}}>
@@ -457,10 +476,57 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
           </div>
 
           <div>
-            <h4 style={{fontSize:15,fontWeight:700,color:'var(--app-text)',margin:'0 0 12px'}}>Rendición de ventas</h4>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+              <h4 style={{fontSize:15,fontWeight:700,color:'var(--app-text)',margin:0}}>
+                Rendición de ventas
+                {loteFiltro && <span style={{fontSize:12,color:'var(--app-text-secondary)',fontWeight:400,marginLeft:8}}>— Lote {loteFiltro.fecha}</span>}
+              </h4>
+              {loteFiltro && (
+                <button onClick={()=>setLoteFiltro(null)}
+                  style={{fontSize:11,padding:'3px 10px',borderRadius:5,border:'1px solid var(--app-card-border)',background:'none',color:'var(--app-text-secondary)',cursor:'pointer'}}>
+                  ✕ Quitar filtro
+                </button>
+              )}
+            </div>
+            {loteFiltro && (
+              <div style={{
+                background: cuadra ? 'rgba(52,211,153,0.08)' : 'rgba(251,146,60,0.08)',
+                border: `1px solid ${cuadra ? 'rgba(52,211,153,0.3)' : 'rgba(251,146,60,0.3)'}`,
+                borderRadius:10, padding:'12px 16px', marginBottom:12,
+                display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8
+              }}>
+                <div style={{display:'flex',gap:20,flexWrap:'wrap'}}>
+                  {[
+                    {label:'Entregados',value:loteFiltro.cantidad_inicial,color:'#60a5fa'},
+                    {label:'Vendidos (lote)',value:loteFiltro.cantidad_vendida,color:'#a78bfa'},
+                    {label:'Ventas registradas',value:cantVentasFiltradas,color:cuadra?'#34d399':'#fb923c'},
+                    {label:'Restantes lote',value:loteFiltro.cantidad_restante,color:'#34d399'},
+                  ].map(({label,value,color})=>(
+                    <div key={label} style={{textAlign:'center'}}>
+                      <p style={{fontSize:10,color:'var(--app-text-secondary)',margin:'0 0 2px',textTransform:'uppercase'}}>{label}</p>
+                      <p style={{fontSize:18,fontWeight:800,color,margin:0}}>{value}</p>
+                    </div>
+                  ))}
+                  <div style={{display:'flex',alignItems:'center'}}>
+                    {cuadra
+                      ? <span style={{fontSize:13,fontWeight:700,color:'#34d399',padding:'4px 12px',borderRadius:6,background:'rgba(52,211,153,0.1)'}}>✅ Cuadra</span>
+                      : <span style={{fontSize:13,fontWeight:700,color:'#fb923c',padding:'4px 12px',borderRadius:6,background:'rgba(251,146,60,0.1)'}}>
+                          ⚠️ Diferencia: {Math.abs(cantVentasFiltradas - loteFiltro.cantidad_vendida)} bal.
+                        </span>
+                    }
+                  </div>
+                </div>
+                <button onClick={()=>setLoteFiltro(null)}
+                  style={{fontSize:12,padding:'5px 12px',borderRadius:6,border:'1px solid var(--app-card-border)',background:'var(--app-card-bg)',color:'var(--app-text-secondary)',cursor:'pointer'}}>
+                  Ver todo
+                </button>
+              </div>
+            )}
             {diasOrdenados.length === 0 ? (
               <div style={{textAlign:'center',padding:'24px',color:'var(--app-text-secondary)',fontSize:13,border:'1px solid var(--app-card-border)',borderRadius:10}}>
-                Sin ventas registradas — registra ventas desde Ventas seleccionando el almacén de {selected.nombre}
+                {loteFiltro
+                  ? `Sin ventas registradas en el período de este lote`
+                  : `Sin ventas registradas — registra ventas desde Ventas seleccionando el almacén de ${selected.nombre}`}
               </div>
             ) : (
               <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden',overflowX:'auto'}}>
@@ -501,12 +567,12 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
                 })}
                 {/* Fila totales */}
                 {diasOrdenados.length > 1 && (() => {
-                  const tCant = ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0),0)
-                  const tMonto = ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)
-                  const tv20 = ventasDistribuidor.reduce((s,v)=>s+(v.vales_20||0),0)
-                  const tv30 = ventasDistribuidor.reduce((s,v)=>s+(v.vales_30||0),0)
-                  const tv43 = ventasDistribuidor.reduce((s,v)=>s+(v.vales_43||0),0)
-                  const tEf = ventasDistribuidor.reduce((s,v)=>s+(v.efectivo_dist||0),0)
+                  const tCant = ventasFiltradas.reduce((s,v)=>s+(v.cantidad||0),0)
+                  const tMonto = ventasFiltradas.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)
+                  const tv20 = ventasFiltradas.reduce((s,v)=>s+(v.vales_20||0),0)
+                  const tv30 = ventasFiltradas.reduce((s,v)=>s+(v.vales_30||0),0)
+                  const tv43 = ventasFiltradas.reduce((s,v)=>s+(v.vales_43||0),0)
+                  const tEf = ventasFiltradas.reduce((s,v)=>s+(v.efectivo_dist||0),0)
                   const tVales = tv20*20+tv30*30+tv43*43
                   const tSaldo = tMonto - tVales - tEf
                   return (
@@ -527,27 +593,65 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
               </div>
             )}
           </div>
-          {/* Lotes FIFO */}
+          {/* Lotes FIFO — clickeables para filtrar */}
           {lotesDistribuidor.length > 0 && (
             <div>
-              <h4 style={{fontSize:15,fontWeight:700,color:'var(--app-text)',margin:'0 0 12px'}}>Lotes de precio (FIFO)</h4>
+              <h4 style={{fontSize:15,fontWeight:700,color:'var(--app-text)',margin:'0 0 6px'}}>Lotes de precio (FIFO)</h4>
+              <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 10px'}}>
+                💡 Haz clic en un lote para filtrar la rendición a ese período
+              </p>
               <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden'}}>
-                <div style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',background:'var(--app-card-bg-alt)',borderBottom:'1px solid var(--app-card-border)'}}>
-                  {['Fecha','P. Venta','Inicial','Vendidos','Restantes','Estado'].map(h => (
-                    <div key={h} style={{padding:'13px 12px',fontSize:14,fontWeight:800,color:'var(--app-text-secondary)',textTransform:'uppercase',borderRight:'1px solid var(--app-card-border)'}}>{h}</div>
+                <div style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',background:'var(--app-card-bg-alt)',borderBottom:'1px solid var(--app-card-border)'}}>
+                  {['Fecha','P. Venta','Inicial','Vendidos','Restantes','¿Cuadra?','Estado'].map(h => (
+                    <div key={h} style={{padding:'13px 12px',fontSize:13,fontWeight:800,color:'var(--app-text-secondary)',textTransform:'uppercase',borderRight:'1px solid var(--app-card-border)'}}>{h}</div>
                   ))}
                 </div>
                 {lotesDistribuidor.map((lote,i) => {
-                  const ag = lote.cerrado||lote.cantidad_restante<=0
+                  const ag = lote.cerrado || lote.cantidad_restante <= 0
+                  const seleccionado = loteFiltro?.id === lote.id
+                  const idxL = i
+                  const lotePrevio = lotesDistribuidor[idxL - 1]
+                  const fInicio = lote.fecha
+                  const fFin = lotePrevio ? lotePrevio.fecha : null
+                  const ventasLote = ventasDistribuidor.filter(v => {
+                    const fv = (v.fecha||'').substring(0,10)
+                    if (fFin) return fv >= fInicio && fv < fFin
+                    return fv >= fInicio
+                  })
+                  const cantRegistradas = ventasLote.reduce((s,v)=>s+(v.cantidad||0),0)
+                  const loteCuadra = cantRegistradas === lote.cantidad_vendida
                   return (
-                    <div key={lote.id} style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',borderBottom:i<lotesDistribuidor.length-1?'1px solid var(--app-card-border)':'none'}}>
-                      <div style={{padding:'13px 12px',fontSize:15,fontWeight:600,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)'}}>{lote.fecha}</div>
+                    <div key={lote.id}
+                      onClick={()=>setLoteFiltro(seleccionado ? null : lote)}
+                      style={{
+                        display:'grid', gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',
+                        borderBottom:i<lotesDistribuidor.length-1?'1px solid var(--app-card-border)':'none',
+                        cursor:'pointer',
+                        background: seleccionado ? 'color-mix(in srgb, var(--app-accent) 8%, transparent)' : 'transparent',
+                        outline: seleccionado ? '2px solid var(--app-accent)' : 'none',
+                        transition:'background 0.15s'
+                      }}
+                      onMouseEnter={e=>{ if(!seleccionado) e.currentTarget.style.background='var(--app-card-bg-alt)' }}
+                      onMouseLeave={e=>{ if(!seleccionado) e.currentTarget.style.background='transparent' }}
+                    >
+                      <div style={{padding:'13px 12px',fontSize:15,fontWeight:600,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)'}}>
+                        {lote.fecha}
+                        {seleccionado && <span style={{fontSize:10,color:'var(--app-accent)',marginLeft:6}}>● filtrado</span>}
+                      </div>
                       <div style={{padding:'13px 12px',fontSize:17,fontWeight:800,color:'#fb923c',borderRight:'1px solid var(--app-card-border)'}}>
                         {lote.precio_venta ? `S/${lote.precio_venta}` : <span style={{color:'#f87171',fontSize:12}}>Sin precio</span>}
                       </div>
                       <div style={{padding:'13px 12px',fontSize:16,fontWeight:600,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{lote.cantidad_inicial}</div>
                       <div style={{padding:'13px 12px',fontSize:17,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{lote.cantidad_vendida}</div>
                       <div style={{padding:'13px 12px',fontSize:19,fontWeight:800,color:ag?'#9ca3af':'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{lote.cantidad_restante}</div>
+                      <div style={{padding:'13px 12px',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
+                        {lote.cantidad_vendida === 0
+                          ? <span style={{fontSize:11,color:'var(--app-text-secondary)'}}>—</span>
+                          : loteCuadra
+                            ? <span style={{fontSize:13,color:'#34d399',fontWeight:700}}>✅</span>
+                            : <span style={{fontSize:11,color:'#fb923c',fontWeight:700}}>⚠️ {cantRegistradas} reg.</span>
+                        }
+                      </div>
                       <div style={{padding:'8px',textAlign:'center'}}>
                         <span style={{fontSize:13,fontWeight:700,padding:'5px 12px',borderRadius:5,background:ag?'rgba(107,114,128,0.15)':'rgba(52,211,153,0.15)',color:ag?'#9ca3af':'#34d399'}}>
                           {ag?'Agotado':lote.cantidad_vendida===0?'Nuevo':'Activo'}
@@ -564,18 +668,22 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
           {ventasDistribuidor.length > 0 && (
             <button
               onClick={() => {
-                const totalCant = ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0),0)
-                const totalMonto = ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)
-                const tv20 = ventasDistribuidor.reduce((s,v)=>s+(v.vales_20||0),0)
-                const tv30 = ventasDistribuidor.reduce((s,v)=>s+(v.vales_30||0),0)
-                const tv43 = ventasDistribuidor.reduce((s,v)=>s+(v.vales_43||0),0)
-                const tEf = ventasDistribuidor.reduce((s,v)=>s+(v.efectivo_dist||0),0)
+                const ventasImprimir = loteFiltro ? ventasFiltradas : ventasDistribuidor
+                const tituloPeriodo = loteFiltro
+                  ? `Lote ${loteFiltro.fecha} — ${loteFiltro.cantidad_inicial} entregados / ${loteFiltro.cantidad_vendida} vendidos / ${loteFiltro.cantidad_restante} restantes`
+                  : 'Todas las ventas'
+                const totalCant = ventasImprimir.reduce((s,v)=>s+(v.cantidad||0),0)
+                const totalMonto = ventasImprimir.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)
+                const tv20 = ventasImprimir.reduce((s,v)=>s+(v.vales_20||0),0)
+                const tv30 = ventasImprimir.reduce((s,v)=>s+(v.vales_30||0),0)
+                const tv43 = ventasImprimir.reduce((s,v)=>s+(v.vales_43||0),0)
+                const tEf = ventasImprimir.reduce((s,v)=>s+(v.efectivo_dist||0),0)
                 const tVales = tv20*20+tv30*30+tv43*43
                 const tSaldo = totalMonto - tVales - tEf
 
                 // Agrupar por día para la tabla
                 const porDia = {}
-                ventasDistribuidor.forEach(v => {
+                ventasImprimir.forEach(v => {
                   const dia = new Date(v.fecha).toLocaleDateString('en-CA', {timeZone:'America/Lima'})
                   if (!porDia[dia]) porDia[dia] = { cantidad:0, monto:0, v20:0, v30:0, v43:0, ef:0 }
                   porDia[dia].cantidad += v.cantidad||0
@@ -603,12 +711,12 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
                   const ag = l.cerrado || l.cantidad_restante <= 0
                   return `<tr>
                     <td>${l.fecha}</td>
-                    <td class="center">S/${l.precio_unitario}</td>
+                    <td class="center">S/${l.precio_venta||l.precio_unitario}</td>
                     <td class="center">${l.cantidad_inicial}</td>
                     <td class="center">${l.cantidad_vendida}</td>
                     <td class="center"><b>${l.cantidad_restante}</b></td>
                     <td class="center" style="color:${ag?'#999':'green'}">${ag?'Agotado':l.cantidad_vendida===0?'Sin ventas':'Activo'}</td>
-                    <td class="right">S/${(l.cantidad_restante * l.precio_unitario).toLocaleString('es-PE')}</td>
+                    <td class="right">S/${(l.cantidad_restante * (l.precio_venta||l.precio_unitario)).toLocaleString('es-PE')}</td>
                   </tr>`
                 }).join('')
 
@@ -638,6 +746,7 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
                   <button onclick="window.print()" style="position:fixed;top:10px;right:10px;padding:8px 16px;background:#222;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">🖨️ Imprimir</button>
 
                   <h1>Rendición de ventas — ${selected.nombre}</h1>
+                  <p class="sub">${tituloPeriodo}</p>
                   <p class="sub">Centro Gas Paucara · Generado el ${new Date().toLocaleDateString('es-PE', {day:'2-digit',month:'long',year:'numeric'})}</p>
 
                   <div class="seccion">
