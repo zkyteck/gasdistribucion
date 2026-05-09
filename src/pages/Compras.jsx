@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { hoyPeru } from '../lib/fechas'
-import { ShoppingBag, Plus, X, AlertCircle, Package, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
+import { ShoppingBag, Plus, X, AlertCircle, Package, ChevronDown, ChevronUp } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -33,12 +33,11 @@ export default function Compras() {
   const [error, setError] = useState('')
   const [expandido, setExpandido] = useState(null)
 
-  // Form de nueva compra
   const emptyForm = {
     fecha: hoyPeru(),
     notas: '',
     precios: { '10kg': '', '5kg': '', '45kg': '' },
-    distribucion: [], // { almacen_id, tipo_balon, cantidad }
+    distribucion: [],
   }
   const [form, setForm] = useState(emptyForm)
 
@@ -162,21 +161,35 @@ export default function Compras() {
       })
     )
 
-    // Crear lotes FIFO para distribuidores
+    // ── Crear lotes FIFO para distribuidores ──────────────────────────────────
+    // precio_unitario = costo de compra (lo que pagamos al proveedor)
+    // precio_venta    = precio que le cobramos al distribuidor (jala automático de Configuración)
     await Promise.all(
       form.distribucion.map(async d => {
         const alm = almacenes.find(a => a.id === d.almacen_id)
         if (alm?.nombre?.toLowerCase().includes('alazan') || alm?.nombre?.toLowerCase().includes('cristian')) {
-          const dist = await supabase.from('distribuidores').select('id').eq('almacen_id', d.almacen_id).maybeSingle()
+          const dist = await supabase.from('distribuidores')
+            .select('id,precio_base').eq('almacen_id', d.almacen_id).maybeSingle()
+
           if (dist?.data) {
+            // Buscar precio específico por tipo en precio_distribuidor_tipo
+            const { data: pdt } = await supabase.from('precio_distribuidor_tipo')
+              .select('precio')
+              .eq('distribuidor_id', dist.data.id)
+              .eq('tipo_balon', d.tipo_balon)
+              .maybeSingle()
+
+            // precio_venta = precio por tipo si existe, si no el precio_base del distribuidor
+            const precioVenta = pdt?.precio || dist.data.precio_base || 0
+
             await supabase.from('lotes_distribuidor').insert({
               distribuidor_id: dist.data.id,
               almacen_id: d.almacen_id,
               tipo_balon: d.tipo_balon,
               cantidad_inicial: d.cantidad,
               cantidad_restante: d.cantidad,
-              precio_unitario: parseFloat(form.precios[d.tipo_balon]) || 0,
-              precio_venta: 0,
+              precio_unitario: parseFloat(form.precios[d.tipo_balon]) || 0, // costo compra
+              precio_venta: precioVenta,                                      // precio distribuidor ← automático
               cerrado: false,
             })
           }
@@ -192,7 +205,6 @@ export default function Compras() {
 
   const { totalBalones, totalInvertido } = calcularTotales()
 
-  // ─── Totales generales ─────────────────────────────────────────────────────
   const totalComprado = compras.reduce((s, c) => s + (parseFloat(c.monto_total) || 0), 0)
   const totalBalonesCom = compras.reduce((s, c) => s + (parseInt(c.cantidad_total) || 0), 0)
 
@@ -245,7 +257,6 @@ export default function Compras() {
               const detalles = c.compra_detalles || []
               return (
                 <div key={c.id} style={{borderBottom:'1px solid var(--app-card-border)'}}>
-                  {/* Fila principal */}
                   <div
                     onClick={()=>setExpandido(isOpen ? null : c.id)}
                     style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 20px',cursor:'pointer',gap:12}}
@@ -326,6 +337,9 @@ export default function Compras() {
             {/* Precios por tipo */}
             <div>
               <label className="label">Precio de compra por tipo de balón (S/)</label>
+              <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 8px'}}>
+                💡 El precio que le cobras al distribuidor se carga automático desde Configuración.
+              </p>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
                 {TIPOS.map(tipo => (
                   <div key={tipo}>
@@ -391,7 +405,6 @@ export default function Compras() {
                     <p style={{fontSize:16,fontWeight:700,color:'#f87171',margin:0}}>S/{totalInvertido.toLocaleString('es-PE',{maximumFractionDigits:0})}</p>
                   </div>
                 </div>
-                {/* Detalle por tipo */}
                 <div style={{marginTop:8,display:'flex',flexDirection:'column',gap:3}}>
                   {TIPOS.filter(t => form.distribucion.some(d=>d.tipo_balon===t)).map(tipo => {
                     const cant = form.distribucion.filter(d=>d.tipo_balon===tipo).reduce((s,d)=>s+d.cantidad,0)
