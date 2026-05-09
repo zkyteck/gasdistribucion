@@ -191,7 +191,7 @@ function abrirVentanaImpresion(html) {
 
 
 // ── Componente ModalHistorial ─────────────────────────────────────────────
-function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, cuentasCerradas, lotesDistribuidor, ventasDistribuidor, rendiciones, supabase, onClose, cargarHistorial, format, es, hoyPeru }) {
+function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, cuentasCerradas, lotesDistribuidor, ventasDistribuidor, ventaLoteDetalles, rendiciones, supabase, onClose, cargarHistorial, format, es, hoyPeru }) {
   const esCuentaCorriente = selected.modalidad === 'cuenta_corriente'
   const [loteFiltro, setLoteFiltro] = useState(null)
 
@@ -537,31 +537,57 @@ function ModalHistorial({ selected, cargasDist, abonosParciales, cuentaActiva, c
                 </div>
                 {diasOrdenados.map((dia,i) => {
                   const d = ventasPorDia[dia]
-                  const precio = d.cantidad > 0 ? d.monto/d.cantidad : 0
                   const totalVales = d.v20*20 + d.v30*30 + d.v43*43
                   const totalPagado = totalVales + d.efectivo
                   const saldo = d.monto - totalPagado
                   const cancelado = saldo <= 0
+                  // Buscar desglose FIFO para ventas de ese día
+                  const ventasDelDia = ventasFiltradas.filter(v=>(v.fecha||'').substring(0,10)===dia)
+                  const ventaIdsDelDia = ventasDelDia.map(v=>v.id)
+                  const desgloseDelDia = (ventaLoteDetalles||[]).filter(vld=>ventaIdsDelDia.includes(vld.venta_id))
+                  // Agrupar desglose por lote
+                  const desglosePorLote = {}
+                  desgloseDelDia.forEach(vld => {
+                    const key = vld.lote_id
+                    if(!desglosePorLote[key]) desglosePorLote[key] = { fecha:vld.lotes_distribuidor?.fecha||'?', precio:vld.precio_venta, cantidad:0, subtotal:0 }
+                    desglosePorLote[key].cantidad += vld.cantidad
+                    desglosePorLote[key].subtotal += vld.cantidad * vld.precio_venta
+                  })
+                  const desgloseArr = Object.values(desglosePorLote)
+                  const tieneDesglose = desgloseArr.length > 1
                   return (
-                    <div key={dia} style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 0.9fr 0.6fr 0.6fr 0.6fr 0.9fr 0.8fr',borderBottom:i<diasOrdenados.length-1?'1px solid var(--app-card-border)':'none',minWidth:900,background:i%2===0?'transparent':'var(--app-row-alt)'}}>
-                      <div style={{padding:'14px 10px',fontSize:15,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center',fontWeight:700}}>{dia}</div>
-                      <div style={{padding:'14px 10px',fontSize:20,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.cantidad}</div>
-                      <div style={{padding:'14px 10px',fontSize:18,fontWeight:800,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{d.monto.toLocaleString('es-PE')}</div>
-                      <div style={{padding:'14px 10px',fontSize:18,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.v20>0?d.v20:'—'}</div>
-                      <div style={{padding:'14px 10px',fontSize:18,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.v30>0?d.v30:'—'}</div>
-                      <div style={{padding:'14px 10px',fontSize:18,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.v43>0?d.v43:'—'}</div>
-                      <div style={{padding:'14px 10px',fontSize:16,borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
-                        {cancelado
-                          ? <span style={{color:'#34d399',fontWeight:700}}>✅ Pagado</span>
-                          : <span style={{color:'#f87171',fontWeight:700}}>S/{saldo.toLocaleString('es-PE')}</span>
-                        }
-                        {d.efectivo > 0 && <p style={{fontSize:13,color:'#34d399',margin:'2px 0 0'}}>ef. S/{d.efectivo}</p>}
+                    <div key={dia}>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 0.9fr 0.6fr 0.6fr 0.6fr 0.9fr 0.8fr',borderBottom:tieneDesglose?'none':i<diasOrdenados.length-1?'1px solid var(--app-card-border)':'none',minWidth:900,background:i%2===0?'transparent':'var(--app-row-alt)'}}>
+                        <div style={{padding:'14px 10px',fontSize:15,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center',fontWeight:700}}>{dia}</div>
+                        <div style={{padding:'14px 10px',fontSize:20,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.cantidad}</div>
+                        <div style={{padding:'14px 10px',fontSize:18,fontWeight:800,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{d.monto.toLocaleString('es-PE')}</div>
+                        <div style={{padding:'14px 10px',fontSize:18,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.v20>0?d.v20:'—'}</div>
+                        <div style={{padding:'14px 10px',fontSize:18,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.v30>0?d.v30:'—'}</div>
+                        <div style={{padding:'14px 10px',fontSize:18,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.v43>0?d.v43:'—'}</div>
+                        <div style={{padding:'14px 10px',fontSize:16,borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
+                          {cancelado
+                            ? <span style={{color:'#34d399',fontWeight:700}}>✅ Pagado</span>
+                            : <span style={{color:'#f87171',fontWeight:700}}>S/{saldo.toLocaleString('es-PE')}</span>
+                          }
+                          {d.efectivo > 0 && <p style={{fontSize:13,color:'#34d399',margin:'2px 0 0'}}>ef. S/{d.efectivo}</p>}
+                        </div>
+                        <div style={{padding:'8px 5px',textAlign:'center',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                          <span style={{fontSize:13,fontWeight:700,padding:'5px 12px',borderRadius:5,background:cancelado?'rgba(52,211,153,0.15)':'rgba(251,146,60,0.15)',color:cancelado?'#34d399':'#fb923c'}}>
+                            {cancelado?'Pagado':'Pendiente'}
+                          </span>
+                        </div>
                       </div>
-                      <div style={{padding:'8px 5px',textAlign:'center',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                        <span style={{fontSize:13,fontWeight:700,padding:'5px 12px',borderRadius:5,background:cancelado?'rgba(52,211,153,0.15)':'rgba(251,146,60,0.15)',color:cancelado?'#34d399':'#fb923c'}}>
-                          {cancelado?'Pagado':'Pendiente'}
-                        </span>
-                      </div>
+                      {/* Desglose por lote si cruza múltiples */}
+                      {tieneDesglose && (
+                        <div style={{background:'rgba(99,102,241,0.04)',borderBottom:i<diasOrdenados.length-1?'1px solid var(--app-card-border)':'none',padding:'6px 16px 10px 24px'}}>
+                          <p style={{fontSize:10,color:'#818cf8',fontWeight:600,margin:'0 0 4px',textTransform:'uppercase'}}>📦 Desglose FIFO</p>
+                          {desgloseArr.map((dl,j)=>(
+                            <p key={j} style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0'}}>
+                              {j===desgloseArr.length-1?'└':'├'} {dl.cantidad} bal × S/{dl.precio} (Lote {dl.fecha}) = <strong style={{color:'var(--app-text)'}}>S/{dl.subtotal.toFixed(2)}</strong>
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )
                 })}
@@ -818,6 +844,7 @@ export default function Distribuidores() {
   const [historial, setHistorial] = useState([])
   const [lotesDistribuidor, setLotesDistribuidor] = useState([])
   const [ventasDistribuidor, setVentasDistribuidor] = useState([])
+  const [ventaLoteDetalles, setVentaLoteDetalles] = useState([])
   const [movimientos, setMovimientos] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -1118,28 +1145,24 @@ export default function Distribuidores() {
       await cargarCuentaCorriente(distId)
     }
 
-    const [{ data: repos }, { data: rends }, { data: movs }, { data: lotes }, { data: ventas }] = await Promise.all([
-      supabase.from('reposiciones_distribuidor')
-        .select('*, almacenes(nombre)').eq('distribuidor_id', distId).order('fecha', { ascending: false }).limit(20),
-      supabase.from('cuentas_distribuidor')
-        .select('*').eq('distribuidor_id', distId).order('periodo_fin', { ascending: false }).limit(30),
-      almacenId ? supabase.from('movimientos_stock')
-        .select('*').eq('almacen_id', almacenId)
-        .in('tipo', ['traslado', 'entrada', 'compra', 'ajuste_manual'])
-        .order('created_at', { ascending: false }).limit(20) : { data: [] },
-      supabase.from('lotes_distribuidor')
-        .select('*').eq('distribuidor_id', distId).order('fecha', { ascending: false }).limit(30),
-      almacenId ? supabase.from('ventas')
-        .select('*')
-        .eq('almacen_id', almacenId)
-        .not('metodo_pago', 'eq', 'credito_distribuidor')
-        .order('fecha', { ascending: false }).limit(200) : { data: [] }
+
+    const ventasQuery = almacenId ? supabase.from("ventas").select("*").eq("almacen_id", almacenId).not("metodo_pago", "eq", "credito_distribuidor").order("fecha", { ascending: false }).limit(200) : Promise.resolve({ data: [] })
+    const vldQuery = almacenId ? supabase.from("venta_lote_detalles").select("*, lotes_distribuidor(fecha,precio_venta,tipo_balon)").order("created_at", { ascending: false }).limit(500) : Promise.resolve({ data: [] })
+
+    const [{ data: repos }, { data: rends }, { data: movs }, { data: lotes }, { data: ventas }, { data: vld }] = await Promise.all([
+      supabase.from("reposiciones_distribuidor").select("*, almacenes(nombre)").eq("distribuidor_id", distId).order("fecha", { ascending: false }).limit(20),
+      supabase.from("cuentas_distribuidor").select("*").eq("distribuidor_id", distId).order("periodo_fin", { ascending: false }).limit(30),
+      almacenId ? supabase.from("movimientos_stock").select("*").eq("almacen_id", almacenId).in("tipo", ["traslado", "entrada", "compra", "ajuste_manual"]).order("created_at", { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
+      supabase.from("lotes_distribuidor").select("*").eq("distribuidor_id", distId).order("fecha", { ascending: false }).limit(30),
+      ventasQuery,
+      vldQuery
     ])
     setHistorial(repos || [])
     setRendiciones(rends || [])
     setMovimientos(movs || [])
     setLotesDistribuidor(lotes || [])
     setVentasDistribuidor(ventas || [])
+    setVentaLoteDetalles(vld || [])
   }
 
   async function cargarMovimientos(distId) {
@@ -2202,6 +2225,7 @@ export default function Distribuidores() {
           cuentasCerradas={cuentasCerradas}
           lotesDistribuidor={lotesDistribuidor}
           ventasDistribuidor={ventasDistribuidor}
+          ventaLoteDetalles={ventaLoteDetalles}
           rendiciones={rendiciones}
           supabase={supabase}
           onClose={() => setModal(null)}

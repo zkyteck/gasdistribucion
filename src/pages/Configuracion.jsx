@@ -104,6 +104,8 @@ export default function Configuracion() {
   const [usuarios,setUsuarios] = useState([])
   const [distribuidores,setDistribuidores] = useState([])
   const [preciosDistTipo,setPreciosDistTipo] = useState([])
+  const [lotesDistribuidores,setLotesDistribuidores] = useState([])
+  const [editandoLotePrecios,setEditandoLotePrecios] = useState({})
   const [almacenesLista,setAlmacenesLista] = useState([])
   const [historial,setHistorial] = useState([])
   const [loading,setLoading] = useState(true)
@@ -146,11 +148,19 @@ export default function Configuracion() {
       pt?.forEach(p => { mapa[p.id]={}; TIPOS_BALON.forEach(tipo => { const f=ptb?.find(x=>x.precio_tipo_id===p.id&&x.tipo_balon===tipo); mapa[p.id][tipo]=f?.precio??'' }) })
       setEditandoPrecios(mapa)
     } else if(tab==='distribuidores_precios') {
-      const [{data:d},{data:pdt}] = await Promise.all([supabase.from('distribuidores').select('*').eq('activo',true).order('nombre'),supabase.from('precio_distribuidor_tipo').select('*')])
-      setDistribuidores(d||[]); setPreciosDistTipo(pdt||[])
+      const [{data:d},{data:pdt},{data:lotes}] = await Promise.all([
+        supabase.from('distribuidores').select('*').eq('activo',true).order('nombre'),
+        supabase.from('precio_distribuidor_tipo').select('*'),
+        supabase.from('lotes_distribuidor').select('*').eq('cerrado',false).gt('cantidad_restante',0).order('fecha',{ascending:true})
+      ])
+      setDistribuidores(d||[]); setPreciosDistTipo(pdt||[]); setLotesDistribuidores(lotes||[])
       const mapa={}
       d?.forEach(dist => { mapa[dist.id]={}; TIPOS_BALON.forEach(tipo => { const f=pdt?.find(x=>x.distribuidor_id===dist.id&&x.tipo_balon===tipo); mapa[dist.id][tipo]=f?.precio??'' }) })
       setEditandoDistPrecios(mapa)
+      // Pre-cargar precios actuales de lotes
+      const mapaLotes={}
+      lotes?.forEach(l => { mapaLotes[l.id] = l.precio_venta ?? '' })
+      setEditandoLotePrecios(mapaLotes)
     } else if(tab==='costos') {
       const [{data:pt},{data:ptb},{data:cfg},{data:dists},{data:pdt}] = await Promise.all([
         supabase.from('precio_tipos').select('*').order('precio'),supabase.from('precio_tipo_balon').select('*'),
@@ -224,6 +234,17 @@ export default function Configuracion() {
     const ops=[]; if(rows.length>0) ops.push(supabase.from('precio_distribuidor_tipo').upsert(rows,{onConflict:'id'}))
     await Promise.all([...ops,...distUpdates]); await logHistorial(logs); setSaving(false); toast('Precios de distribuidores guardados'); cargar()
   },[editandoDistPrecios,preciosDistTipo,distribuidores,cargar,toast,logHistorial])
+
+  const guardarPrecioLote = useCallback(async (loteId) => {
+    const precio = parseFloat(editandoLotePrecios[loteId])
+    if(isNaN(precio)||precio<=0) { toast('Ingresa un precio válido','error'); return }
+    const lote = lotesDistribuidores.find(l=>l.id===loteId)
+    const dist = distribuidores.find(d=>d.id===lote?.distribuidor_id)
+    await supabase.from('lotes_distribuidor').update({ precio_venta: precio }).eq('id', loteId)
+    await logHistorial([{ tipo:'lote', entidad:`${dist?.nombre||'Distribuidor'} — Lote ${lote?.fecha}`, tipo_balon:lote?.tipo_balon, precio_anterior:lote?.precio_venta, precio_nuevo:precio }])
+    toast(`Precio del lote actualizado a S/${precio}`)
+    cargar()
+  },[editandoLotePrecios, lotesDistribuidores, distribuidores, logHistorial, toast, cargar])
 
   const guardarCostos = useCallback(async () => {
     for(const tipo of TIPOS_BALON) { const e1=validarPrecio(costosCompra[tipo],`Costo ${tipo}`),e2=validarPrecio(costoBalon[tipo],`Balón ${tipo}`); if(e1){toast(e1,'error');return} if(e2){toast(e2,'error');return} }
@@ -398,12 +419,15 @@ export default function Configuracion() {
         {tab==='distribuidores_precios' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <p className="text-sm" style={{color:'var(--app-text-secondary)'}}>Precio por distribuidor y tamaño de balón</p>
+              <p className="text-sm" style={{color:'var(--app-text-secondary)'}}>Precio base por distribuidor y tamaño de balón</p>
               <button onClick={guardarPreciosDistribuidor} disabled={saving} className="btn-primary"><Save className="w-4 h-4"/>{saving?'Guardando...':'Guardar cambios'}</button>
             </div>
             <div className="space-y-4">
-              {distribuidores.map(d=>(
+              {distribuidores.map(d=>{
+                const lotesDelDist = lotesDistribuidores.filter(l=>l.distribuidor_id===d.id)
+                return (
                 <div key={d.id} className="card" style={{border:'1px solid var(--app-card-border)'}}>
+                  {/* Header distribuidor */}
                   <div className="flex items-center gap-3 mb-4" style={{paddingBottom:12,borderBottom:'1px solid var(--app-card-border)'}}>
                     <div style={{width:36,height:36,borderRadius:'50%',background:'color-mix(in srgb, var(--app-accent) 15%, transparent)',border:'1px solid color-mix(in srgb, var(--app-accent) 30%, transparent)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--app-accent)',fontWeight:700,fontSize:14}}>
                       {d.nombre?.charAt(0)}
@@ -417,7 +441,10 @@ export default function Configuracion() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex gap-4 flex-wrap">
+
+                  {/* Precio base por tipo */}
+                  <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 8px',textTransform:'uppercase',fontWeight:600}}>Precio base (próximas compras)</p>
+                  <div className="flex gap-4 flex-wrap mb-4">
                     {TIPOS_BALON.map(tipo=>(
                       <div key={tipo} className="flex items-center gap-2">
                         <span className="text-sm font-medium" style={{color:'var(--app-text-secondary)'}}>{tipo}:</span>
@@ -428,8 +455,58 @@ export default function Configuracion() {
                       </div>
                     ))}
                   </div>
+
+                  {/* Lotes activos con precio editable */}
+                  {lotesDelDist.length > 0 && (
+                    <div style={{borderTop:'1px solid var(--app-card-border)',paddingTop:12}}>
+                      <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 10px',textTransform:'uppercase',fontWeight:600}}>
+                        🗂️ Lotes activos — asignar precio por lote
+                      </p>
+                      <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                        {lotesDelDist.map(lote=>{
+                          const sinPrecio = !lote.precio_venta || lote.precio_venta === 0
+                          return (
+                            <div key={lote.id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 14px',borderRadius:10,background:sinPrecio?'rgba(234,179,8,0.06)':'var(--app-card-bg-alt)',border:`1px solid ${sinPrecio?'rgba(234,179,8,0.3)':'var(--app-card-border)'}`}}>
+                              <div style={{flex:1}}>
+                                <p style={{fontSize:13,fontWeight:600,color:'var(--app-text)',margin:0}}>
+                                  Lote {lote.fecha} — {lote.tipo_balon}
+                                </p>
+                                <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>
+                                  {lote.cantidad_restante} restantes / {lote.cantidad_inicial} iniciales
+                                  {sinPrecio && <span style={{color:'#eab308',marginLeft:8}}>⚠️ Sin precio asignado</span>}
+                                </p>
+                              </div>
+                              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                                <div style={{position:'relative'}}>
+                                  <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',fontSize:12,color:'var(--app-text-secondary)'}}>S/</span>
+                                  <input
+                                    type="number" min="0" step="0.5"
+                                    style={{paddingLeft:'2rem',width:100,padding:'6px 8px 6px 2rem',borderRadius:8,background:'var(--app-input-bg)',border:'1px solid var(--app-input-border)',color:'var(--app-input-text)',fontSize:13,outline:'none'}}
+                                    value={editandoLotePrecios[lote.id]??''}
+                                    onChange={e=>setEditandoLotePrecios(p=>({...p,[lote.id]:e.target.value}))}
+                                    placeholder="0.00"
+                                    onFocus={e=>e.target.style.borderColor='var(--app-accent)'}
+                                    onBlur={e=>e.target.style.borderColor='var(--app-input-border)'}
+                                  />
+                                </div>
+                                <button
+                                  onClick={()=>guardarPrecioLote(lote.id)}
+                                  style={{padding:'6px 14px',borderRadius:8,background:'var(--app-accent)',border:'none',color:'#fff',fontSize:12,fontWeight:600,cursor:'pointer',whiteSpace:'nowrap'}}
+                                >
+                                  ✓ Guardar
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {lotesDelDist.length === 0 && (
+                    <p style={{fontSize:12,color:'var(--app-text-secondary)',fontStyle:'italic',marginTop:4}}>Sin lotes activos</p>
+                  )}
                 </div>
-              ))}
+              )})}
             </div>
           </div>
         )}
