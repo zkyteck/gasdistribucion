@@ -1,6 +1,6 @@
 // src/components/AsistenteFlotante.jsx
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Send, RefreshCw, Zap, Minimize2 } from 'lucide-react'
+import { Send, RefreshCw, Zap, MessageCircle, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { differenceInDays } from 'date-fns'
@@ -39,7 +39,6 @@ async function llamarClaude(mensajes, systemPrompt) {
   return data.content?.[0]?.text || 'No pude generar una respuesta.'
 }
 
-// Ícono robot SVG
 function RobotIcon({ size = 24, color = '#fff' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -67,11 +66,82 @@ export default function AsistenteFlotante() {
   const chatRef = useRef(null)
   const inputRef = useRef(null)
 
-  // Verificar permisos
+  // ── Posición draggable ─────────────────────────────────────────────────────
+  const [pos, setPos] = useState(() => ({
+    x: Math.max(0, (typeof window !== 'undefined' ? window.innerWidth : 800) - 80),
+    y: Math.max(0, (typeof window !== 'undefined' ? window.innerHeight : 600) - 80),
+  }))
+  const isDragging = useRef(false)
+  const hasMoved = useRef(false)
+  const dragStart = useRef({ mx: 0, my: 0, px: 0, py: 0 })
+
+  // Mouse drag
+  const onMouseDown = useCallback((e) => {
+    e.preventDefault()
+    isDragging.current = true
+    hasMoved.current = false
+    dragStart.current = { mx: e.clientX, my: e.clientY, px: pos.x, py: pos.y }
+  }, [pos])
+
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!isDragging.current) return
+      const dx = e.clientX - dragStart.current.mx
+      const dy = e.clientY - dragStart.current.my
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) hasMoved.current = true
+      const newX = Math.max(0, Math.min(window.innerWidth - 60, dragStart.current.px + dx))
+      const newY = Math.max(0, Math.min(window.innerHeight - 60, dragStart.current.py + dy))
+      setPos({ x: newX, y: newY })
+    }
+    const onUp = () => { isDragging.current = false }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [])
+
+  // Touch drag
+  const onTouchStart = useCallback((e) => {
+    const t = e.touches[0]
+    isDragging.current = true
+    hasMoved.current = false
+    dragStart.current = { mx: t.clientX, my: t.clientY, px: pos.x, py: pos.y }
+  }, [pos])
+
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!isDragging.current) return
+      e.preventDefault()
+      const t = e.touches[0]
+      const dx = t.clientX - dragStart.current.mx
+      const dy = t.clientY - dragStart.current.my
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) hasMoved.current = true
+      const newX = Math.max(0, Math.min(window.innerWidth - 60, dragStart.current.px + dx))
+      const newY = Math.max(0, Math.min(window.innerHeight - 60, dragStart.current.py + dy))
+      setPos({ x: newX, y: newY })
+    }
+    const onEnd = () => { isDragging.current = false }
+    window.addEventListener('touchmove', onMove, { passive: false })
+    window.addEventListener('touchend', onEnd)
+    return () => {
+      window.removeEventListener('touchmove', onMove)
+      window.removeEventListener('touchend', onEnd)
+    }
+  }, [])
+
+  const handleBtnClick = useCallback(() => {
+    if (hasMoved.current) return // fue drag, no click
+    setAbierto(v => !v)
+  }, [])
+
+  // ── Permisos ───────────────────────────────────────────────────────────────
   const isAdmin = perfil?.rol === 'admin'
   const tienePermiso = isAdmin || perfil?.permisos?.asistente === true
   if (!tienePermiso) return null
 
+  // ── Scroll y focus ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight
   }, [mensajes])
@@ -80,6 +150,7 @@ export default function AsistenteFlotante() {
     if (abierto) { setBadgeCount(0); inputRef.current?.focus() }
   }, [abierto])
 
+  // ── Mensajes ───────────────────────────────────────────────────────────────
   const agregarMensaje = useCallback((rol, texto, tipo = 'normal') => {
     setMensajes(prev => [...prev, {
       id: Date.now() + Math.random(), rol, texto, tipo,
@@ -97,7 +168,6 @@ export default function AsistenteFlotante() {
 Analiza los datos del negocio y da recomendaciones concretas al dueño Jordan.
 Responde en español, de forma directa y práctica. Usa emojis.
 Para cada problema da 2-3 opciones concretas (A, B, C) y di cuál recomiendas.`
-
       const resumen = `Datos actuales:
 STOCK: ${d.almacenes.map(a => `${a.nombre}: ${a.stock_actual} bal`).join(', ')}
 ${d.stockBajos.length > 0 ? `⚠️ STOCK BAJO: ${d.stockBajos.map(a => a.nombre).join(', ')}` : '✅ Stock OK'}
@@ -105,12 +175,9 @@ DEUDAS: ${d.deudasUrgentes.length} urgentes (+30 días)
 ${d.deudasUrgentes.slice(0,3).map(x => `• ${x.nombre_deudor} S/${parseFloat(x.monto_pendiente).toFixed(0)} (${differenceInDays(new Date(), new Date(x.fecha_deuda))}d)`).join('\n')}
 A CUENTA: ${d.acuentaPendiente.length} pendientes
 VENTAS semana: S/${d.totalVentasSemana.toFixed(0)} | ${d.totalBalonesVendidos} balones
-
 Genera reporte proactivo con recomendaciones. Sé conciso. Al final pregunta qué hacemos.`
-
       const respuesta = await llamarClaude([{ role: 'user', content: resumen }], systemPrompt)
       agregarMensaje('ia', respuesta, 'analisis')
-
       if (d.deudasUrgentes.length > 0 || d.stockBajos.length > 0) {
         const alertas = []
         if (d.stockBajos.length > 0) alertas.push(`stock bajo en ${d.stockBajos.map(a => a.nombre).join(', ')}`)
@@ -144,7 +211,6 @@ DATOS: Stock bajo: ${d.stockBajos.map(a => `${a.nombre}(${a.stock_actual})`).joi
 Deudas urgentes: ${d.deudasUrgentes.length} | A cuenta pendiente: ${d.acuentaPendiente.length}
 Ventas semana: S/${d.totalVentasSemana.toFixed(0)}
 Responde de forma práctica. Si recomiendas opciones usa A,B,C. Usa emojis. Responde en español.`
-
       const historial = mensajes.filter(m => m.rol !== 'sistema').slice(-8)
         .map(m => ({ role: m.rol === 'usuario' ? 'user' : 'assistant', content: m.texto }))
       historial.push({ role: 'user', content: texto })
@@ -155,59 +221,90 @@ Responde de forma práctica. Si recomiendas opciones usa A,B,C. Usa emojis. Resp
     inputRef.current?.focus()
   }, [input, cargando, mensajes, datos, agregarMensaje])
 
+  // ── Posición del panel chat (se abre hacia arriba/izquierda según espacio) ─
+  const panelW = 360
+  const panelH = 520
+  const panelLeft = pos.x + 60 + panelW > window.innerWidth ? pos.x - panelW + 56 : pos.x
+  const panelTop  = pos.y + 60 + panelH > window.innerHeight ? pos.y - panelH : pos.y + 64
+
   return (
     <>
-      {/* Botón flotante */}
-      {!abierto && (
+      {/* Botón flotante arrastrable */}
+      <div
+        style={{
+          position: 'fixed',
+          left: pos.x,
+          top: pos.y,
+          zIndex: 100,
+          cursor: isDragging.current ? 'grabbing' : 'grab',
+          userSelect: 'none',
+          touchAction: 'none',
+        }}
+        onMouseDown={onMouseDown}
+        onTouchStart={onTouchStart}
+      >
         <button
-          onClick={() => setAbierto(true)}
+          onClick={handleBtnClick}
           style={{
-            position: 'fixed', bottom: 24, right: 24, zIndex: 100,
             width: 56, height: 56, borderRadius: '50%',
-            background: 'linear-gradient(135deg, var(--app-accent), #6366f1)',
+            background: abierto
+              ? 'linear-gradient(135deg, #6366f1, #4f46e5)'
+              : 'linear-gradient(135deg, var(--app-accent), #6366f1)',
             border: 'none', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-            transition: 'transform 0.2s',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
+            transition: 'background 0.2s, transform 0.15s',
+            position: 'relative',
           }}
-          onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
+          onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
           onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-          title="Asistente IA"
+          title={abierto ? 'Cerrar asistente' : 'Abrir asistente IA'}
         >
-          <RobotIcon size={26}/>
-          {badgeCount > 0 && (
+          {/* Icono: X si abierto, mensaje si cerrado */}
+          {abierto
+            ? <X style={{ width: 22, height: 22, color: '#fff' }} />
+            : <MessageCircle style={{ width: 24, height: 24, color: '#fff' }} />
+          }
+
+          {/* Badge mensajes nuevos */}
+          {!abierto && badgeCount > 0 && (
             <span style={{
               position: 'absolute', top: -2, right: -2,
               width: 18, height: 18, borderRadius: '50%',
               background: '#ef4444', color: '#fff',
               fontSize: 10, fontWeight: 700,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              border: '2px solid var(--app-bg)'
+              border: '2px solid var(--app-bg)',
+              pointerEvents: 'none',
             }}>{badgeCount}</span>
           )}
         </button>
-      )}
+      </div>
 
       {/* Panel chat */}
       {abierto && (
-        <div style={{
-          position: 'fixed', bottom: 24, right: 24, zIndex: 100,
-          width: 360, height: 520,
-          background: 'var(--app-modal-bg, var(--app-card-bg))',
-          border: '1px solid var(--app-card-border)',
-          borderRadius: 20,
-          boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-          backdropFilter: 'none',
-          display: 'flex', flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-        className="lg:w-96"
+        <div
+          style={{
+            position: 'fixed',
+            left: Math.max(8, Math.min(window.innerWidth - panelW - 8, panelLeft)),
+            top: Math.max(8, Math.min(window.innerHeight - panelH - 8, panelTop)),
+            zIndex: 99,
+            width: panelW,
+            height: panelH,
+            background: 'var(--app-modal-bg, var(--app-card-bg))',
+            border: '1px solid var(--app-card-border)',
+            borderRadius: 20,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+            display: 'flex', flexDirection: 'column',
+            overflow: 'hidden',
+          }}
         >
-          {/* Header */}
+          {/* Header — arrastrar desde aquí también mueve el panel */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '14px 16px',
             background: 'linear-gradient(135deg, var(--app-accent), #6366f1)',
+            flexShrink: 0,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -218,19 +315,41 @@ Responde de forma práctica. Si recomiendas opciones usa A,B,C. Usa emojis. Resp
                 <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', margin: 0 }}>● Activo · revisa cada hora</p>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={() => ejecutarAnalisis()} disabled={analizando} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, cursor: 'pointer', padding: '5px 8px', color: '#fff', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
-                {analizando ? <RefreshCw style={{ width: 12, height: 12, animation: 'spin 1s linear infinite' }}/> : <Zap style={{ width: 12, height: 12 }}/>}
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <button
+                onClick={() => ejecutarAnalisis()}
+                disabled={analizando}
+                style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, cursor: 'pointer', padding: '5px 8px', color: '#fff', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}
+              >
+                {analizando
+                  ? <RefreshCw style={{ width: 12, height: 12, animation: 'spin 1s linear infinite' }}/>
+                  : <Zap style={{ width: 12, height: 12 }}/>
+                }
                 {analizando ? '...' : 'Analizar'}
               </button>
-              <button onClick={() => setAbierto(false)} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, cursor: 'pointer', padding: '5px 8px', color: '#fff' }}>
-                <Minimize2 style={{ width: 14, height: 14 }}/>
+              {/* X para cerrar */}
+              <button
+                onClick={() => setAbierto(false)}
+                style={{
+                  background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8,
+                  cursor: 'pointer', padding: '5px 8px', color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.35)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+                title="Cerrar"
+              >
+                <X style={{ width: 16, height: 16 }}/>
               </button>
             </div>
           </div>
 
           {/* Mensajes */}
-          <div ref={chatRef} style={{ flex: 1, overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--app-main-bg, var(--app-card-bg))' }}>
+          <div
+            ref={chatRef}
+            style={{ flex: 1, overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--app-main-bg, var(--app-card-bg))' }}
+          >
             {mensajes.map(m => (
               <div key={m.id} style={{ display: 'flex', justifyContent: m.rol === 'usuario' ? 'flex-end' : 'flex-start', gap: 6 }}>
                 {m.rol === 'ia' && (
@@ -267,7 +386,7 @@ Responde de forma práctica. Si recomiendas opciones usa A,B,C. Usa emojis. Resp
           </div>
 
           {/* Input */}
-          <div style={{ padding: '10px 12px', borderTop: '1px solid var(--app-card-border)', display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <div style={{ padding: '10px 12px', borderTop: '1px solid var(--app-card-border)', display: 'flex', gap: 8, alignItems: 'flex-end', flexShrink: 0 }}>
             <textarea
               ref={inputRef}
               value={input}
@@ -293,9 +412,6 @@ Responde de forma práctica. Si recomiendas opciones usa A,B,C. Usa emojis. Resp
       <style>{`
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
-        @media(max-width:640px){
-          .chat-flotante{width:calc(100vw - 32px)!important;right:16px!important;bottom:80px!important}
-        }
       `}</style>
     </>
   )
