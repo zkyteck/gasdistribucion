@@ -214,9 +214,14 @@ export default function Ventas() {
     if(!c) return
     const tipoPrecio = precioTipos.find(t => t.nombre.toLowerCase().includes(c.tipo)) || precioTipos[0]
     const precio = getPrecio(tipoPrecio?.id, form.tipo_balon)
-    setForm(f => ({...f, cliente_id:c.id, cliente_nombre:c.nombre, es_varios:c.es_varios, precio_tipo_id:tipoPrecio?.id||'', precio_unitario:precio||tipoPrecio?.precio||''}))
+    // Si es venta de distribuidor, NO sobreescribir el precio FIFO
+    if(form.es_distribuidor) {
+      setForm(f => ({...f, cliente_id:c.id, cliente_nombre:c.nombre, es_varios:c.es_varios}))
+    } else {
+      setForm(f => ({...f, cliente_id:c.id, cliente_nombre:c.nombre, es_varios:c.es_varios, precio_tipo_id:tipoPrecio?.id||'', precio_unitario:precio||tipoPrecio?.precio||''}))
+    }
     buscarDeudaCliente(c.id, c.nombre)
-  }, [clientes, precioTipos, getPrecio, form.tipo_balon, buscarDeudaCliente])
+  }, [clientes, precioTipos, getPrecio, form.tipo_balon, form.es_distribuidor, buscarDeudaCliente])
 
   // ─── Guardar cliente rápido ────────────────────────────────────────────────
   const guardarClienteRapido = useCallback(async () => {
@@ -658,7 +663,7 @@ export default function Ventas() {
                   return(
                     <div style={{marginTop:6,padding:'8px 12px',borderRadius:8,background:'rgba(251,146,60,0.08)',border:'1px solid rgba(251,146,60,0.25)'}}>
                       <p style={{fontSize:11,color:'#fb923c',margin:0,fontWeight:600}}>🚛 Precio FIFO automático</p>
-                      {fifo?<p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Lote {fifo.lote.fecha} · S/{fifo.lote.precio_unitario}/bal. · {fifo.lote.cantidad_restante} restantes</p>:<p style={{fontSize:11,color:'#f87171',margin:'2px 0 0'}}>⚠️ Sin lotes activos</p>}
+                      {fifo?<p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Lote {fifo.lote.fecha} · S/{fifo.lote.precio_venta||fifo.lote.precio_unitario}/bal. · {fifo.lote.cantidad_restante} restantes</p>:<p style={{fontSize:11,color:'#f87171',margin:'2px 0 0'}}>⚠️ Sin lotes activos</p>}
                     </div>
                   )
                 })()}
