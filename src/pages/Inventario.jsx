@@ -42,7 +42,8 @@ export default function Inventario() {
   // Forms
   const [movForm, setMovForm] = useState({ origen_id: '', destino_id: '', tipo_balon: '10kg', cantidad: '', notas: '', fecha: hoyPeru() })
   const [vaciosForm, setVaciosForm] = useState({ almacen_id: '', cantidades: { '5kg': 0, '10kg': 0, '45kg': 0 }, notas: '', fecha: hoyPeru() })
-  const [editStockVal, setEditStockVal] = useState({ stock: 0, vacios: 0 })
+  // ← CAMBIO 1: editStockVal ahora incluye los 3 tipos
+  const [editStockVal, setEditStockVal] = useState({ '5kg': 0, '10kg': 0, '45kg': 0, vacios: 0 })
 
   // ─── Cargar datos ──────────────────────────────────────────────────────────
   const cargar = useCallback(async () => {
@@ -142,14 +143,39 @@ export default function Inventario() {
   }, [vaciosForm, almacenes, cargar])
 
   // ─── Editar stock directamente ─────────────────────────────────────────────
+  // CAMBIO 2: ahora actualiza almacenes + stock_por_tipo por cada tipo
   const guardarEditStock = useCallback(async () => {
     if (!modalEditStock) return
     setSaving(true)
-    await supabase.from('almacenes').update({
-      stock_actual: parseInt(editStockVal.stock) || 0,
-      balones_vacios: parseInt(editStockVal.vacios) || 0,
-      updated_at: new Date().toISOString()
-    }).eq('id', modalEditStock.id)
+
+    const v5  = parseInt(editStockVal['5kg'])  || 0
+    const v10 = parseInt(editStockVal['10kg']) || 0
+    const v45 = parseInt(editStockVal['45kg']) || 0
+    const totalLlenos = v5 + v10 + v45
+
+    await Promise.all([
+      // Actualiza total en almacenes
+      supabase.from('almacenes').update({
+        stock_actual: totalLlenos,
+        balones_vacios: parseInt(editStockVal.vacios) || 0,
+        updated_at: new Date().toISOString()
+      }).eq('id', modalEditStock.id),
+
+      // Upsert por cada tipo en stock_por_tipo
+      supabase.from('stock_por_tipo').upsert({
+        almacen_id: modalEditStock.id, tipo_balon: '5kg',
+        stock_actual: v5, updated_at: new Date().toISOString()
+      }, { onConflict: 'almacen_id,tipo_balon' }),
+      supabase.from('stock_por_tipo').upsert({
+        almacen_id: modalEditStock.id, tipo_balon: '10kg',
+        stock_actual: v10, updated_at: new Date().toISOString()
+      }, { onConflict: 'almacen_id,tipo_balon' }),
+      supabase.from('stock_por_tipo').upsert({
+        almacen_id: modalEditStock.id, tipo_balon: '45kg',
+        stock_actual: v45, updated_at: new Date().toISOString()
+      }, { onConflict: 'almacen_id,tipo_balon' }),
+    ])
+
     setSaving(false); setModalEditStock(null); cargar()
   }, [modalEditStock, editStockVal, cargar])
 
@@ -228,7 +254,17 @@ export default function Inventario() {
                       </div>
                       <div style={{display:'flex',alignItems:'center',gap:8}}>
                         {bajo && <span style={{fontSize:11,color:'#f87171'}}>⚠️ Stock bajo</span>}
-                        <button onClick={()=>{setModalEditStock(alm);setEditStockVal({stock:alm.stock_actual||0,vacios:alm.balones_vacios||0})}}
+                        {/* CAMBIO 3: al abrir el modal, pre-carga los valores por tipo desde stock_por_tipo */}
+                        <button
+                          onClick={()=>{
+                            setModalEditStock(alm)
+                            setEditStockVal({
+                              '5kg':  getStock(alm.id, '5kg'),
+                              '10kg': getStock(alm.id, '10kg'),
+                              '45kg': getStock(alm.id, '45kg'),
+                              vacios: alm.balones_vacios || 0
+                            })
+                          }}
                           style={{background:'none',border:'none',cursor:'pointer',color:'var(--app-text-secondary)',padding:4}}>
                           <Edit2 style={{width:14,height:14}}/>
                         </button>
@@ -400,28 +436,47 @@ export default function Inventario() {
         </Modal>
       )}
 
-      {/* Modal editar stock */}
+      {/* Modal editar stock — CAMBIO 3: inputs por tipo + total automático */}
       {modalEditStock && (
         <Modal title={`Editar stock — ${modalEditStock.nombre}`} onClose={()=>setModalEditStock(null)}>
           <div className="space-y-4">
             <div style={{background:'rgba(234,179,8,0.08)',border:'1px solid rgba(234,179,8,0.25)',borderRadius:8,padding:'10px 14px',fontSize:12,color:'var(--app-text-secondary)'}}>
-              ⚠️ Esto ajusta el stock directamente. Úsalo solo para correcciones manuales.
+              ⚠️ Esto ajusta el stock directamente. El total se calcula automáticamente sumando los tres tipos.
             </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <div>
-                <label className="label">Balones llenos</label>
-                <input type="number" min="0" className="input" value={editStockVal.stock}
-                  onChange={e=>setEditStockVal(f=>({...f,stock:e.target.value}))}/>
+
+            <div>
+              <label className="label">Balones llenos por tipo</label>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+                {TIPOS.map(tipo => (
+                  <div key={tipo}>
+                    <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 4px'}}>{tipo}</p>
+                    <input type="number" min="0" className="input" style={{padding:'6px 10px'}}
+                      value={editStockVal[tipo]}
+                      onChange={e=>setEditStockVal(f=>({...f,[tipo]:e.target.value}))}
+                      placeholder="0"/>
+                  </div>
+                ))}
               </div>
-              <div>
-                <label className="label">Balones vacíos</label>
-                <input type="number" min="0" className="input" value={editStockVal.vacios}
-                  onChange={e=>setEditStockVal(f=>({...f,vacios:e.target.value}))}/>
-              </div>
+              <p style={{fontSize:12,color:'var(--app-text-secondary)',marginTop:6}}>
+                Total llenos:{' '}
+                <strong style={{color:'#22c55e'}}>
+                  {(parseInt(editStockVal['5kg'])||0) + (parseInt(editStockVal['10kg'])||0) + (parseInt(editStockVal['45kg'])||0)} balones
+                </strong>
+              </p>
             </div>
+
+            <div>
+              <label className="label">Balones vacíos (total)</label>
+              <input type="number" min="0" className="input" value={editStockVal.vacios}
+                onChange={e=>setEditStockVal(f=>({...f,vacios:e.target.value}))}
+                placeholder="0"/>
+            </div>
+
             <div className="flex gap-3 pt-2">
               <button onClick={()=>setModalEditStock(null)} className="btn-secondary flex-1">Cancelar</button>
-              <button onClick={guardarEditStock} disabled={saving} className="btn-primary flex-1 justify-center">{saving?'Guardando...':'✓ Guardar'}</button>
+              <button onClick={guardarEditStock} disabled={saving} className="btn-primary flex-1 justify-center">
+                {saving?'Guardando...':'✓ Guardar'}
+              </button>
             </div>
           </div>
         </Modal>
