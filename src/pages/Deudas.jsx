@@ -94,6 +94,7 @@ export default function Deudas() {
   const [mostrarSugerencias, setMostrarSugerencias] = useState(false)
   const [editForm, setEditForm] = useState({ monto_pendiente:'', balones_pendiente:'', vales_20_pendiente:'', vales_43_pendiente:'', fecha_deuda:'', notas:'' })
   const [historialCompleto, setHistorialCompleto] = useState(null)
+  const [modalConfirm, setModalConfirm] = useState(null) // { mensaje, onConfirm }
   const [loadingHistorial, setLoadingHistorial] = useState(false)
   const [tabHistorial, setTabHistorial] = useState('movimientos')
 
@@ -354,15 +355,18 @@ export default function Deudas() {
 
   // ─── Eliminar deuda ───────────────────────────────────────────────────────────
   const eliminarDeuda = useCallback(async (id) => {
-    if(!confirm('¿Eliminar esta deuda? Esta acción no se puede deshacer.')) return
-    const deuda = deudas.find(d => d.id === id)
-    await Promise.all([
-      // Soft delete
-      supabase.from('deudas').update({ eliminado:true, eliminado_por:perfil?.id||null, eliminado_at:new Date().toISOString() }).eq('id',id),
-      // Guardar en historial
-      deuda ? supabase.from('historial_eliminaciones').insert({ tabla:'deudas', registro_id:id, datos_anteriores:deuda, eliminado_por:perfil?.id||null }) : Promise.resolve()
-    ])
-    toast('Deuda eliminada'); cargar()
+    setModalConfirm({
+      mensaje: '¿Eliminar esta deuda? Esta acción no se puede deshacer.',
+      onConfirm: async () => {
+        const deuda = deudas.find(d => d.id === id)
+        await Promise.all([
+          supabase.from('deudas').update({ eliminado:true, eliminado_por:perfil?.id||null, eliminado_at:new Date().toISOString() }).eq('id',id),
+          deuda ? supabase.from('historial_eliminaciones').insert({ tabla:'deudas', registro_id:id, datos_anteriores:deuda, eliminado_por:perfil?.id||null }) : Promise.resolve()
+        ])
+        setModalConfirm(null)
+        toast('Deuda eliminada'); cargar()
+      }
+    })
   }, [cargar, toast, deudas, perfil])
 
   // ─── Filtros y ordenamiento ───────────────────────────────────────────────────
@@ -1013,6 +1017,24 @@ export default function Deudas() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Modal confirmación eliminar */}
+      {modalConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.7)'}}>
+          <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:16,width:'100%',maxWidth:380,padding:'28px 24px',boxShadow:'0 25px 50px rgba(0,0,0,0.4)',textAlign:'center'}}>
+            <div style={{width:48,height:48,borderRadius:'50%',background:'rgba(239,68,68,0.12)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:22}}>🗑️</div>
+            <p style={{fontSize:15,fontWeight:600,color:'var(--app-text)',margin:'0 0 8px'}}>¿Eliminar deuda?</p>
+            <p style={{fontSize:13,color:'var(--app-text-secondary)',margin:'0 0 24px'}}>{modalConfirm.mensaje}</p>
+            <div style={{display:'flex',gap:10}}>
+              <button onClick={()=>setModalConfirm(null)} className="btn-secondary" style={{flex:1}}>Cancelar</button>
+              <button onClick={modalConfirm.onConfirm}
+                style={{flex:1,padding:'8px 16px',borderRadius:8,background:'rgba(239,68,68,0.9)',border:'none',color:'#fff',fontWeight:600,fontSize:13,cursor:'pointer'}}>
+                Sí, eliminar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <Toast toasts={toasts}/>

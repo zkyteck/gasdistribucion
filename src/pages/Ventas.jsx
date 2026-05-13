@@ -93,6 +93,7 @@ export default function Ventas() {
   const [busquedaCliente, setBusquedaCliente] = useState('')
   const [filtroFecha, setFiltroFecha] = useState(hoyPeru())
   const [subModal, setSubModal] = useState(null)
+  const [modalConfirm, setModalConfirm] = useState(null)
   const [clienteRapidoForm, setClienteRapidoForm] = useState({ nombre:'', telefono:'' })
   const [deudaExistente, setDeudaExistente] = useState(null)
   const [loadingDeuda, setLoadingDeuda] = useState(false)
@@ -235,59 +236,38 @@ export default function Ventas() {
     setClienteRapidoForm({nombre:'',telefono:''}); setSubModal(null)
   }, [clienteRapidoForm, seleccionarCliente])
 
-  // ─── FIFO distribuidor — calcula desglose y precio ponderado ──────────────
-  const calcularDesgloseFIFO = useCallback((distribuidorId, tipoBalon, cantidad) => {
-    const lotes = lotesDistribuidor
-      .filter(l => l.distribuidor_id===distribuidorId && l.tipo_balon===tipoBalon && !l.cerrado && l.cantidad_restante>0)
-      .sort((a,b) => a.fecha.localeCompare(b.fecha))
-    let restante = cantidad, totalMonto = 0
-    const desglose = []
-    for(const lote of lotes) {
-      if(restante<=0) break
-      const cant = Math.min(restante, lote.cantidad_restante)
-      const precio = lote.precio_venta || lote.precio_unitario || 0
-      totalMonto += cant * precio
-      desglose.push({ lote_id:lote.id, lote_fecha:lote.fecha, cantidad:cant, precio_venta:precio, subtotal:cant*precio })
-      restante -= cant
-    }
-    const precioPromedio = cantidad>0 ? totalMonto/cantidad : 0
-    return { desglose, totalMonto, precioPromedio }
-  }, [lotesDistribuidor])
-
-  const aplicarFIFO = useCallback(async (distribuidorId, tipoBalon, cantidadVendida, ventaId) => {
+  // ─── FIFO distribuidor ─────────────────────────────────────────────────────
+  const aplicarFIFO = useCallback(async (distribuidorId, tipoBalon, cantidadVendida) => {
     const { data:lotesAbiertos } = await supabase.from('lotes_distribuidor').select('*').eq('distribuidor_id',distribuidorId).eq('tipo_balon',tipoBalon).eq('cerrado',false).gt('cantidad_restante',0).order('fecha',{ascending:true})
     if(!lotesAbiertos?.length) return
     let restante = cantidadVendida
-    const detallesLote = []
     for(const lote of lotesAbiertos) {
-      if(restante<=0) break
+      if(restante <= 0) break
       const descontar = Math.min(restante, lote.cantidad_restante)
-      const precio = lote.precio_venta || lote.precio_unitario || 0
       await supabase.from('lotes_distribuidor').update({ cantidad_vendida:lote.cantidad_vendida+descontar, cantidad_restante:lote.cantidad_restante-descontar, cerrado:lote.cantidad_restante-descontar<=0 }).eq('id',lote.id)
-      detallesLote.push({ venta_id:ventaId, lote_id:lote.id, cantidad:descontar, precio_venta:precio })
       restante -= descontar
-    }
-    if(ventaId && detallesLote.length>0) {
-      await supabase.from('venta_lote_detalles').insert(detallesLote)
     }
   }, [])
 
   // ─── Eliminar venta ────────────────────────────────────────────────────────
   const eliminarVenta = useCallback(async (venta) => {
-    if(!confirm(`¿Eliminar venta de ${venta.clientes?.nombre||'Cliente Varios'} — S/${(venta.cantidad*venta.precio_unitario).toFixed(2)}?`)) return
-    const stockActual = getStock(venta.almacen_id, venta.tipo_balon||'10kg')
-    const tipo = venta.tipo_balon||'10kg'
-    const campoVacios = tipo==='5kg'?'vacios_5kg':tipo==='10kg'?'vacios_10kg':'vacios_45kg'
-    const almacen = almacenes.find(a => a.id===venta.almacen_id)
-    await Promise.all([
-      supabase.from('stock_por_tipo').update({ stock_actual:stockActual+venta.cantidad, updated_at:new Date().toISOString() }).eq('almacen_id',venta.almacen_id).eq('tipo_balon',tipo),
-      almacen ? supabase.from('almacenes').update({ stock_actual:(almacen.stock_actual||0)+venta.cantidad, balones_vacios:Math.max(0,(almacen.balones_vacios||0)-venta.cantidad), [campoVacios]:Math.max(0,(almacen[campoVacios]||0)-venta.cantidad) }).eq('id',venta.almacen_id) : Promise.resolve(),
-      // Soft delete — no borra, marca como eliminado
-      supabase.from('ventas').update({ eliminado:true, eliminado_por:perfil?.id||null, eliminado_at:new Date().toISOString() }).eq('id',venta.id),
-      // Guardar en historial
-      supabase.from('historial_eliminaciones').insert({ tabla:'ventas', registro_id:venta.id, datos_anteriores:venta, eliminado_por:perfil?.id||null })
-    ])
-    toast('Venta eliminada'); cargar()
+    setModalConfirm({
+      mensaje: `¿Eliminar venta de ${venta.clientes?.nombre||'Cliente Varios'} — S/${(venta.cantidad*venta.precio_unitario).toFixed(2)}?`,
+      onConfirm: async () => {
+        const stockActual = getStock(venta.almacen_id, venta.tipo_balon||'10kg')
+        const tipo = venta.tipo_balon||'10kg'
+        const campoVacios = tipo==='5kg'?'vacios_5kg':tipo==='10kg'?'vacios_10kg':'vacios_45kg'
+        const almacen = almacenes.find(a => a.id===venta.almacen_id)
+        await Promise.all([
+          supabase.from('stock_por_tipo').update({ stock_actual:stockActual+venta.cantidad, updated_at:new Date().toISOString() }).eq('almacen_id',venta.almacen_id).eq('tipo_balon',tipo),
+          almacen ? supabase.from('almacenes').update({ stock_actual:(almacen.stock_actual||0)+venta.cantidad, balones_vacios:Math.max(0,(almacen.balones_vacios||0)-venta.cantidad), [campoVacios]:Math.max(0,(almacen[campoVacios]||0)-venta.cantidad) }).eq('id',venta.almacen_id) : Promise.resolve(),
+          supabase.from('ventas').update({ eliminado:true, eliminado_por:perfil?.id||null, eliminado_at:new Date().toISOString() }).eq('id',venta.id),
+          supabase.from('historial_eliminaciones').insert({ tabla:'ventas', registro_id:venta.id, datos_anteriores:venta, eliminado_por:perfil?.id||null })
+        ])
+        setModalConfirm(null)
+        toast('Venta eliminada'); cargar()
+      }
+    })
   }, [getStock, almacenes, cargar, toast, perfil])
 
   // ─── Guardar apertura ──────────────────────────────────────────────────────
@@ -325,7 +305,7 @@ export default function Ventas() {
     // ── Venta gas normal ──────────────────────────────────────────────────────
     if(form.tipo_venta==='gas') {
       const stockDisp = getStock(form.almacen_id, form.tipo_balon)
-      const { data:ventaData, error:e } = await supabase.from('ventas').insert({
+      const { error:e } = await supabase.from('ventas').insert({
         cliente_id:form.cliente_id||null, almacen_id:form.almacen_id,
         precio_tipo_id:form.precio_tipo_id||null, tipo_balon:form.tipo_balon,
         fecha:(form.fecha||hoyPeru())+'T12:00:00-05:00',
@@ -336,19 +316,13 @@ export default function Ventas() {
         vales_30:form.es_distribuidor?(parseInt(form.vales30)||0):null,
         vales_43:form.es_distribuidor?(parseInt(form.vales43)||0):null,
         efectivo_dist:form.es_distribuidor?(parseFloat(form.efectivoDist)||0):null
-      }).select().single()
+      })
       if(e) { setError(e.message); setSaving(false); return }
-      const ventaId = ventaData?.id
       if(!form.es_distribuidor) {
         await supabase.from('stock_por_tipo').update({ stock_actual:Math.max(0,stockDisp-cant) }).eq('almacen_id',form.almacen_id).eq('tipo_balon',form.tipo_balon)
       }
       if(form.es_distribuidor&&form.distribuidor_id) {
-        // Calcular precio ponderado FIFO antes de guardar
-        const { precioPromedio } = calcularDesgloseFIFO(form.distribuidor_id, form.tipo_balon, cant)
-        if(precioPromedio>0 && Math.abs(precioPromedio - precioGas) > 0.01) {
-          await supabase.from('ventas').update({ precio_unitario: precioPromedio }).eq('id', ventaId)
-        }
-        await aplicarFIFO(form.distribuidor_id, form.tipo_balon, cant, ventaId)
+        await aplicarFIFO(form.distribuidor_id, form.tipo_balon, cant)
         const { data:lotesActivos } = await supabase.from('lotes_distribuidor').select('cantidad_restante').eq('distribuidor_id',form.distribuidor_id).eq('cerrado',false)
         const totalRestante = (lotesActivos||[]).reduce((s,l) => s+(l.cantidad_restante||0),0)
         const { data:almDist } = await supabase.from('almacenes').select('balones_vacios,vacios_5kg,vacios_10kg,vacios_45kg').eq('id',form.almacen_id).single()
@@ -694,24 +668,6 @@ export default function Ventas() {
                     <div style={{marginTop:6,padding:'8px 12px',borderRadius:8,background:'rgba(251,146,60,0.08)',border:'1px solid rgba(251,146,60,0.25)'}}>
                       <p style={{fontSize:11,color:'#fb923c',margin:0,fontWeight:600}}>🚛 Precio FIFO automático</p>
                       {fifo?<p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Lote {fifo.lote.fecha} · S/{fifo.lote.precio_venta||fifo.lote.precio_unitario}/bal. · {fifo.lote.cantidad_restante} restantes</p>:<p style={{fontSize:11,color:'#f87171',margin:'2px 0 0'}}>⚠️ Sin lotes activos</p>}
-                    {/* Desglose FIFO si la venta cruza múltiples lotes */}
-                    {form.es_distribuidor && form.distribuidor_id && parseInt(form.cantidad)>0 && (() => {
-                      const { desglose, totalMonto, precioPromedio } = calcularDesgloseFIFO(form.distribuidor_id, form.tipo_balon, parseInt(form.cantidad)||0)
-                      if(desglose.length<=1) return null
-                      return (
-                        <div style={{marginTop:8,padding:'8px 10px',borderRadius:8,background:'rgba(99,102,241,0.08)',border:'1px solid rgba(99,102,241,0.2)'}}>
-                          <p style={{fontSize:11,fontWeight:600,color:'#818cf8',margin:'0 0 5px'}}>📦 Desglose FIFO (cruza {desglose.length} lotes)</p>
-                          {desglose.map((d,i)=>(
-                            <p key={i} style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0'}}>
-                              {i===0?'├':'└'} {d.cantidad} bal × S/{d.precio_venta} (Lote {d.lote_fecha}) = <strong style={{color:'var(--app-text)'}}>S/{d.subtotal.toFixed(2)}</strong>
-                            </p>
-                          ))}
-                          <p style={{fontSize:11,fontWeight:700,color:'#34d399',margin:'5px 0 0',borderTop:'1px solid rgba(99,102,241,0.2)',paddingTop:4}}>
-                            Total: S/{totalMonto.toFixed(2)} · Precio promedio: S/{precioPromedio.toFixed(2)}/bal
-                          </p>
-                        </div>
-                      )
-                    })()}
                     </div>
                   )
                 })()}
@@ -986,6 +942,24 @@ export default function Ventas() {
       )}
 
       {modalRapido&&(<VentaRapida onClose={()=>setModalRapido(false)} onGuardado={()=>{cargar();}} onAbrirDetallado={()=>{setModalRapido(false);abrirModal()}} almacenes={almacenes} precioTipos={precioTipos} preciosPorTipo={preciosPorTipo} stockPorTipo={stockPorTipo} clientes={clientes} distribuidores={distribuidores} lotesDistribuidor={lotesDistribuidor}/>)}
+      {/* Modal confirmación eliminar */}
+      {modalConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.7)'}}>
+          <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:16,width:'100%',maxWidth:380,padding:'28px 24px',boxShadow:'0 25px 50px rgba(0,0,0,0.4)',textAlign:'center'}}>
+            <div style={{width:48,height:48,borderRadius:'50%',background:'rgba(239,68,68,0.12)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:22}}>🗑️</div>
+            <p style={{fontSize:15,fontWeight:600,color:'var(--app-text)',margin:'0 0 8px'}}>¿Eliminar venta?</p>
+            <p style={{fontSize:13,color:'var(--app-text-secondary)',margin:'0 0 24px'}}>{modalConfirm.mensaje}</p>
+            <div style={{display:'flex',gap:10}}>
+              <button onClick={()=>setModalConfirm(null)} className="btn-secondary" style={{flex:1}}>Cancelar</button>
+              <button onClick={modalConfirm.onConfirm}
+                style={{flex:1,padding:'8px 16px',borderRadius:8,background:'rgba(239,68,68,0.9)',border:'none',color:'#fff',fontWeight:600,fontSize:13,cursor:'pointer'}}>
+                Sí, eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Toast toasts={toasts}/>
     </div>
   )
