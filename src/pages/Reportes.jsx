@@ -250,6 +250,8 @@ export default function Reportes() {
         ingTotal:ingTienda+ingDist, ganTotal:ganTienda+ganDist,
         balTotal:balTienda+balDist, costoTotal:costoTienda+costoDist,
         margen:(ingTienda+ingDist)>0?(ganTienda+ganDist)/(ingTienda+ingDist)*100:0,
+        margenTienda:ingTienda>0?ganTienda/ingTienda*100:0,
+        margenDist:ingDist>0?ganDist/ingDist*100:0,
         ingAnterior, variacionMes,
         ingCredito, ingCobroCredito,
         porBalon, porPago, porDist, topClientes, topDias, diario, stockActual,
@@ -560,7 +562,7 @@ export default function Reportes() {
               <StatCard label="Ingresos" value={`S/${ing.toLocaleString('es-PE')}`} accent="var(--app-accent)" Icon={TrendingUp}/>
               <StatCard label="Costo de compra" value={`S/${costo.toLocaleString('es-PE',{maximumFractionDigits:0})}`} accent="#f87171" Icon={ShoppingCart}/>
               <StatCard label="Ganancia neta" value={`S/${gan.toLocaleString('es-PE',{maximumFractionDigits:0})}`} accent="#22c55e" Icon={DollarSign}
-                sub={`Margen: ${data.margen.toFixed(1)}%`}/>
+                sub={`Margen: ${(!data?0:filtroVista==='tienda'?data.margenTienda:filtroVista==='distribuidores'?data.margenDist:data.margen).toFixed(1)}%`}/>
               <StatCard label="Costo promedio/bal." value={`S/${data.costoPromedio.toFixed(2)}`} accent="#eab308"/>
             </div>
 
