@@ -127,10 +127,16 @@ export default function Reportes() {
       const costoTotalVentas = ventas?.reduce((s,v)=>s+(v.cantidad||0)*(costos[v.tipo_balon||'10kg']||0),0)||0
       const costoPromedio = totalBalVendidos>0 ? costoTotalVentas/totalBalVendidos : (costos['10kg']||0)
 
-      // ── Tienda ────────────────────────────────────────────────────────────
-      const ingTienda = ventas?.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)||0
-      const balTienda = ventas?.reduce((s,v)=>s+(v.cantidad||0),0)||0
-      const costoTienda = ventas?.reduce((s,v)=>s+(v.cantidad||0)*(costos[v.tipo_balon||'10kg']||costoPromedio),0)||0
+      // ── Distribuidores ────────────────────────────────────────────────────
+      const distAlmacenMap = {}
+      ;(distribuidores||[]).forEach(d => { if(d.almacen_id) distAlmacenMap[d.almacen_id]=d.nombre })
+      const distAlmacenIds = Object.keys(distAlmacenMap)
+
+      // ── Tienda — excluir ventas de almacenes de distribuidores ────────────
+      const ventasTienda = (ventas||[]).filter(v => !distAlmacenIds.includes(v.almacen_id))
+      const ingTienda = ventasTienda.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)||0
+      const balTienda = ventasTienda.reduce((s,v)=>s+(v.cantidad||0),0)||0
+      const costoTienda = ventasTienda.reduce((s,v)=>s+(v.cantidad||0)*(costos[v.tipo_balon||'10kg']||costoPromedio),0)||0
       const ganTienda = ingTienda - costoTienda
 
       // ── Mes anterior ──────────────────────────────────────────────────────
@@ -139,11 +145,11 @@ export default function Reportes() {
 
       // ── Crédito del período ───────────────────────────────────────────────
       const ingCredito = ingCreditoData?.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)||0
-      const ingCobroCredito = ventas?.filter(v=>v.metodo_pago==='cobro_credito').reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)||0
+      const ingCobroCredito = ventasTienda.filter(v=>v.metodo_pago==='cobro_credito').reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)||0
 
-      // ── Por tipo balón ────────────────────────────────────────────────────
+      // ── Por tipo balón (solo tienda) ──────────────────────────────────────
       const porBalon = {}
-      ventas?.forEach(v => {
+      ventasTienda.forEach(v => {
         const t = v.tipo_balon||'10kg'
         if(!porBalon[t]) porBalon[t]={ balones:0, ingreso:0, ganancia:0 }
         porBalon[t].balones += v.cantidad||0
@@ -151,18 +157,18 @@ export default function Reportes() {
         porBalon[t].ganancia += (v.cantidad||0)*((v.precio_unitario||0)-(costos[t]||0))
       })
 
-      // ── Por método de pago ────────────────────────────────────────────────
+      // ── Por método de pago (solo tienda) ─────────────────────────────────
       const porPago = {}
-      ventas?.forEach(v => {
+      ventasTienda.forEach(v => {
         const t = v.metodo_pago||'efectivo'
         if(!porPago[t]) porPago[t]={ ingreso:0, count:0 }
         porPago[t].ingreso += (v.cantidad||0)*(v.precio_unitario||0)
         porPago[t].count += v.cantidad||0
       })
 
-      // ── Top clientes ──────────────────────────────────────────────────────
+      // ── Top clientes (solo tienda) ────────────────────────────────────────
       const porCliente = {}
-      ventas?.forEach(v => {
+      ventasTienda.forEach(v => {
         const n = v.clientes?.nombre||'Cliente Varios'
         if(!porCliente[n]) porCliente[n]={ total:0, balones:0 }
         porCliente[n].total += (v.cantidad||0)*(v.precio_unitario||0)
@@ -170,9 +176,9 @@ export default function Reportes() {
       })
       const topClientes = Object.entries(porCliente).sort((a,b)=>b[1].total-a[1].total).slice(0,5)
 
-      // ── Top días ──────────────────────────────────────────────────────────
+      // ── Top días (solo tienda) ────────────────────────────────────────────
       const porDia = {}
-      ventas?.forEach(v => {
+      ventasTienda.forEach(v => {
         const d = (v.fecha||'').split('T')[0]
         if(!porDia[d]) porDia[d]={ ingreso:0, balones:0 }
         porDia[d].ingreso += (v.cantidad||0)*(v.precio_unitario||0)
@@ -180,10 +186,6 @@ export default function Reportes() {
       })
       const topDias = Object.entries(porDia).sort((a,b)=>b[1].ingreso-a[1].ingreso).slice(0,5).map(([fecha,d])=>({ fecha:format(new Date(fecha+'T12:00:00'),'EEE dd/MM',{locale:es}), ...d }))
 
-      // ── Distribuidores ────────────────────────────────────────────────────
-      const distAlmacenMap = {}
-      ;(distribuidores||[]).forEach(d => { if(d.almacen_id) distAlmacenMap[d.almacen_id]=d.nombre })
-      const distAlmacenIds = Object.keys(distAlmacenMap)
       const porDist = {}
       ;(ventasDist||[]).filter(v=>distAlmacenIds.includes(v.almacen_id)).forEach(v => {
         const distNombre = distAlmacenMap[v.almacen_id]||v.almacenes?.nombre||'Sin nombre'
@@ -229,7 +231,7 @@ export default function Reportes() {
       const dias = eachDayOfInterval({ start:parseISO(desdeDate), end:parseISO(hastaDate) })
       const diario = dias.map(dia => {
         const ds = format(dia,'yyyy-MM-dd')
-        const vDia = (ventas||[]).filter(v=>v.fecha?.startsWith(ds))
+        const vDia = ventasTienda.filter(v=>v.fecha?.startsWith(ds))
         const iT = vDia.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)
         const gT = vDia.reduce((s,v)=>s+(v.cantidad||0)*((v.precio_unitario||0)-(costos[v.tipo_balon||'10kg']||0)),0)
         const bT = vDia.reduce((s,v)=>s+(v.cantidad||0),0)
