@@ -127,7 +127,7 @@ export default function Dashboard() {
         // Distribuidores
         supabase.from('distribuidores').select('id,nombre,modalidad,precio_base').eq('activo',true).order('nombre'),
         // Top 3 deudas por monto
-        (() => { let q = supabase.from('deudas').select('id,nombre_cliente,monto_total,monto_pagado,fecha').neq('estado','liquidada').order('monto_total',{ascending:false}).limit(3); if(almacenId) q=q.eq('almacen_id',almacenId); return q })(),
+        (() => { let q = supabase.from('deudas').select('id,nombre_deudor,monto_pendiente,fecha_deuda').neq('estado','liquidada').or('eliminado.is.null,eliminado.eq.false').order('monto_pendiente',{ascending:false}).limit(3); if(almacenId) q=q.eq('almacen_id',almacenId); return q })(),
         // Lotes distribuidor (stock autónomos como Alazan)
         supabase.from('lotes_distribuidor').select('distribuidor_id,cantidad_actual').gt('cantidad_actual',0),
         // Cargas distribuidor (cuenta corriente como Cristian)
@@ -200,8 +200,9 @@ export default function Dashboard() {
       // ── Top deudas ─────────────────────────────────────────────────────────
       setTopDeudas((topDeudasData||[]).map(d => ({
         ...d,
-        pendiente: (d.monto_total||0) - (d.monto_pagado||0),
-        diasSinPagar: Math.floor((new Date()-new Date(d.fecha))/(1000*60*60*24)),
+        nombre: d.nombre_deudor,
+        pendiente: d.monto_pendiente||0,
+        diasSinPagar: Math.floor((new Date()-new Date(d.fecha_deuda))/(1000*60*60*24)),
       })))
 
       setStats({
@@ -406,13 +407,13 @@ export default function Dashboard() {
                       {i+1}
                     </div>
                     <div>
-                      <p style={{ fontSize:13, fontWeight:500, color:'var(--app-text)', margin:0 }}>{d.nombre_cliente}</p>
+                      <p style={{ fontSize:13, fontWeight:500, color:'var(--app-text)', margin:0 }}>{d.nombre_deudor}</p>
                       <p style={{ fontSize:11, color:'var(--app-text-secondary)', margin:0 }}>{d.diasSinPagar}d sin pagar</p>
                     </div>
                   </div>
                   <div style={{ textAlign:'right' }}>
                     <p style={{ fontSize:13, fontWeight:700, color:'#f87171', margin:0 }}>S/{d.pendiente.toLocaleString('es-PE',{maximumFractionDigits:0})}</p>
-                    <p style={{ fontSize:11, color:'var(--app-text-secondary)', margin:0 }}>de S/{d.monto_total?.toLocaleString('es-PE',{maximumFractionDigits:0})}</p>
+                    <p style={{ fontSize:11, color:'var(--app-text-secondary)', margin:0 }}>pendiente</p>
                   </div>
                 </div>
               ))}
