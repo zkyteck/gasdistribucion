@@ -103,7 +103,7 @@ export default function Reportes() {
         // Vales FISE
         supabase.from('vales_fise').select('*').gte('lote_dia',desdeDate).lte('lote_dia',hastaDate),
         // Deudas activas
-        supabase.from('deudas').select('monto_pendiente,tipo_deuda').neq('estado','liquidada'),
+        supabase.from('deudas').select('monto_pendiente,tipo_deuda,eliminado').neq('estado','liquidada').or('eliminado.is.null,eliminado.eq.false'),
         // Stock por tipo
         supabase.from('stock_por_tipo').select('*'),
         // Ventas mes anterior (para comparación)
@@ -256,7 +256,7 @@ export default function Reportes() {
         ingCredito, ingCobroCredito,
         porBalon, porPago, porDist, topClientes, topDias, diario, stockActual,
         totalValesFise:valesFise?.reduce((s,v)=>s+(v.monto||0),0)||0,
-        totalDeudas:deudas?.filter(d=>d.tipo_deuda==='dinero').reduce((s,d)=>s+(parseFloat(d.monto_pendiente)||0),0)||0,
+        totalDeudas:deudas?.filter(d=>!d.eliminado).reduce((s,d)=>s+(parseFloat(d.monto_pendiente)||0),0)||0,
         distribuidores:distribuidores||[],
       })
     } catch(e) { console.error(e) }
