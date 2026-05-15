@@ -816,104 +816,51 @@ export default function Deudas() {
                     const v20 = parseInt(h.vales_20)||0
                     const v43 = parseInt(h.vales_43)||0
                     const v30 = parseInt(h.vales_30)||0
-                    const montoVales = v20*20 + v43*43 + v30*30
 
-                    let titulo, icono, colorBorde, colorFondo
+                    let titulo, icono, colorBorde, colorFondo, colorTitulo
                     if(esPago) {
                       const metodos={efectivo:'💵 Pagó en efectivo',yape:'📱 Pagó por Yape',transferencia:'🏦 Por transferencia',vale:'🎫 Pagó con vale',mixto:'💰 Pago mixto',cobro_credito:'✅ Crédito cobrado'}
                       titulo=metodos[h.metodo_pago]||'✅ Realizó un pago'
-                      icono='✅'; colorBorde='rgba(34,197,94,0.25)'; colorFondo='rgba(34,197,94,0.06)'
+                      icono='✅'; colorBorde='rgba(34,197,94,0.3)'; colorFondo='rgba(34,197,94,0.07)'; colorTitulo='#22c55e'
                     } else if(h._idx===0) {
                       titulo='Se registró la deuda'
-                      icono='🔴'; colorBorde='rgba(239,68,68,0.25)'; colorFondo='rgba(239,68,68,0.05)'
+                      icono='🔴'; colorBorde='rgba(239,68,68,0.3)'; colorFondo='rgba(239,68,68,0.06)'; colorTitulo='#f87171'
                     } else {
                       titulo='Se le agregó más deuda'
-                      icono='➕'; colorBorde='rgba(251,146,60,0.25)'; colorFondo='rgba(251,146,60,0.05)'
+                      icono='➕'; colorBorde='rgba(251,146,60,0.3)'; colorFondo='rgba(251,146,60,0.06)'; colorTitulo='#fb923c'
                     }
 
+                    // Construir resumen de lo que cambió
+                    const partes = []
+                    if(monto>0) partes.push(`${esPago?'− S/':'+ S/'}${monto.toLocaleString('es-PE')}`)
+                    if(balones>0) partes.push(`${esPago?'devolvió':'debe devolver'} ${balones} bal.`)
+                    if(v20>0) partes.push(`${v20} vales S/20 (S/${v20*20})`)
+                    if(v30>0) partes.push(`${v30} vales S/30 (S/${v30*30})`)
+                    if(v43>0) partes.push(`${v43} vales S/43 (S/${v43*43})`)
+
                     return(
-                      <div key={i} style={{borderRadius:12,background:colorFondo,border:`1px solid ${colorBorde}`,overflow:'hidden'}}>
-                        {/* Header */}
-                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderBottom:`1px solid ${colorBorde}`}}>
-                          <div style={{display:'flex',alignItems:'center',gap:8}}>
-                            <span style={{fontSize:16}}>{icono}</span>
-                            <p style={{fontWeight:700,color: esPago?'#22c55e':h._idx===0?'#f87171':'#fb923c',margin:0,fontSize:13}}>{titulo}</p>
+                      <div key={i} style={{borderRadius:10,background:colorFondo,border:`1px solid ${colorBorde}`,padding:'10px 14px'}}>
+                        <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
+                          <div>
+                            <div style={{display:'flex',alignItems:'center',gap:6}}>
+                              <span>{icono}</span>
+                              <p style={{fontWeight:700,color:colorTitulo,margin:0,fontSize:13}}>{titulo}</p>
+                            </div>
+                            <p style={{color:'var(--app-text-secondary)',margin:'2px 0 0',fontSize:11}}>📅 {h.fecha?format(new Date(h.fecha+'T12:00:00'),"dd/MM/yyyy",{locale:es}):'—'}</p>
                           </div>
-                          <p style={{color:'var(--app-text-secondary)',margin:0,fontSize:11}}>
-                            📅 {h.fecha?format(new Date(h.fecha+'T12:00:00'),"dd/MM/yyyy",{locale:es}):'—'}
-                          </p>
-                        </div>
-
-                        {/* Detalle */}
-                        <div style={{padding:'10px 14px',display:'flex',flexWrap:'wrap',gap:8}}>
-                          {/* Dinero */}
-                          {monto>0&&(
-                            <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:8,background: esPago?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.08)',border:`1px solid ${esPago?'rgba(34,197,94,0.2)':'rgba(239,68,68,0.15)'}`}}>
-                              <span style={{fontSize:13}}>💰</span>
-                              <div>
-                                <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>Dinero</p>
-                                <p style={{fontSize:15,fontWeight:700,color: esPago?'#22c55e':'#f87171',margin:0}}>{esPago?'−':'+'} S/{monto.toLocaleString('es-PE')}</p>
-                              </div>
-                            </div>
-                          )}
-                          {/* Balones */}
-                          {balones>0&&(
-                            <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:8,background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.2)'}}>
-                              <span style={{fontSize:13}}>🔵</span>
-                              <div>
-                                <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>{esPago?'Devolvió':'Debe devolver'}</p>
-                                <p style={{fontSize:15,fontWeight:700,color:'#60a5fa',margin:0}}>{esPago?'−':'+' } {balones} bal. {h.tipo_balon||'10kg'}</p>
-                              </div>
-                            </div>
-                          )}
-                          {/* Vales S/20 */}
-                          {v20>0&&(
-                            <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:8,background:'rgba(234,179,8,0.08)',border:'1px solid rgba(234,179,8,0.2)'}}>
-                              <span style={{fontSize:13}}>🎫</span>
-                              <div>
-                                <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>{v20} vales S/20</p>
-                                <p style={{fontSize:15,fontWeight:700,color:'#eab308',margin:0}}>= S/{v20*20}</p>
-                              </div>
-                            </div>
-                          )}
-                          {/* Vales S/30 */}
-                          {v30>0&&(
-                            <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:8,background:'rgba(234,179,8,0.08)',border:'1px solid rgba(234,179,8,0.2)'}}>
-                              <span style={{fontSize:13}}>🎫</span>
-                              <div>
-                                <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>{v30} vales S/30</p>
-                                <p style={{fontSize:15,fontWeight:700,color:'#eab308',margin:0}}>= S/{v30*30}</p>
-                              </div>
-                            </div>
-                          )}
-                          {/* Vales S/43 */}
-                          {v43>0&&(
-                            <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:8,background:'rgba(234,179,8,0.08)',border:'1px solid rgba(234,179,8,0.2)'}}>
-                              <span style={{fontSize:13}}>🎫</span>
-                              <div>
-                                <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>{v43} vales S/43</p>
-                                <p style={{fontSize:15,fontWeight:700,color:'#eab308',margin:0}}>= S/{v43*43}</p>
-                              </div>
-                            </div>
-                          )}
-                          {/* Total pago si hay vales + efectivo */}
-                          {esPago && (monto>0||montoVales>0) && (
-                            <div style={{width:'100%',marginTop:2,paddingTop:8,borderTop:`1px solid ${colorBorde}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                              <span style={{fontSize:11,color:'var(--app-text-secondary)'}}>Total pagado en este movimiento</span>
-                              <span style={{fontSize:14,fontWeight:700,color:'#22c55e'}}>S/{(monto+montoVales).toLocaleString('es-PE')}</span>
-                            </div>
+                          {partes.length>0&&(
+                            <p style={{fontWeight:700,color:colorTitulo,margin:0,fontSize:13,textAlign:'right',flexShrink:0}}>
+                              {partes.join(' · ')}
+                            </p>
                           )}
                         </div>
-
-                        {/* Nota */}
                         {h.notas&&(
-                          <div style={{margin:'0 14px 10px',padding:'5px 10px',background:'rgba(234,179,8,0.06)',borderRadius:6,border:'1px solid rgba(234,179,8,0.15)'}}>
-                            <p style={{color:'#eab308',fontSize:11,margin:0}}>📝 {h.notas}</p>
-                          </div>
+                          <p style={{color:'#eab308',fontSize:11,margin:'6px 0 0',padding:'4px 8px',background:'rgba(234,179,8,0.07)',borderRadius:6}}>📝 {h.notas}</p>
                         )}
                       </div>
                     )
                   })}
+
                   {/* Saldo actual */}
                   {(totalPendiente>0||parseInt(selected?.balones_pendiente)>0)&&(
                     <div style={{borderRadius:12,background:'rgba(239,68,68,0.06)',border:'2px solid rgba(239,68,68,0.25)',padding:'12px 14px'}}>
