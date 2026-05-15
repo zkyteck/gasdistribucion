@@ -318,6 +318,7 @@ export default function Ventas() {
         cliente_id:form.cliente_id||null, almacen_id:form.almacen_id,
         precio_tipo_id:form.precio_tipo_id||null, tipo_balon:form.tipo_balon,
         fecha:form.fecha===hoyPeru() ? new Date().toISOString() : (form.fecha+'T12:00:00-05:00'),
+        cantidad:cant, precio_unitario:precioGas,
         metodo_pago:debeDinero?'credito':form.metodo_pago,
         notas:form.notas, usuario_id:perfil?.id||null,
         vales_20:form.es_distribuidor?(parseInt(form.vales20)||0):null,
