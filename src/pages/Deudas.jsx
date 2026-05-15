@@ -94,7 +94,6 @@ export default function Deudas() {
   const [mostrarSugerencias, setMostrarSugerencias] = useState(false)
   const [editForm, setEditForm] = useState({ monto_pendiente:'', balones_pendiente:'', vales_20_pendiente:'', vales_43_pendiente:'', fecha_deuda:'', notas:'' })
   const [historialCompleto, setHistorialCompleto] = useState(null)
-  const [modalConfirm, setModalConfirm] = useState(null) // { mensaje, onConfirm }
   const [loadingHistorial, setLoadingHistorial] = useState(false)
   const [tabHistorial, setTabHistorial] = useState('movimientos')
 
@@ -355,18 +354,15 @@ export default function Deudas() {
 
   // ─── Eliminar deuda ───────────────────────────────────────────────────────────
   const eliminarDeuda = useCallback(async (id) => {
-    setModalConfirm({
-      mensaje: '¿Eliminar esta deuda? Esta acción no se puede deshacer.',
-      onConfirm: async () => {
-        const deuda = deudas.find(d => d.id === id)
-        await Promise.all([
-          supabase.from('deudas').update({ eliminado:true, eliminado_por:perfil?.id||null, eliminado_at:new Date().toISOString() }).eq('id',id),
-          deuda ? supabase.from('historial_eliminaciones').insert({ tabla:'deudas', registro_id:id, datos_anteriores:deuda, eliminado_por:perfil?.id||null }) : Promise.resolve()
-        ])
-        setModalConfirm(null)
-        toast('Deuda eliminada'); cargar()
-      }
-    })
+    if(!confirm('¿Eliminar esta deuda? Esta acción no se puede deshacer.')) return
+    const deuda = deudas.find(d => d.id === id)
+    await Promise.all([
+      // Soft delete
+      supabase.from('deudas').update({ eliminado:true, eliminado_por:perfil?.id||null, eliminado_at:new Date().toISOString() }).eq('id',id),
+      // Guardar en historial
+      deuda ? supabase.from('historial_eliminaciones').insert({ tabla:'deudas', registro_id:id, datos_anteriores:deuda, eliminado_por:perfil?.id||null }) : Promise.resolve()
+    ])
+    toast('Deuda eliminada'); cargar()
   }, [cargar, toast, deudas, perfil])
 
   // ─── Filtros y ordenamiento ───────────────────────────────────────────────────
@@ -815,57 +811,129 @@ export default function Deudas() {
                   <>
                   {todosMovimientos.map((h,i)=>{
                     const esPago = h.tipo==='pago'
-                    const items=[]
-                    if(parseFloat(h.monto)>0) items.push(`S/${Number(h.monto).toLocaleString('es-PE')}`)
-                    if(parseInt(h.balones)>0) items.push(`${h.balones} balón${parseInt(h.balones)>1?'es':''}`)
-                    if(parseInt(h.vales_20)>0) items.push(`${h.vales_20} vale${parseInt(h.vales_20)>1?'s':''} S/20`)
-                    if(parseInt(h.vales_43)>0) items.push(`${h.vales_43} vale${parseInt(h.vales_43)>1?'s':''} S/43`)
-                    let etiqueta, colorEtiqueta, bgEtiqueta, borderColor
+                    const monto = parseFloat(h.monto)||0
+                    const balones = parseInt(h.balones)||0
+                    const v20 = parseInt(h.vales_20)||0
+                    const v43 = parseInt(h.vales_43)||0
+                    const v30 = parseInt(h.vales_30)||0
+                    const montoVales = v20*20 + v43*43 + v30*30
+
+                    let titulo, icono, colorBorde, colorFondo
                     if(esPago) {
-                      const metodos={efectivo:'💵 Pagó en efectivo',yape:'📱 Pagó por Yape',transferencia:'🏦 Pagó por transferencia',vale:'🎫 Pagó con vale',mixto:'💰 Pagó mixto',cobro_credito:'✅ Crédito cobrado'}
-                      etiqueta=metodos[h.metodo_pago]||'✅ Realizó un pago'
-                      colorEtiqueta='#22c55e'; bgEtiqueta='rgba(34,197,94,0.08)'; borderColor='rgba(34,197,94,0.2)'
+                      const metodos={efectivo:'💵 Pagó en efectivo',yape:'📱 Pagó por Yape',transferencia:'🏦 Por transferencia',vale:'🎫 Pagó con vale',mixto:'💰 Pago mixto',cobro_credito:'✅ Crédito cobrado'}
+                      titulo=metodos[h.metodo_pago]||'✅ Realizó un pago'
+                      icono='✅'; colorBorde='rgba(34,197,94,0.25)'; colorFondo='rgba(34,197,94,0.06)'
                     } else if(h._idx===0) {
-                      etiqueta='🔴 Se registró la deuda'
-                      colorEtiqueta='#f87171'; bgEtiqueta='rgba(239,68,68,0.06)'; borderColor='rgba(239,68,68,0.2)'
+                      titulo='Se registró la deuda'
+                      icono='🔴'; colorBorde='rgba(239,68,68,0.25)'; colorFondo='rgba(239,68,68,0.05)'
                     } else {
-                      etiqueta='➕ Se le agregó más deuda'
-                      colorEtiqueta='#fb923c'; bgEtiqueta='rgba(251,146,60,0.06)'; borderColor='rgba(251,146,60,0.2)'
+                      titulo='Se le agregó más deuda'
+                      icono='➕'; colorBorde='rgba(251,146,60,0.25)'; colorFondo='rgba(251,146,60,0.05)'
                     }
+
                     return(
-                      <div key={i} style={{display:'flex',gap:10,padding:'10px 12px',borderRadius:10,background:bgEtiqueta,border:`1px solid ${borderColor}`}}>
-                        <span style={{fontSize:16,flexShrink:0,marginTop:1}}>{esPago?'✅':h._idx===0?'🔴':'➕'}</span>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8,flexWrap:'wrap'}}>
-                            <div>
-                              <p style={{fontWeight:600,color:colorEtiqueta,margin:0,fontSize:13}}>{etiqueta}</p>
-                              <p style={{color:'var(--app-text-secondary)',margin:'2px 0 0',fontSize:11}}>
-                                📅 {h.fecha?format(new Date(h.fecha+'T12:00:00'),"dd 'de' MMMM yyyy",{locale:es}):'—'}
-                              </p>
-                            </div>
-                            <span style={{fontWeight:700,color:colorEtiqueta,fontSize:14,whiteSpace:'nowrap'}}>
-                              {esPago?'− ':'+ '}{items.join(' + ')||'—'}
-                            </span>
+                      <div key={i} style={{borderRadius:12,background:colorFondo,border:`1px solid ${colorBorde}`,overflow:'hidden'}}>
+                        {/* Header */}
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderBottom:`1px solid ${colorBorde}`}}>
+                          <div style={{display:'flex',alignItems:'center',gap:8}}>
+                            <span style={{fontSize:16}}>{icono}</span>
+                            <p style={{fontWeight:700,color: esPago?'#22c55e':h._idx===0?'#f87171':'#fb923c',margin:0,fontSize:13}}>{titulo}</p>
                           </div>
-                          {h.notas&&(
-                            <div style={{marginTop:6,padding:'5px 8px',background:'rgba(234,179,8,0.08)',borderRadius:6,border:'1px solid rgba(234,179,8,0.2)'}}>
-                              <p style={{color:'#eab308',fontSize:11,margin:0}}>📝 Nota: {h.notas}</p>
+                          <p style={{color:'var(--app-text-secondary)',margin:0,fontSize:11}}>
+                            📅 {h.fecha?format(new Date(h.fecha+'T12:00:00'),"dd/MM/yyyy",{locale:es}):'—'}
+                          </p>
+                        </div>
+
+                        {/* Detalle */}
+                        <div style={{padding:'10px 14px',display:'flex',flexWrap:'wrap',gap:8}}>
+                          {/* Dinero */}
+                          {monto>0&&(
+                            <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:8,background: esPago?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.08)',border:`1px solid ${esPago?'rgba(34,197,94,0.2)':'rgba(239,68,68,0.15)'}`}}>
+                              <span style={{fontSize:13}}>💰</span>
+                              <div>
+                                <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>Dinero</p>
+                                <p style={{fontSize:15,fontWeight:700,color: esPago?'#22c55e':'#f87171',margin:0}}>{esPago?'−':'+'} S/{monto.toLocaleString('es-PE')}</p>
+                              </div>
+                            </div>
+                          )}
+                          {/* Balones */}
+                          {balones>0&&(
+                            <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:8,background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.2)'}}>
+                              <span style={{fontSize:13}}>🔵</span>
+                              <div>
+                                <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>{esPago?'Devolvió':'Debe devolver'}</p>
+                                <p style={{fontSize:15,fontWeight:700,color:'#60a5fa',margin:0}}>{esPago?'−':'+' } {balones} bal. {h.tipo_balon||'10kg'}</p>
+                              </div>
+                            </div>
+                          )}
+                          {/* Vales S/20 */}
+                          {v20>0&&(
+                            <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:8,background:'rgba(234,179,8,0.08)',border:'1px solid rgba(234,179,8,0.2)'}}>
+                              <span style={{fontSize:13}}>🎫</span>
+                              <div>
+                                <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>{v20} vales S/20</p>
+                                <p style={{fontSize:15,fontWeight:700,color:'#eab308',margin:0}}>= S/{v20*20}</p>
+                              </div>
+                            </div>
+                          )}
+                          {/* Vales S/30 */}
+                          {v30>0&&(
+                            <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:8,background:'rgba(234,179,8,0.08)',border:'1px solid rgba(234,179,8,0.2)'}}>
+                              <span style={{fontSize:13}}>🎫</span>
+                              <div>
+                                <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>{v30} vales S/30</p>
+                                <p style={{fontSize:15,fontWeight:700,color:'#eab308',margin:0}}>= S/{v30*30}</p>
+                              </div>
+                            </div>
+                          )}
+                          {/* Vales S/43 */}
+                          {v43>0&&(
+                            <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:8,background:'rgba(234,179,8,0.08)',border:'1px solid rgba(234,179,8,0.2)'}}>
+                              <span style={{fontSize:13}}>🎫</span>
+                              <div>
+                                <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>{v43} vales S/43</p>
+                                <p style={{fontSize:15,fontWeight:700,color:'#eab308',margin:0}}>= S/{v43*43}</p>
+                              </div>
+                            </div>
+                          )}
+                          {/* Total pago si hay vales + efectivo */}
+                          {esPago && (monto>0||montoVales>0) && (
+                            <div style={{width:'100%',marginTop:2,paddingTop:8,borderTop:`1px solid ${colorBorde}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                              <span style={{fontSize:11,color:'var(--app-text-secondary)'}}>Total pagado en este movimiento</span>
+                              <span style={{fontSize:14,fontWeight:700,color:'#22c55e'}}>S/{(monto+montoVales).toLocaleString('es-PE')}</span>
                             </div>
                           )}
                         </div>
+
+                        {/* Nota */}
+                        {h.notas&&(
+                          <div style={{margin:'0 14px 10px',padding:'5px 10px',background:'rgba(234,179,8,0.06)',borderRadius:6,border:'1px solid rgba(234,179,8,0.15)'}}>
+                            <p style={{color:'#eab308',fontSize:11,margin:0}}>📝 {h.notas}</p>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
                   {/* Saldo actual */}
-                  {totalPendiente>0&&(
-                    <div style={{display:'flex',gap:10,padding:'10px 12px',borderRadius:10,background:'rgba(239,68,68,0.06)',border:'1px solid rgba(239,68,68,0.2)'}}>
-                      <span style={{fontSize:16,flexShrink:0}}>⏳</span>
-                      <div style={{flex:1,display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:4}}>
-                        <div>
-                          <p style={{fontWeight:600,color:'#f87171',margin:0,fontSize:13}}>Saldo pendiente hoy</p>
-                          <p style={{color:'var(--app-text-secondary)',fontSize:11,margin:'2px 0 0'}}>Falta cobrar este monto</p>
-                        </div>
-                        <span style={{fontWeight:700,color:'#f87171',fontSize:14}}>S/{totalPendiente.toLocaleString('es-PE')}</span>
+                  {(totalPendiente>0||parseInt(selected?.balones_pendiente)>0)&&(
+                    <div style={{borderRadius:12,background:'rgba(239,68,68,0.06)',border:'2px solid rgba(239,68,68,0.25)',padding:'12px 14px'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                        <span style={{fontSize:16}}>⏳</span>
+                        <p style={{fontWeight:700,color:'#f87171',margin:0,fontSize:13}}>Saldo pendiente hoy</p>
+                      </div>
+                      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                        {totalPendiente>0&&(
+                          <div style={{padding:'6px 14px',borderRadius:8,background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.2)'}}>
+                            <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>Dinero</p>
+                            <p style={{fontSize:18,fontWeight:800,color:'#f87171',margin:0}}>S/{totalPendiente.toLocaleString('es-PE')}</p>
+                          </div>
+                        )}
+                        {parseInt(selected?.balones_pendiente)>0&&(
+                          <div style={{padding:'6px 14px',borderRadius:8,background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.2)'}}>
+                            <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:0}}>Balones a devolver</p>
+                            <p style={{fontSize:18,fontWeight:800,color:'#60a5fa',margin:0}}>{selected.balones_pendiente} bal.</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1017,24 +1085,6 @@ export default function Deudas() {
             </div>
           </div>
         </Modal>
-      )}
-
-      {/* Modal confirmación eliminar */}
-      {modalConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.7)'}}>
-          <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:16,width:'100%',maxWidth:380,padding:'28px 24px',boxShadow:'0 25px 50px rgba(0,0,0,0.4)',textAlign:'center'}}>
-            <div style={{width:48,height:48,borderRadius:'50%',background:'rgba(239,68,68,0.12)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:22}}>🗑️</div>
-            <p style={{fontSize:15,fontWeight:600,color:'var(--app-text)',margin:'0 0 8px'}}>¿Eliminar deuda?</p>
-            <p style={{fontSize:13,color:'var(--app-text-secondary)',margin:'0 0 24px'}}>{modalConfirm.mensaje}</p>
-            <div style={{display:'flex',gap:10}}>
-              <button onClick={()=>setModalConfirm(null)} className="btn-secondary" style={{flex:1}}>Cancelar</button>
-              <button onClick={modalConfirm.onConfirm}
-                style={{flex:1,padding:'8px 16px',borderRadius:8,background:'rgba(239,68,68,0.9)',border:'none',color:'#fff',fontWeight:600,fontSize:13,cursor:'pointer'}}>
-                Sí, eliminar
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       <Toast toasts={toasts}/>
