@@ -317,8 +317,7 @@ export default function Ventas() {
       const { error:e } = await supabase.from('ventas').insert({
         cliente_id:form.cliente_id||null, almacen_id:form.almacen_id,
         precio_tipo_id:form.precio_tipo_id||null, tipo_balon:form.tipo_balon,
-        fecha:(form.fecha||hoyPeru())+'T12:00:00-05:00',
-        cantidad:cant, precio_unitario:precioGas,
+        fecha:form.fecha===hoyPeru() ? new Date().toISOString() : (form.fecha+'T12:00:00-05:00'),
         metodo_pago:debeDinero?'credito':form.metodo_pago,
         notas:form.notas, usuario_id:perfil?.id||null,
         vales_20:form.es_distribuidor?(parseInt(form.vales20)||0):null,
@@ -352,7 +351,7 @@ export default function Ventas() {
       const { error:e } = await supabase.from('ventas').insert({
         cliente_id:form.cliente_id||null, almacen_id:form.almacen_id,
         precio_tipo_id:form.precio_tipo_id||null, tipo_balon:form.tipo_balon,
-        fecha:(form.fecha||hoyPeru())+'T12:00:00-05:00',
+        fecha:form.fecha===hoyPeru() ? new Date().toISOString() : (form.fecha+'T12:00:00-05:00'),
         cantidad:cant, precio_unitario:precioTotal, metodo_pago:form.metodo_pago,
         notas:`Gas+Balón (gas:S/${precioGas} bal:S/${precioBalon})${form.notas?' — '+form.notas:''}`,
         usuario_id:perfil?.id||null
@@ -365,7 +364,7 @@ export default function Ventas() {
     } else if(form.tipo_venta==='balon_vacio') {
       const { error:e } = await supabase.from('ventas').insert({
         cliente_id:form.cliente_id||null, almacen_id:form.almacen_id,
-        tipo_balon:form.tipo_balon, fecha:(form.fecha||hoyPeru())+'T12:00:00-05:00',
+        tipo_balon:form.tipo_balon, fecha:form.fecha===hoyPeru() ? new Date().toISOString() : (form.fecha+'T12:00:00-05:00'),
         cantidad:cant, precio_unitario:precioBalon, metodo_pago:form.metodo_pago,
         notas:`Venta balón vacío${form.notas?' — '+form.notas:''}`, usuario_id:perfil?.id||null
       })
