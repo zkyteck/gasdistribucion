@@ -568,7 +568,7 @@ export default function Reportes() {
 
             {/* Gráfica ganancia diaria */}
             <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:12,padding:'16px'}}>
-              <p style={{fontSize:13,fontWeight:600,color:'var(--app-text)',margin:'0 0 14px'}}>📈 Ganancia diaria (tienda)</p>
+              <p style={{fontSize:13,fontWeight:600,color:'var(--app-text)',margin:'0 0 14px'}}>📈 Ganancia diaria {filtroVista==='tienda'?'(tienda)':filtroVista==='distribuidores'?'(distribuidores)':'(total)'}</p>
               <ResponsiveContainer width="100%" height={200}>
                 <AreaChart data={data.diario}>
                   <defs>
