@@ -121,7 +121,7 @@ export default function Ventas() {
         .or('eliminado.is.null,eliminado.eq.false').order('fecha',{ascending:false}),
       supabase.from('almacenes').select('id,nombre,stock_actual').eq('activo',true).order('nombre'),
       supabase.from('precio_tipos').select('*').eq('activo',true),
-      supabase.from('clientes').select('id,nombre,tipo,es_varios,telefono').order('nombre').limit(200),
+      supabase.from('clientes').select('id,nombre,tipo,es_varios,telefono,precio_personalizado,tipo_balon_personalizado').order('nombre').limit(200),
       supabase.from('precio_tipo_balon').select('*'),
       supabase.from('stock_por_tipo').select('*'),
       supabase.from('distribuidores').select('id,nombre,almacen_id,precio_base').eq('activo',true),
@@ -219,7 +219,11 @@ export default function Ventas() {
     if(form.es_distribuidor) {
       setForm(f => ({...f, cliente_id:c.id, cliente_nombre:c.nombre, es_varios:c.es_varios}))
     } else {
-      setForm(f => ({...f, cliente_id:c.id, cliente_nombre:c.nombre, es_varios:c.es_varios, precio_tipo_id:tipoPrecio?.id||'', precio_unitario:precio||tipoPrecio?.precio||''}))
+      // Si el cliente tiene precio personalizado para el tipo de balón actual, usarlo
+      const precioFinal = (c.precio_personalizado && (!c.tipo_balon_personalizado || c.tipo_balon_personalizado === form.tipo_balon))
+        ? c.precio_personalizado
+        : (precio || tipoPrecio?.precio || '')
+      setForm(f => ({...f, cliente_id:c.id, cliente_nombre:c.nombre, es_varios:c.es_varios, precio_tipo_id:tipoPrecio?.id||'', precio_unitario:precioFinal}))
     }
     buscarDeudaCliente(c.id, c.nombre)
   }, [clientes, precioTipos, getPrecio, form.tipo_balon, form.es_distribuidor, buscarDeudaCliente])
@@ -763,8 +767,8 @@ export default function Ventas() {
                   {parseFloat(form.precio_unitario)<=0&&form.cantidad&&<span style={{fontSize:11,color:'#f87171',marginLeft:8}}>⚠️ Precio en cero</span>}
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{color:'var(--app-text-secondary)'}}>S/</span>
-                  <input type="number" min="0" step="0.50" className="input" style={{paddingLeft:'2rem',fontWeight:700,fontSize:18}} value={form.precio_unitario} onChange={e=>setForm(f=>({...f,precio_unitario:e.target.value}))} placeholder="0"/>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{color:'var(--app-text-secondary)',pointerEvents:'none'}}>S/</span>
+                  <input type="number" min="0" step="0.50" className="input" style={{paddingLeft:'2.2rem',fontWeight:700,fontSize:18}} value={form.precio_unitario} onChange={e=>setForm(f=>({...f,precio_unitario:e.target.value}))} placeholder="0"/>
                 </div>
                 {form.cantidad&&form.precio_unitario&&(
                   <p style={{fontSize:12,color:'var(--app-accent)',marginTop:4,fontWeight:600}}>
