@@ -109,6 +109,7 @@ export default function Compras() {
       estado_pago: 'pendiente',
       notas: form.notas || null,
       usuario_id: perfil?.id || null,
+      precio_unitario: totalBalones > 0 ? parseFloat((totalInvertido / totalBalones).toFixed(2)) : 0,
     }).select().single()
 
     if (e1) { setError(e1.message); setSaving(false); return }
