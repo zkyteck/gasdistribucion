@@ -207,8 +207,13 @@ export default function Ventas() {
 
   const seleccionarTipoBalon = useCallback((tipoBalon) => {
     const precio = getPrecio(form.precio_tipo_id, tipoBalon)
-    setForm(f => ({...f, tipo_balon:tipoBalon, precio_unitario:precio}))
-  }, [getPrecio, form.precio_tipo_id])
+    // Respetar precio personalizado del cliente si aplica a este tipo de balón
+    const c = clientes.find(c => c.id === form.cliente_id)
+    const precioFinal = (c?.precio_personalizado && (!c?.tipo_balon_personalizado || c?.tipo_balon_personalizado === tipoBalon))
+      ? c.precio_personalizado
+      : precio
+    setForm(f => ({...f, tipo_balon:tipoBalon, precio_unitario:precioFinal}))
+  }, [getPrecio, form.precio_tipo_id, form.cliente_id, clientes])
 
   const seleccionarCliente = useCallback((clienteId) => {
     const c = clientes.find(c => c.id===clienteId)

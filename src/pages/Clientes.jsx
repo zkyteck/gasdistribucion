@@ -386,10 +386,10 @@ export default function Clientes() {
               <p style={{fontSize:11,color:"var(--app-text-secondary)"}}>Si este cliente siempre compra a un precio fijo, ingrésalo aquí. Se usará automáticamente al vender.</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Precio S/</label>
+                  <label className="label">Precio especial</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">S/</span>
-                    <input type="number" min="0" step="0.50" className="input pl-9"
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" style={{pointerEvents:'none'}}>S/</span>
+                    <input type="number" min="0" step="0.50" className="input" style={{paddingLeft:'2.2rem'}}
                       placeholder="Ej: 48"
                       value={clienteForm.precio_personalizado}
                       onChange={e => setClienteForm(f => ({...f, precio_personalizado: e.target.value}))} />
