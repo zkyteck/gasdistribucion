@@ -597,7 +597,6 @@ export default function Ventas() {
                             <Trash2 style={{width:14,height:14}}/>
                           </button>
                         )}
-                        </button>
                       </td>
                     </tr>
                   )
