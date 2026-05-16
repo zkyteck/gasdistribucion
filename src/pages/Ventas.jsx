@@ -93,6 +93,7 @@ export default function Ventas() {
   const [busquedaCliente, setBusquedaCliente] = useState('')
   const [filtroFecha, setFiltroFecha] = useState(hoyPeru())
   const [subModal, setSubModal] = useState(null)
+  const [confirmando, setConfirmando] = useState(null) // id de venta a confirmar
   const [modalConfirm, setModalConfirm] = useState(null)
   const [clienteRapidoForm, setClienteRapidoForm] = useState({ nombre:'', telefono:'' })
   const [deudaExistente, setDeudaExistente] = useState(null)
@@ -260,23 +261,21 @@ export default function Ventas() {
 
   // ─── Eliminar venta ────────────────────────────────────────────────────────
   const eliminarVenta = useCallback(async (venta) => {
-    setModalConfirm({
-      mensaje: `¿Eliminar venta de ${venta.clientes?.nombre||'Cliente Varios'} — S/${(venta.cantidad*venta.precio_unitario).toFixed(2)}?`,
-      onConfirm: async () => {
-        const stockActual = getStock(venta.almacen_id, venta.tipo_balon||'10kg')
-        const tipo = venta.tipo_balon||'10kg'
-        const campoVacios = tipo==='5kg'?'vacios_5kg':tipo==='10kg'?'vacios_10kg':'vacios_45kg'
-        const almacen = almacenes.find(a => a.id===venta.almacen_id)
-        await Promise.all([
-          supabase.from('stock_por_tipo').update({ stock_actual:stockActual+venta.cantidad, updated_at:new Date().toISOString() }).eq('almacen_id',venta.almacen_id).eq('tipo_balon',tipo),
-          almacen ? supabase.from('almacenes').update({ stock_actual:(almacen.stock_actual||0)+venta.cantidad, balones_vacios:Math.max(0,(almacen.balones_vacios||0)-venta.cantidad), [campoVacios]:Math.max(0,(almacen[campoVacios]||0)-venta.cantidad) }).eq('id',venta.almacen_id) : Promise.resolve(),
-          supabase.from('ventas').update({ eliminado:true, eliminado_por:perfil?.id||null, eliminado_at:new Date().toISOString() }).eq('id',venta.id),
-          supabase.from('historial_eliminaciones').insert({ tabla:'ventas', registro_id:venta.id, datos_anteriores:venta, eliminado_por:perfil?.id||null })
-        ])
-        setModalConfirm(null)
-        toast('Venta eliminada'); cargar()
-      }
-    })
+    try {
+      const stockActual = getStock(venta.almacen_id, venta.tipo_balon||'10kg')
+      const tipo = venta.tipo_balon||'10kg'
+      const campoVacios = tipo==='5kg'?'vacios_5kg':tipo==='10kg'?'vacios_10kg':'vacios_45kg'
+      const almacen = almacenes.find(a => a.id===venta.almacen_id)
+      await supabase.from('stock_por_tipo').update({ stock_actual:stockActual+venta.cantidad, updated_at:new Date().toISOString() }).eq('almacen_id',venta.almacen_id).eq('tipo_balon',tipo)
+      if(almacen) await supabase.from('almacenes').update({ stock_actual:(almacen.stock_actual||0)+venta.cantidad, balones_vacios:Math.max(0,(almacen.balones_vacios||0)-venta.cantidad), [campoVacios]:Math.max(0,(almacen[campoVacios]||0)-venta.cantidad) }).eq('id',venta.almacen_id)
+      await supabase.from('ventas').update({ eliminado:true, eliminado_por:perfil?.id||null, eliminado_at:new Date().toISOString() }).eq('id',venta.id)
+    } catch(err) {
+      console.error('Error al eliminar venta:', err)
+    } finally {
+      setConfirmando(null)
+      toast('Venta eliminada')
+      cargar()
+    }
   }, [getStock, almacenes, cargar, toast, perfil])
 
   // ─── Guardar apertura ──────────────────────────────────────────────────────
@@ -553,7 +552,7 @@ export default function Ventas() {
                     <span style={{color:'var(--app-text-secondary)',fontSize:12}}>x{v.cantidad} · S/{v.precio_unitario}c/u</span>
                     {v.precio_tipos?.nombre&&<span style={{color:'var(--app-text-secondary)',fontSize:11}}>{v.precio_tipos.nombre}</span>}
                     {v.notas&&<span style={{color:'var(--app-text-secondary)',fontSize:11,fontStyle:'italic'}}>"{v.notas}"</span>}
-                    <button onClick={()=>eliminarVenta(v)} style={{marginLeft:'auto',color:'var(--app-text-secondary)',background:'none',border:'none',cursor:'pointer',padding:4}}>
+                    <button onClick={()=>setConfirmando(v.id)} style={{marginLeft:'auto',color: confirmando===v.id?'#f87171':'var(--app-text-secondary)',background:'none',border:'none',cursor:'pointer',padding:4}}>
                       <Trash2 style={{width:14,height:14}}/>
                     </button>
                   </div>
@@ -588,8 +587,16 @@ export default function Ventas() {
                       <td className="px-4 py-3"><PagoBadge metodo={v.metodo_pago}/></td>
                       <td className="px-4 py-3 text-xs max-w-32 truncate" style={{color:'var(--app-text-secondary)'}} title={v.notas||''}>{v.notas||<span style={{color:'var(--app-card-border)'}}>—</span>}</td>
                       <td className="px-4 py-3">
-                        <button onClick={()=>eliminarVenta(v)} style={{color:'var(--app-text-secondary)',background:'none',border:'none',cursor:'pointer',padding:4,borderRadius:4}} title="Eliminar">
-                          <Trash2 style={{width:14,height:14}}/>
+                        {confirmando===v.id ? (
+                          <div style={{display:'flex',gap:4}}>
+                            <button onClick={()=>eliminarVenta(v)} style={{fontSize:11,padding:'3px 8px',borderRadius:6,background:'rgba(239,68,68,0.9)',border:'none',color:'#fff',cursor:'pointer',fontWeight:600}}>✓</button>
+                            <button onClick={()=>setConfirmando(null)} style={{fontSize:11,padding:'3px 8px',borderRadius:6,background:'rgba(100,100,100,0.3)',border:'none',color:'var(--app-text)',cursor:'pointer'}}>✕</button>
+                          </div>
+                        ) : (
+                          <button onClick={()=>setConfirmando(v.id)} style={{color:'var(--app-text-secondary)',background:'none',border:'none',cursor:'pointer',padding:4,borderRadius:4}} title="Eliminar">
+                            <Trash2 style={{width:14,height:14}}/>
+                          </button>
+                        )}
                         </button>
                       </td>
                     </tr>
