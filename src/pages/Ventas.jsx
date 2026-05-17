@@ -277,20 +277,26 @@ export default function Ventas() {
       // 1. Restaurar stock
       await supabase.from('stock_por_tipo').update({ stock_actual:stockActual+venta.cantidad, updated_at:new Date().toISOString() }).eq('almacen_id',venta.almacen_id).eq('tipo_balon',tipo)
       if(almacen) await supabase.from('almacenes').update({ stock_actual:(almacen.stock_actual||0)+venta.cantidad, balones_vacios:Math.max(0,(almacen.balones_vacios||0)-venta.cantidad), [campoVacios]:Math.max(0,(almacen[campoVacios]||0)-venta.cantidad) }).eq('id',venta.almacen_id)
-      // 2. Borrar detalles FIFO (FK constraint)
-      await supabase.from('venta_lote_detalles').delete().eq('venta_id',venta.id)
+      // 2. Borrar detalles FIFO (FK constraint) — con manejo de error explícito
+      const { error:errDet } = await supabase.from('venta_lote_detalles').delete().eq('venta_id',venta.id)
+      if(errDet) {
+        console.error('Error FK venta_lote_detalles:', errDet)
+        toast('Error FK detalles: '+errDet.message, 'error')
+        return
+      }
       // 3. Borrar venta
       const { error } = await supabase.from('ventas').delete().eq('id',venta.id)
-      if(error) { console.error('Error eliminando venta:', error); toast('Error: '+error.message); return }
+      if(error) { console.error('Error eliminando venta:', error); toast('Error: '+error.message, 'error'); return }
       toast('Venta eliminada')
       cargar()
     } catch(err) {
-      console.error('Error:', err)
-      toast('Error al eliminar')
+      console.error('Error inesperado:', err)
+      toast('Error al eliminar', 'error')
     } finally {
       setConfirmando(null)
+      setModalConfirm(null)
     }
-  }, [getStock, almacenes, cargar, toast, perfil])
+  }, [getStock, almacenes, cargar, toast])
 
   // ─── Guardar apertura ──────────────────────────────────────────────────────
 
@@ -519,8 +525,8 @@ export default function Ventas() {
       {/* Filtros y acciones */}
       <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
         <div className="relative flex-1" style={{minWidth:200}}>
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{color:'var(--app-text-secondary)'}}/>
-          <input className="input pl-9" placeholder="Buscar por cliente o teléfono..." value={busqueda} onChange={e=>setBusqueda(e.target.value)}/>
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{color:'var(--app-text-secondary)',pointerEvents:'none'}}/>
+          <input className="input" style={{paddingLeft:'36px'}} placeholder="Buscar por cliente o teléfono..." value={busqueda} onChange={e=>setBusqueda(e.target.value)}/>
         </div>
         <button onClick={imprimirReporte} className="btn-secondary" title="Imprimir reporte del día">
           <Printer className="w-4 h-4"/>Reporte
@@ -608,7 +614,11 @@ export default function Ventas() {
                       <td className="px-4 py-3 text-sm" style={{color:'var(--app-text-secondary)'}}>S/{v.precio_unitario}</td>
                       <td className="px-4 py-3 font-bold" style={{color:esCredito?'#fb923c':'#22c55e'}}>S/{(v.cantidad*v.precio_unitario).toLocaleString()}</td>
                       <td className="px-4 py-3"><PagoBadge metodo={v.metodo_pago}/></td>
-                      <td className="px-4 py-3 text-xs max-w-32 truncate" style={{color:'var(--app-text-secondary)'}} title={v.notas||''}>{v.notas||<span style={{color:'var(--app-card-border)'}}>—</span>}</td>
+                      <td className="px-4 py-3" style={{color:'var(--app-text-secondary)'}}>
+                        <div style={{width:180,overflowX:'auto',whiteSpace:'nowrap',fontSize:12,scrollbarWidth:'thin',scrollbarColor:'var(--app-card-border) transparent'}} title={v.notas||''}>
+                          {v.notas||<span style={{color:'var(--app-card-border)'}}>—</span>}
+                        </div>
+                      </td>
                       <td className="px-4 py-3">
                         {confirmando===v.id ? (
                           <div style={{display:'flex',gap:4}}>
