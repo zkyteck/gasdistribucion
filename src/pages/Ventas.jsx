@@ -266,10 +266,14 @@ export default function Ventas() {
       const tipo = venta.tipo_balon||'10kg'
       const campoVacios = tipo==='5kg'?'vacios_5kg':tipo==='10kg'?'vacios_10kg':'vacios_45kg'
       const almacen = almacenes.find(a => a.id===venta.almacen_id)
+      // 1. Restaurar stock
       await supabase.from('stock_por_tipo').update({ stock_actual:stockActual+venta.cantidad, updated_at:new Date().toISOString() }).eq('almacen_id',venta.almacen_id).eq('tipo_balon',tipo)
       if(almacen) await supabase.from('almacenes').update({ stock_actual:(almacen.stock_actual||0)+venta.cantidad, balones_vacios:Math.max(0,(almacen.balones_vacios||0)-venta.cantidad), [campoVacios]:Math.max(0,(almacen[campoVacios]||0)-venta.cantidad) }).eq('id',venta.almacen_id)
+      // 2. Borrar detalles FIFO (FK constraint)
+      await supabase.from('venta_lote_detalles').delete().eq('venta_id',venta.id)
+      // 3. Borrar venta
       const { error } = await supabase.from('ventas').delete().eq('id',venta.id)
-      if(error) { console.error('Error eliminando venta:', error); toast('Error al eliminar'); return }
+      if(error) { console.error('Error eliminando venta:', error); toast('Error: '+error.message); return }
       toast('Venta eliminada')
       cargar()
     } catch(err) {
