@@ -558,9 +558,18 @@ export default function Ventas() {
                     <span style={{color:'var(--app-text-secondary)',fontSize:12}}>x{v.cantidad} · S/{v.precio_unitario}c/u</span>
                     {v.precio_tipos?.nombre&&<span style={{color:'var(--app-text-secondary)',fontSize:11}}>{v.precio_tipos.nombre}</span>}
                     {v.notas&&<span style={{color:'var(--app-text-secondary)',fontSize:11,fontStyle:'italic'}}>"{v.notas}"</span>}
-                    <button onClick={()=>setConfirmando(v.id)} style={{marginLeft:'auto',color: confirmando===v.id?'#f87171':'var(--app-text-secondary)',background:'none',border:'none',cursor:'pointer',padding:4}}>
-                      <Trash2 style={{width:14,height:14}}/>
-                    </button>
+                    <div style={{marginLeft:'auto',display:'flex',gap:4,alignItems:'center'}}>
+                      {confirmando===v.id ? (
+                        <>
+                          <button onPointerDown={()=>eliminarVenta(v)} style={{fontSize:12,padding:'4px 10px',borderRadius:6,background:'rgba(239,68,68,0.9)',border:'none',color:'#fff',cursor:'pointer',fontWeight:600}}>✓ Borrar</button>
+                          <button onPointerDown={()=>setConfirmando(null)} style={{fontSize:12,padding:'4px 10px',borderRadius:6,background:'rgba(100,100,100,0.3)',border:'none',color:'var(--app-text)',cursor:'pointer'}}>✕</button>
+                        </>
+                      ) : (
+                        <button onPointerDown={()=>setConfirmando(v.id)} style={{color:'var(--app-text-secondary)',background:'none',border:'none',cursor:'pointer',padding:4}}>
+                          <Trash2 style={{width:14,height:14}}/>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               )
@@ -650,7 +659,7 @@ export default function Ventas() {
                   return(
                     <div style={{position:'absolute',zIndex:9999,background:'var(--app-modal-bg)',border:'1px solid var(--app-card-border)',borderRadius:8,width:'100%',marginTop:2,overflow:'hidden'}}>
                       {coincidencias.slice(0,6).map(c=>(
-                        <button key={c.id} type="button" onClick={()=>{seleccionarCliente(c.id);setBusquedaCliente(c.nombre)}}
+                        <button key={c.id} type="button" onPointerDown={(e)=>{e.preventDefault();seleccionarCliente(c.id);setBusquedaCliente(c.nombre)}}
                           style={{width:'100%',textAlign:'left',padding:'8px 12px',fontSize:13,color:'var(--app-text)',background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:8}}
                           onMouseEnter={e=>e.currentTarget.style.background='var(--app-card-bg-alt)'}
                           onMouseLeave={e=>e.currentTarget.style.background='none'}>
