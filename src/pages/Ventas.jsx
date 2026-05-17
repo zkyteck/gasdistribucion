@@ -91,6 +91,7 @@ export default function Ventas() {
   const [error, setError] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [busquedaCliente, setBusquedaCliente] = useState('')
+  const [dropdownAbierto, setDropdownAbierto] = useState(false)
   const [filtroFecha, setFiltroFecha] = useState(hoyPeru())
   const [subModal, setSubModal] = useState(null)
   const [confirmando, setConfirmando] = useState(null) // id de venta a confirmar
@@ -136,6 +137,13 @@ export default function Ventas() {
 
 
   useEffect(() => { cargar() }, [cargar])
+
+  // Auto-seleccionar cliente cuando hay coincidencia exacta en búsqueda
+  useEffect(() => {
+    if(!busquedaCliente || !clientes.length) return
+    const exacto = clientes.find(c => !c.es_varios && c.nombre.toLowerCase() === busquedaCliente.toLowerCase())
+    if(exacto && form.cliente_id !== exacto.id) seleccionarCliente(exacto.id)
+  }, [busquedaCliente, clientes])
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
   const getPrecio = useCallback((precioTipoId, tipoBalon) => {
@@ -650,16 +658,19 @@ export default function Ventas() {
                 <label className="label">Cliente</label>
                 <input className="input" placeholder="Buscar por nombre o teléfono..."
                   value={busquedaCliente}
-                  onChange={e=>{setBusquedaCliente(e.target.value);if(!e.target.value){const v=clientes.find(c=>c.es_varios);if(v)seleccionarCliente(v.id)}}}
+                  onFocus={()=>setDropdownAbierto(true)}
+                  onBlur={()=>setTimeout(()=>setDropdownAbierto(false),200)}
+                  onChange={e=>{setBusquedaCliente(e.target.value);setDropdownAbierto(true);if(!e.target.value){const v=clientes.find(c=>c.es_varios);if(v)seleccionarCliente(v.id)}}}
                   autoFocus/>
-                {busquedaCliente.length>=1&&(()=>{
+                {busquedaCliente.length>=1 && dropdownAbierto &&(()=>{
                   const coincidencias = clientes.filter(c => !c.es_varios && (c.nombre.toLowerCase().includes(busquedaCliente.toLowerCase())||(c.telefono&&c.telefono.includes(busquedaCliente))))
                   const exacto = clientes.find(c => c.nombre.toLowerCase()===busquedaCliente.toLowerCase())
                   if(exacto&&!exacto.es_varios) return <div style={{marginTop:4,fontSize:12,color:'#22c55e',paddingLeft:4}}>✅ {exacto.nombre}</div>
                   return(
                     <div style={{position:'absolute',zIndex:9999,background:'var(--app-modal-bg)',border:'1px solid var(--app-card-border)',borderRadius:8,width:'100%',marginTop:2,overflow:'hidden'}}>
                       {coincidencias.slice(0,6).map(c=>(
-                        <button key={c.id} type="button" onPointerDown={(e)=>{e.preventDefault();seleccionarCliente(c.id);setBusquedaCliente(c.nombre)}}
+                        <button key={c.id} type="button"
+                          onClick={()=>{seleccionarCliente(c.id);setBusquedaCliente(c.nombre);setDropdownAbierto(false)}}
                           style={{width:'100%',textAlign:'left',padding:'8px 12px',fontSize:13,color:'var(--app-text)',background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:8}}
                           onMouseEnter={e=>e.currentTarget.style.background='var(--app-card-bg-alt)'}
                           onMouseLeave={e=>e.currentTarget.style.background='none'}>
