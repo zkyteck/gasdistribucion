@@ -183,16 +183,19 @@ export default function Compras() {
             // precio_venta = precio por tipo si existe, si no el precio_base del distribuidor
             const precioVenta = pdt?.precio || dist.data.precio_base || 0
 
-            await supabase.from('lotes_distribuidor').insert({
+            const { error: eLote } = await supabase.from('lotes_distribuidor').insert({
               distribuidor_id: dist.data.id,
               almacen_id: d.almacen_id,
               tipo_balon: d.tipo_balon,
               cantidad_inicial: d.cantidad,
               cantidad_restante: d.cantidad,
+              cantidad_vendida: 0,
               precio_unitario: parseFloat(form.precios[d.tipo_balon]) || 0, // costo compra
               precio_venta: precioVenta,                                      // precio distribuidor ← automático
               cerrado: false,
+              fecha: form.fecha,
             })
+            if (eLote) console.error('Error creando lote FIFO:', eLote.message)
           }
         }
       })
