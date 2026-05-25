@@ -69,7 +69,7 @@ function CustomTooltip({ active, payload, label }) {
 export default function Dashboard() {
   const { perfil } = useAuth()
   const [stats, setStats] = useState({
-    ventasHoy: 0, montoHoy: 0, gananciaNeta: 0,
+    ventasHoy: 0, montoHoy: 0, gananciaNeta: 0, costosConfigurados: true,
     stockTotal: 0, stockVacios: 0, balonesEnDeuda: 0,
     valesMes: 0, deudasActivas: 0,
     montoMes: 0, montoMesAnterior: 0,
@@ -142,6 +142,8 @@ export default function Dashboard() {
       // ── Costos por tipo ────────────────────────────────────────────────────
       const costos = { '5kg': 0, '10kg': 0, '45kg': 0 }
       costosData?.forEach(r => { if(r.clave==='costo_5kg') costos['5kg']=parseFloat(r.valor)||0; if(r.clave==='costo_10kg') costos['10kg']=parseFloat(r.valor)||0; if(r.clave==='costo_45kg') costos['45kg']=parseFloat(r.valor)||0 })
+      // Verificar si los costos están configurados (al menos el 10kg que es el principal)
+      const costosConfigurados = costos['10kg'] > 0
 
       // ── Stats ventas hoy ───────────────────────────────────────────────────
       const montoHoy = ventasHoyData?.reduce((s,v) => s + v.cantidad * v.precio_unitario, 0) || 0
@@ -207,7 +209,7 @@ export default function Dashboard() {
       })))
 
       setStats({
-        ventasHoy: ventasHoyData?.length||0, montoHoy, gananciaNeta,
+        ventasHoy: ventasHoyData?.length||0, montoHoy, gananciaNeta, costosConfigurados,
         stockTotal, stockVacios, balonesEnDeuda,
         valesMes: valesMes||0, deudasActivas: deudasActivas||0,
         montoMes, montoMesAnterior,
@@ -262,11 +264,27 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* ── Alerta costos no configurados ── */}
+      {!stats.costosConfigurados && (
+        <div style={{ background:'rgba(251,146,60,0.08)', border:'1px solid rgba(251,146,60,0.3)', borderRadius:10, padding:'12px 16px', display:'flex', alignItems:'center', gap:10 }}>
+          <AlertTriangle style={{ width:18, height:18, color:'#fb923c', flexShrink:0 }}/>
+          <div>
+            <p style={{ fontSize:13, fontWeight:600, color:'#fb923c', margin:0 }}>Costos de compra no configurados</p>
+            <p style={{ fontSize:12, color:'var(--app-text-secondary)', margin:'2px 0 0' }}>
+              La ganancia neta no es confiable. Ve a <strong>Configuración → Costos</strong> y registra el costo por balón.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── Stats grid ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard icon={ShoppingCart} label="Ventas hoy"    value={stats.ventasHoy}                                      accent="var(--app-accent)" />
         <StatCard icon={TrendingUp}   label="Ingresos hoy"  value={`S/${stats.montoHoy.toLocaleString('es-PE')}`}        accent="#22c55e" />
-        <StatCard icon={TrendingUp}   label="Ganancia neta" value={`S/${stats.gananciaNeta.toLocaleString('es-PE',{maximumFractionDigits:0})}`} accent="#a78bfa" sub="Ingresos - costos de compra" />
+        <StatCard icon={TrendingUp}   label="Ganancia neta"
+          value={stats.costosConfigurados ? `S/${stats.gananciaNeta.toLocaleString('es-PE',{maximumFractionDigits:0})}` : '—'}
+          accent={stats.costosConfigurados ? '#a78bfa' : '#f87171'}
+          sub={stats.costosConfigurados ? 'Ingresos - costos de compra' : '⚠️ Configura costos en Configuración'} />
         <StatCard icon={AlertCircle}  label="Deudas activas" value={stats.deudasActivas}                                 accent="#f87171" />
       </div>
 
