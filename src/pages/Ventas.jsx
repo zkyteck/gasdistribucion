@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { hoyPeru, inicioDiaPeru, finDiaPeru, nowPeru } from '../lib/fechas'
+import { hoyPeru } from '../lib/fechas'
 import { ShoppingCart, Plus, X, AlertCircle, Trash2, Search, Printer, CheckCircle, AlertTriangle } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -65,7 +65,6 @@ export default function Ventas() {
   const [clienteRapidoForm, setClienteRapidoForm] = useState({ nombre:'', telefono:'' })
   const [deudaExistente, setDeudaExistente] = useState(null)
   const [loadingDeuda, setLoadingDeuda] = useState(false)
-  const [modalReporte, setModalReporte] = useState(false)
 
   // Cierre/apertura
 

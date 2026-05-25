@@ -60,7 +60,7 @@ export default function Inventario() {
     const dist = await supabase.from('distribuidores').select('id,nombre').eq('almacen_id', almacen.id).maybeSingle()
     if (dist?.data) {
       const { data } = await supabase.from('lotes_distribuidor').select('*')
-        .eq('distribuidor_id', dist.data.id).eq('cerrado', false).order('created_at')
+        .eq('distribuidor_id', dist.data.id).eq('cerrado', false).order('fecha', { ascending: true })
       setLotesData(data || [])
     } else setLotesData([])
     setLoadingLotes(false)
