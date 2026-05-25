@@ -36,6 +36,8 @@ const emptyDeudaForm = { nombre_deudor:'', cliente_id:'', monto:'', balones:'', 
 const emptyPagoForm  = { monto:'', balones:'', vales_20:'', vales_43:'', metodo_pago:'efectivo', fecha:hoyPeru(), notas:'' }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
+const POR_PAGINA = 30
+
 export default function Deudas() {
   const { perfil } = useAuth()
   const { toasts, toast } = useToast()
@@ -44,6 +46,9 @@ export default function Deudas() {
   const [deudas, setDeudas] = useState([])
   const [clientes, setClientes] = useState([])
   const [loading, setLoading] = useState(true)
+  const [hayMas, setHayMas] = useState(false)
+  const [cargandoMas, setCargandoMas] = useState(false)
+  const [paginaOffset, setPaginaOffset] = useState(0)
   const [modal, setModal] = useState(null)
   const [selected, setSelected] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -66,16 +71,33 @@ export default function Deudas() {
   // ─── Carga ──────────────────────────────────────────────────────────────────
   const cargar = useCallback(async () => {
     setLoading(true)
-    let query = supabase.from('deudas').select('*').order('fecha_deuda', {ascending:false})
+    setPaginaOffset(0)
+    let query = supabase.from('deudas').select('*', {count:'exact'}).order('fecha_deuda', {ascending:false})
       .or('eliminado.is.null,eliminado.eq.false')
     if(filtroEstado==='activas') query = query.in('estado',['activa','pagada_parcial'])
     else if(filtroEstado==='liquidadas') query = query.eq('estado','liquidada')
     // Admin ve todas las deudas — otros usuarios solo ven las de su almacén
     if(!isAdmin && perfil?.almacen_id) query = query.eq('almacen_id', perfil.almacen_id)
-    const { data } = await query
+    const { data, count } = await query.range(0, POR_PAGINA-1)
     setDeudas(data||[])
+    setHayMas((count||0) > POR_PAGINA)
     setLoading(false)
   }, [filtroEstado, isAdmin, perfil?.almacen_id])
+
+  const cargarMas = useCallback(async () => {
+    setCargandoMas(true)
+    const nuevaOffset = paginaOffset + POR_PAGINA
+    let query = supabase.from('deudas').select('*', {count:'exact'}).order('fecha_deuda', {ascending:false})
+      .or('eliminado.is.null,eliminado.eq.false')
+    if(filtroEstado==='activas') query = query.in('estado',['activa','pagada_parcial'])
+    else if(filtroEstado==='liquidadas') query = query.eq('estado','liquidada')
+    if(!isAdmin && perfil?.almacen_id) query = query.eq('almacen_id', perfil.almacen_id)
+    const { data, count } = await query.range(nuevaOffset, nuevaOffset+POR_PAGINA-1)
+    setDeudas(prev => [...prev, ...(data||[])])
+    setHayMas((count||0) > nuevaOffset + POR_PAGINA)
+    setPaginaOffset(nuevaOffset)
+    setCargandoMas(false)
+  }, [filtroEstado, isAdmin, perfil?.almacen_id, paginaOffset])
 
   const cargarClientes = useCallback(async () => {
     let dQuery = supabase.from('deudas').select('nombre_deudor').in('estado',['activa','pagada_parcial'])
@@ -600,6 +622,14 @@ export default function Deudas() {
                 </div>
               )
             })}
+          </div>
+        )}
+        {/* Cargar más */}
+        {hayMas && !loading && (
+          <div style={{display:'flex',justifyContent:'center',padding:'16px'}}>
+            <button onClick={cargarMas} disabled={cargandoMas} className="btn-secondary" style={{fontSize:13}}>
+              {cargandoMas ? 'Cargando...' : 'Ver más deudas'}
+            </button>
           </div>
         )}
       </div>
