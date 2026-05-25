@@ -3,6 +3,9 @@ import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { Plus, X, AlertCircle, Edit2, Eye, EyeOff, Save, CheckCircle, AlertTriangle, Clock, TrendingDown } from 'lucide-react'
+import Modal from '../components/Modal'
+import Toast from '../components/Toast'
+import { useToast } from '../hooks/useToast'
 
 const TIPOS_BALON = ['5kg', '10kg', '45kg']
 const TABS = [
@@ -23,30 +26,7 @@ const MODULOS_LABELS = [
 const PERMISOS_DEFAULT = { ventas:false,vales:false,acuenta:false,clientes:false,deudas:false,inventario:false,distribuidores:false,almacenes:false,reportes:false,configuracion:false,correo:false }
 const PERMISOS_TODOS   = { ventas:true,vales:true,acuenta:true,clientes:true,deudas:true,inventario:true,distribuidores:true,almacenes:true,reportes:true,configuracion:false,correo:true }
 
-function Toast({ toasts }) {
-  return (
-    <div style={{ position:'fixed',bottom:80,right:20,zIndex:999,display:'flex',flexDirection:'column',gap:8,pointerEvents:'none' }}>
-      {toasts.map(t => (
-        <div key={t.id} style={{ display:'flex',alignItems:'center',gap:10,padding:'12px 16px',borderRadius:10,background:t.tipo==='error'?'rgba(239,68,68,0.95)':'rgba(34,197,94,0.95)',color:'#fff',fontSize:13,fontWeight:500,boxShadow:'0 4px 16px rgba(0,0,0,0.3)',animation:'fadeInUp 0.2s ease',minWidth:220 }}>
-          {t.tipo==='error'?<AlertTriangle style={{width:16,height:16,flexShrink:0}}/>:<CheckCircle style={{width:16,height:16,flexShrink:0}}/>}
-          {t.mensaje}
-        </div>
-      ))}
-    </div>
-  )
-}
 
-function useToast() {
-  const [toasts,setToasts] = useState([])
-  const timerRef = useRef({})
-  const toast = useCallback((mensaje,tipo='ok') => {
-    const id = Date.now()
-    setToasts(prev => [...prev,{id,mensaje,tipo}])
-    timerRef.current[id] = setTimeout(() => setToasts(prev => prev.filter(t => t.id!==id)),3000)
-  },[])
-  useEffect(() => () => Object.values(timerRef.current).forEach(clearTimeout),[])
-  return { toasts, toast }
-}
 
 function validarPrecio(val,nombre) {
   if(val===''||val===null) return null
@@ -56,19 +36,6 @@ function validarPrecio(val,nombre) {
   return null
 }
 
-function Modal({ title, onClose, children }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.7)'}}>
-      <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:16,width:'100%',maxWidth:520,boxShadow:'0 25px 50px rgba(0,0,0,0.4)',maxHeight:'90vh',overflowY:'auto'}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 24px',borderBottom:'1px solid var(--app-card-border)',position:'sticky',top:0,background:'var(--app-card-bg)'}}>
-          <h3 style={{color:'var(--app-text)',fontWeight:600,margin:0}}>{title}</h3>
-          <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'var(--app-text-secondary)'}}><X className="w-5 h-5"/></button>
-        </div>
-        <div style={{padding:'20px 24px'}}>{children}</div>
-      </div>
-    </div>
-  )
-}
 
 function PermisoBtn({ activo, onClick, children }) {
   return (

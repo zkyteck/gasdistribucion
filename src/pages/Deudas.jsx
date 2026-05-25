@@ -6,47 +6,13 @@ import { format, differenceInDays } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useAuth } from '../context/AuthContext'
 import { Notif } from '../lib/notificaciones'
+import Modal from '../components/Modal'
+import Toast from '../components/Toast'
+import { useToast } from '../hooks/useToast'
 
-// ─── Toast ────────────────────────────────────────────────────────────────────
-function Toast({ toasts }) {
-  return (
-    <div style={{ position:'fixed', bottom:80, right:20, zIndex:999, display:'flex', flexDirection:'column', gap:8, pointerEvents:'none' }}>
-      {toasts.map(t => (
-        <div key={t.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 16px', borderRadius:10, background:t.tipo==='error'?'rgba(239,68,68,0.95)':'rgba(34,197,94,0.95)', color:'#fff', fontSize:13, fontWeight:500, boxShadow:'0 4px 16px rgba(0,0,0,0.3)', animation:'fadeInUp 0.2s ease', minWidth:220 }}>
-          {t.tipo==='error'?<AlertTriangle style={{width:16,height:16,flexShrink:0}}/>:<CheckCircle style={{width:16,height:16,flexShrink:0}}/>}
-          {t.mensaje}
-        </div>
-      ))}
-    </div>
-  )
-}
 
-function useToast() {
-  const [toasts, setToasts] = useState([])
-  const timerRef = useRef({})
-  const toast = useCallback((mensaje, tipo='ok') => {
-    const id = Date.now()
-    setToasts(prev => [...prev, {id, mensaje, tipo}])
-    timerRef.current[id] = setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3500)
-  }, [])
-  useEffect(() => () => Object.values(timerRef.current).forEach(clearTimeout), [])
-  return { toasts, toast }
-}
 
 // ─── Modal con tema ───────────────────────────────────────────────────────────
-function Modal({ title, onClose, children, wide }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.7)'}}>
-      <div style={{ background:'var(--app-card-bg)', border:'1px solid var(--app-card-border)', borderRadius:16, width:'100%', maxWidth:wide?680:480, boxShadow:'0 25px 50px rgba(0,0,0,0.4)', maxHeight:'90vh', display:'flex', flexDirection:'column' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 24px', borderBottom:'1px solid var(--app-card-border)', flexShrink:0 }}>
-          <h3 style={{color:'var(--app-text)', fontWeight:600, margin:0}}>{title}</h3>
-          <button onClick={onClose} style={{background:'none', border:'none', cursor:'pointer', color:'var(--app-text-secondary)'}}><X className="w-5 h-5"/></button>
-        </div>
-        <div style={{padding:'20px 24px', overflowY:'auto', flex:1}}>{children}</div>
-      </div>
-    </div>
-  )
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function resumenDeuda(d) {
