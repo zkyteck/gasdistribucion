@@ -11,6 +11,7 @@ import {
   Tooltip, ResponsiveContainer, BarChart, Bar,
 } from 'recharts'
 import { format, subDays } from 'date-fns'
+import { hoyPeru } from '../lib/fechas'
 import { es } from 'date-fns/locale'
 
 const UMBRAL_STOCK_BAJO = 10
@@ -85,7 +86,7 @@ export default function Dashboard() {
     if (!perfil) return
     setLoading(true)
     try {
-      const hoy = new Date().toISOString().split('T')[0]
+      const hoy = hoyPeru()
       const hace7dias = subDays(new Date(), 6).toISOString().split('T')[0]
       const now = new Date()
       const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
@@ -129,7 +130,7 @@ export default function Dashboard() {
         // Top 3 deudas por monto
         (() => { let q = supabase.from('deudas').select('id,nombre_deudor,monto_pendiente,fecha_deuda').neq('estado','liquidada').or('eliminado.is.null,eliminado.eq.false').order('monto_pendiente',{ascending:false}).limit(3); if(almacenId) q=q.eq('almacen_id',almacenId); return q })(),
         // Lotes distribuidor (stock autónomos como Alazan)
-        supabase.from('lotes_distribuidor').select('distribuidor_id,cantidad_actual').gt('cantidad_actual',0),
+        supabase.from('lotes_distribuidor').select('distribuidor_id,cantidad_restante').gt('cantidad_restante',0),
         // Cargas distribuidor (cuenta corriente como Cristian)
         supabase.from('cargas_distribuidor').select('distribuidor_id,cantidad,descargados,precio_unitario'),
         // Vales del mes
@@ -185,7 +186,7 @@ export default function Dashboard() {
         const esAutonomo = d.modalidad?.toLowerCase().includes('autón') || d.modalidad?.toLowerCase().includes('auton')
         let stockDist = 0, deudaDist = 0
         if(esAutonomo) {
-          stockDist = (lotesDistData||[]).filter(l=>l.distribuidor_id===d.id).reduce((s,l)=>s+(l.cantidad_actual||0),0)
+          stockDist = (lotesDistData||[]).filter(l=>l.distribuidor_id===d.id).reduce((s,l)=>s+(l.cantidad_restante||0),0)
         } else {
           const cargas = (cargasDistData||[]).filter(c=>c.distribuidor_id===d.id)
           const totalCargado = cargas.reduce((s,c)=>s+c.cantidad,0)
