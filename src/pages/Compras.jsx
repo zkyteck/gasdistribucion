@@ -163,40 +163,32 @@ export default function Compras() {
     )
 
     // ── Crear lotes FIFO para distribuidores ──────────────────────────────────
-    // precio_unitario = costo de compra (lo que pagamos al proveedor)
-    // precio_venta    = precio que le cobramos al distribuidor (jala automático de Configuración)
+    // Se crea lote para CUALQUIER almacén que tenga un distribuidor vinculado
+    // Sin depender del nombre — funciona con cualquier distribuidor futuro
     await Promise.all(
       form.distribucion.map(async d => {
-        const alm = almacenes.find(a => a.id === d.almacen_id)
-        if (alm?.nombre?.toLowerCase().includes('alazan') || alm?.nombre?.toLowerCase().includes('cristian')) {
-          const dist = await supabase.from('distribuidores')
-            .select('id,precio_base').eq('almacen_id', d.almacen_id).maybeSingle()
-
-          if (dist?.data) {
-            // Buscar precio específico por tipo en precio_distribuidor_tipo
-            const { data: pdt } = await supabase.from('precio_distribuidor_tipo')
-              .select('precio')
-              .eq('distribuidor_id', dist.data.id)
-              .eq('tipo_balon', d.tipo_balon)
-              .maybeSingle()
-
-            // precio_venta = precio por tipo si existe, si no el precio_base del distribuidor
-            const precioVenta = pdt?.precio || dist.data.precio_base || 0
-
-            const { error: eLote } = await supabase.from('lotes_distribuidor').insert({
-              distribuidor_id: dist.data.id,
-              almacen_id: d.almacen_id,
-              tipo_balon: d.tipo_balon,
-              cantidad_inicial: d.cantidad,
-              cantidad_restante: d.cantidad,
-              cantidad_vendida: 0,
-              precio_unitario: parseFloat(form.precios[d.tipo_balon]) || 0, // costo compra
-              precio_venta: precioVenta,                                      // precio distribuidor ← automático
-              cerrado: false,
-              fecha: form.fecha,
-            })
-            if (eLote) console.error('Error creando lote FIFO:', eLote.message)
-          }
+        const dist = await supabase.from('distribuidores')
+          .select('id,precio_base').eq('almacen_id', d.almacen_id).eq('activo', true).maybeSingle()
+        if (dist?.data) {
+          const { data: pdt } = await supabase.from('precio_distribuidor_tipo')
+            .select('precio')
+            .eq('distribuidor_id', dist.data.id)
+            .eq('tipo_balon', d.tipo_balon)
+            .maybeSingle()
+          const precioVenta = pdt?.precio || dist.data.precio_base || 0
+          const { error: eLote } = await supabase.from('lotes_distribuidor').insert({
+            distribuidor_id: dist.data.id,
+            almacen_id: d.almacen_id,
+            tipo_balon: d.tipo_balon,
+            cantidad_inicial: d.cantidad,
+            cantidad_restante: d.cantidad,
+            cantidad_vendida: 0,
+            precio_unitario: parseFloat(form.precios[d.tipo_balon]) || 0,
+            precio_venta: precioVenta,
+            cerrado: false,
+            fecha: form.fecha,
+          })
+          if (eLote) console.error('Error creando lote FIFO:', eLote.message)
         }
       })
     )
