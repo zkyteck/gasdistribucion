@@ -35,6 +35,8 @@ function PagoBadge({ metodo }) {
   )
 }
 
+const POR_PAGINA = 50
+
 export default function Ventas() {
   const { perfil } = useAuth()
   const { toasts, toast } = useToast()
@@ -51,6 +53,9 @@ export default function Ventas() {
 
   // UI
   const [loading, setLoading] = useState(true)
+  const [hayMas, setHayMas] = useState(false)
+  const [cargandoMas, setCargandoMas] = useState(false)
+  const [paginaOffset, setPaginaOffset] = useState(0)
   const [modal, setModal] = useState(false)
   const [modalRapido, setModalRapido] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -82,10 +87,11 @@ export default function Ventas() {
   // ─── Carga ─────────────────────────────────────────────────────────────────
   const cargar = useCallback(async () => {
     setLoading(true)
-    const [{ data:v },{ data:a },{ data:pt },{ data:c },{ data:ptb },{ data:spt },{ data:dist },{ data:lotes }] = await Promise.all([
-      supabase.from('ventas').select('*, clientes(nombre), almacenes(nombre), precio_tipos(nombre)')
+    setPaginaOffset(0)
+    const [{ data:v, count:totalV },{ data:a },{ data:pt },{ data:c },{ data:ptb },{ data:spt },{ data:dist },{ data:lotes }] = await Promise.all([
+      supabase.from('ventas').select('*, clientes(nombre), almacenes(nombre), precio_tipos(nombre)', {count:'exact'})
         .gte('fecha', filtroFecha+'T00:00:00-05:00').lte('fecha', filtroFecha+'T23:59:59-05:00')
-        .or('eliminado.is.null,eliminado.eq.false').order('fecha',{ascending:false}),
+        .or('eliminado.is.null,eliminado.eq.false').order('fecha',{ascending:false}).range(0, POR_PAGINA-1),
       supabase.from('almacenes').select('id,nombre,stock_actual').eq('activo',true).order('nombre'),
       supabase.from('precio_tipos').select('*').eq('activo',true),
       supabase.from('clientes').select('id,nombre,tipo,es_varios,telefono,precio_personalizado,tipo_balon_personalizado').order('nombre').limit(200),
@@ -94,12 +100,26 @@ export default function Ventas() {
       supabase.from('distribuidores').select('id,nombre,almacen_id,precio_base').eq('activo',true),
       supabase.from('lotes_distribuidor').select('*').eq('cerrado',false).order('fecha',{ascending:true})
     ])
-    setVentas(v||[]); setAlmacenes(a||[]); setPrecioTipos(pt||[])
+    setVentas(v||[]); setHayMas((totalV||0) > POR_PAGINA); setAlmacenes(a||[]); setPrecioTipos(pt||[])
     setClientes(c||[]); setPreciosPorTipo(ptb||[]); setStockPorTipo(spt||[])
     setDistribuidores(dist||[]); setLotesDistribuidor(lotes||[])
     setLoading(false)
   }, [filtroFecha])
 
+
+  const cargarMas = useCallback(async () => {
+    setCargandoMas(true)
+    const nuevaOffset = paginaOffset + POR_PAGINA
+    const { data:v, count:totalV } = await supabase.from('ventas')
+      .select('*, clientes(nombre), almacenes(nombre), precio_tipos(nombre)', {count:'exact'})
+      .gte('fecha', filtroFecha+'T00:00:00-05:00').lte('fecha', filtroFecha+'T23:59:59-05:00')
+      .or('eliminado.is.null,eliminado.eq.false').order('fecha',{ascending:false})
+      .range(nuevaOffset, nuevaOffset+POR_PAGINA-1)
+    setVentas(prev => [...prev, ...(v||[])])
+    setHayMas((totalV||0) > nuevaOffset + POR_PAGINA)
+    setPaginaOffset(nuevaOffset)
+    setCargandoMas(false)
+  }, [filtroFecha, paginaOffset])
 
   useEffect(() => { cargar() }, [cargar])
 
@@ -625,6 +645,14 @@ export default function Ventas() {
             </table>
           </div>
         </>)}
+        {/* Cargar más */}
+        {hayMas && !loading && (
+          <div style={{display:'flex',justifyContent:'center',padding:'16px'}}>
+            <button onClick={cargarMas} disabled={cargandoMas} className="btn-secondary" style={{fontSize:13}}>
+              {cargandoMas ? 'Cargando...' : `Ver más ventas`}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── MODAL VENTA ── */}
