@@ -283,6 +283,36 @@ export default function Ventas() {
       // 3. Borrar venta
       const { error } = await supabase.from('ventas').delete().eq('id',venta.id)
       if(error) { console.error('Error eliminando venta:', error); toast('Error: '+error.message, 'error'); return }
+      // 4. Si fue venta al crédito → revertir monto de la deuda del cliente
+      if(venta.metodo_pago === 'credito') {
+        const montoRevertir = (venta.cantidad||0) * (venta.precio_unitario||0)
+        let deudaAct = null
+        if(venta.cliente_id) {
+          const { data:d1 } = await supabase.from('deudas').select('*').in('estado',['activa','pagada_parcial']).eq('cliente_id',venta.cliente_id).limit(1).maybeSingle()
+          deudaAct = d1
+        }
+        if(!deudaAct && venta.clientes?.nombre) {
+          const { data:d2 } = await supabase.from('deudas').select('*').in('estado',['activa','pagada_parcial']).ilike('nombre_deudor',venta.clientes.nombre.trim()).limit(1).maybeSingle()
+          deudaAct = d2
+        }
+        if(deudaAct && montoRevertir > 0) {
+          const nuevoMonto = Math.max(0, (parseFloat(deudaAct.monto_pendiente)||0) - montoRevertir)
+          const nuevosBalones = Math.max(0, parseInt(deudaAct.balones_pendiente)||0)
+          const nuevoEstado = nuevoMonto <= 0 && nuevosBalones <= 0 ? 'liquidada' : deudaAct.estado
+          await supabase.from('deudas').update({
+            monto_pendiente: nuevoMonto,
+            estado: nuevoEstado,
+            historial: [...(deudaAct.historial||[]), {
+              tipo: 'reversal',
+              fecha: new Date().toISOString().split('T')[0],
+              monto: -montoRevertir,
+              balones: 0,
+              notas: 'Venta eliminada — crédito revertido automáticamente'
+            }],
+            updated_at: new Date().toISOString()
+          }).eq('id', deudaAct.id)
+        }
+      }
       toast('Venta eliminada')
       cargar()
     } catch(err) {
