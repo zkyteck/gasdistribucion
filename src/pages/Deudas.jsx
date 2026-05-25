@@ -104,15 +104,19 @@ export default function Deudas() {
       .or('eliminado.is.null,eliminado.eq.false')
     if(filtroEstado==='activas') query = query.in('estado',['activa','pagada_parcial'])
     else if(filtroEstado==='liquidadas') query = query.eq('estado','liquidada')
+    // Admin ve todas las deudas — otros usuarios solo ven las de su almacén
+    if(!isAdmin && perfil?.almacen_id) query = query.eq('almacen_id', perfil.almacen_id)
     const { data } = await query
     setDeudas(data||[])
     setLoading(false)
-  }, [filtroEstado])
+  }, [filtroEstado, isAdmin, perfil?.almacen_id])
 
   const cargarClientes = useCallback(async () => {
+    let dQuery = supabase.from('deudas').select('nombre_deudor').in('estado',['activa','pagada_parcial'])
+    if(!isAdmin && perfil?.almacen_id) dQuery = dQuery.eq('almacen_id', perfil.almacen_id)
     const [{ data:cData },{ data:dData }] = await Promise.all([
       supabase.from('clientes').select('id,nombre').eq('es_varios',false).order('nombre'),
-      supabase.from('deudas').select('nombre_deudor').in('estado',['activa','pagada_parcial'])
+      dQuery
     ])
     const deudorNames = (dData||[]).map(d => ({ id:'deudor_'+d.nombre_deudor, nombre:d.nombre_deudor }))
     const allNames = [...(cData||[])]
