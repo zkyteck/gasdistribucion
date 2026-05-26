@@ -662,7 +662,7 @@ export default function Ventas() {
 
       {/* ── MODAL VENTA ── */}
       {modal&&(
-        <Modal title="Registrar venta" onClose={()=>setModal(false)} wide>
+        <Modal title="Registrar venta" onClose={()=>setModal(false)} wide maxHeight={720}>
           <div className="space-y-4">
             {error&&<div style={{display:'flex',alignItems:'center',gap:8,background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#f87171',borderRadius:8,padding:'8px 12px',fontSize:13}}><AlertCircle style={{width:16,height:16,flexShrink:0}}/>{error}</div>}
 
@@ -682,8 +682,8 @@ export default function Ventas() {
 
             <div className="lg:grid lg:grid-cols-2 lg:gap-6 space-y-4 lg:space-y-0">
             {/* ── Columna izquierda ── */}
-            <div className="space-y-4">
-              {/* Cliente */}
+            <div className="space-y-3">
+              {/* Cliente */
               <div className="relative">
                 <label className="label">Cliente</label>
                 <input className="input" placeholder="Buscar por nombre o teléfono..."
@@ -752,7 +752,7 @@ export default function Ventas() {
                     const stock=getStock(form.almacen_id,tipo)
                     return(
                       <button key={tipo} onClick={()=>seleccionarTipoBalon(tipo)} style={{
-                        padding:'10px 8px', borderRadius:8, fontSize:12, fontWeight:500, cursor:'pointer', textAlign:'center', transition:'all 0.15s',
+                        padding:'6px 6px', borderRadius:8, fontSize:11, fontWeight:500, cursor:'pointer', textAlign:'center', transition:'all 0.15s',
                         background:form.tipo_balon===tipo?'color-mix(in srgb, var(--app-accent) 15%, transparent)':'var(--app-card-bg-alt)',
                         border:form.tipo_balon===tipo?'1px solid var(--app-accent)':'1px solid var(--app-card-border)',
                         color:form.tipo_balon===tipo?'var(--app-accent)':'var(--app-text-secondary)'
@@ -774,7 +774,7 @@ export default function Ventas() {
                       const precio=getPrecio(t.id,form.tipo_balon)||t.precio
                       return(
                         <button key={t.id} onClick={()=>seleccionarTipoPrecio(t.id)} style={{
-                          padding:'8px', borderRadius:8, fontSize:12, fontWeight:500, cursor:'pointer', transition:'all 0.15s',
+                          padding:'6px', borderRadius:8, fontSize:11, fontWeight:500, cursor:'pointer', transition:'all 0.15s',
                           background:form.precio_tipo_id===t.id?'color-mix(in srgb, var(--app-accent) 15%, transparent)':'var(--app-card-bg-alt)',
                           border:form.precio_tipo_id===t.id?'1px solid var(--app-accent)':'1px solid var(--app-card-border)',
                           color:form.precio_tipo_id===t.id?'var(--app-accent)':'var(--app-text-secondary)'
@@ -787,24 +787,21 @@ export default function Ventas() {
                 </div>
               )}
 
-              {/* Toggle incluye balón */}
-              <div style={{borderRadius:12,border:'1px solid var(--app-card-border)',padding:'12px',cursor:'pointer',background:form.tipo_venta!=='gas'?'color-mix(in srgb, var(--app-accent) 8%, transparent)':'var(--app-card-bg-alt)',transition:'all 0.15s'}}
-                onClick={()=>setForm(f=>({...f,tipo_venta:f.tipo_venta==='gas'?'gas_balon':'gas',precio_balon:'100'}))}>
-                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                  <div>
-                    <p style={{fontSize:13,fontWeight:500,color:form.tipo_venta!=='gas'?'var(--app-accent)':'var(--app-text-secondary)',margin:0}}>🔵 ¿Incluye balón vacío?</p>
-                    <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Activa si el cliente se lleva el envase</p>
-                  </div>
-                  <div style={{width:40,height:20,borderRadius:10,background:form.tipo_venta!=='gas'?'var(--app-accent)':'var(--app-card-border)',position:'relative',transition:'background 0.15s'}}>
-                    <div style={{width:16,height:16,background:'white',borderRadius:'50%',position:'absolute',top:2,left:form.tipo_venta!=='gas'?22:2,transition:'left 0.15s'}}/>
+              {/* Toggle + Fecha en misma fila */}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,alignItems:'end'}}>
+                <div style={{borderRadius:10,border:'1px solid var(--app-card-border)',padding:'8px 10px',cursor:'pointer',background:form.tipo_venta!=='gas'?'color-mix(in srgb, var(--app-accent) 8%, transparent)':'var(--app-card-bg-alt)',transition:'all 0.15s'}}
+                  onClick={()=>setForm(f=>({...f,tipo_venta:f.tipo_venta==='gas'?'gas_balon':'gas',precio_balon:'100'}))}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                    <p style={{fontSize:11,fontWeight:500,color:form.tipo_venta!=='gas'?'var(--app-accent)':'var(--app-text-secondary)',margin:0}}>🔵 Balón vacío</p>
+                    <div style={{width:36,height:18,borderRadius:9,background:form.tipo_venta!=='gas'?'var(--app-accent)':'var(--app-card-border)',position:'relative',transition:'background 0.15s',flexShrink:0}}>
+                      <div style={{width:14,height:14,background:'white',borderRadius:'50%',position:'absolute',top:2,left:form.tipo_venta!=='gas'?20:2,transition:'left 0.15s'}}/>
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Fecha */}
-              <div>
-                <label className="label">Fecha</label>
-                <input type="date" className="input" value={form.fecha} onChange={e=>setForm(f=>({...f,fecha:e.target.value}))}/>
+                <div>
+                  <label className="label" style={{fontSize:11}}>Fecha</label>
+                  <input type="date" className="input" style={{padding:'6px 10px',fontSize:13}} value={form.fecha} onChange={e=>setForm(f=>({...f,fecha:e.target.value}))}/>
+                </div>
               </div>
             </div>
 
