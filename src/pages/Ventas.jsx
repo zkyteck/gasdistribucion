@@ -142,18 +142,22 @@ export default function Ventas() {
 
   const getPrecioFIFO = useCallback((distribuidorId, tipoBalon='10kg') => {
     const lote = lotesDistribuidor.find(l => l.distribuidor_id===distribuidorId && l.tipo_balon===tipoBalon && !l.cerrado && l.cantidad_restante>0)
-    return lote ? { precio:lote.precio_unitario, lote } : null
-  }, [lotesDistribuidor])
+    if(lote) return { precio:lote.precio_unitario, lote }
+    // Sin lotes → usar precio_base del distribuidor
+    const dist = distribuidores.find(d => d.id===distribuidorId)
+    return dist ? { precio:dist.precio_base, lote:null } : null
+  }, [lotesDistribuidor, distribuidores])
 
   const getStock = useCallback((almacenId, tipoBalon) => {
     const dist = getDistribuidor(almacenId)
     if(dist) {
-      return lotesDistribuidor.filter(l => l.distribuidor_id===dist.id && l.tipo_balon===tipoBalon && !l.cerrado && l.cantidad_restante>0).reduce((s,l) => s+l.cantidad_restante, 0)
+      // Si tiene lotes FIFO activos → usar lotes
+      const stockFIFO = lotesDistribuidor.filter(l => l.distribuidor_id===dist.id && l.tipo_balon===tipoBalon && !l.cerrado && l.cantidad_restante>0).reduce((s,l) => s+l.cantidad_restante, 0)
+      if(stockFIFO > 0) return stockFIFO
+      // Sin lotes → usar stock_por_tipo directo (como Tienda Principal)
     }
-    // Primero intenta stock_por_tipo
     const spt = stockPorTipo.find(s => s.almacen_id===almacenId && s.tipo_balon===tipoBalon)
     if(spt?.stock_actual > 0) return spt.stock_actual
-    // Si no encuentra o es 0, usa almacenes.stock_actual como respaldo
     const alm = almacenes.find(a => a.id===almacenId)
     return alm?.stock_actual || 0
   }, [getDistribuidor, lotesDistribuidor, stockPorTipo, almacenes])
@@ -366,11 +370,21 @@ export default function Ventas() {
         await supabase.from('stock_por_tipo').update({ stock_actual:Math.max(0,stockDisp-cant) }).eq('almacen_id',form.almacen_id).eq('tipo_balon',form.tipo_balon)
       }
       if(form.es_distribuidor&&form.distribuidor_id) {
-        await aplicarFIFO(form.distribuidor_id, form.tipo_balon, cant)
-        const { data:lotesActivos } = await supabase.from('lotes_distribuidor').select('cantidad_restante').eq('distribuidor_id',form.distribuidor_id).eq('cerrado',false)
-        const totalRestante = (lotesActivos||[]).reduce((s,l) => s+(l.cantidad_restante||0),0)
-        const { data:almDist } = await supabase.from('almacenes').select('balones_vacios,vacios_5kg,vacios_10kg,vacios_45kg').eq('id',form.almacen_id).single()
-        await supabase.from('almacenes').update({ stock_actual:totalRestante, balones_vacios:(almDist?.balones_vacios||0)+cant, [campoVacios]:(almDist?.[campoVacios]||0)+cant }).eq('id',form.almacen_id)
+        // Verificar si hay lotes FIFO activos
+        const { data:lotesCheck } = await supabase.from('lotes_distribuidor').select('id').eq('distribuidor_id',form.distribuidor_id).eq('tipo_balon',form.tipo_balon).eq('cerrado',false).gt('cantidad_restante',0).limit(1)
+        if(lotesCheck?.length > 0) {
+          // Con lotes → FIFO
+          await aplicarFIFO(form.distribuidor_id, form.tipo_balon, cant)
+          const { data:lotesActivos } = await supabase.from('lotes_distribuidor').select('cantidad_restante').eq('distribuidor_id',form.distribuidor_id).eq('cerrado',false)
+          const totalRestante = (lotesActivos||[]).reduce((s,l) => s+(l.cantidad_restante||0),0)
+          const { data:almDist } = await supabase.from('almacenes').select('balones_vacios,vacios_5kg,vacios_10kg,vacios_45kg').eq('id',form.almacen_id).single()
+          await supabase.from('almacenes').update({ stock_actual:totalRestante, balones_vacios:(almDist?.balones_vacios||0)+cant, [campoVacios]:(almDist?.[campoVacios]||0)+cant }).eq('id',form.almacen_id)
+        } else {
+          // Sin lotes → stock directo como Tienda Principal
+          await supabase.from('stock_por_tipo').update({ stock_actual:Math.max(0,stockDisp-cant) }).eq('almacen_id',form.almacen_id).eq('tipo_balon',form.tipo_balon)
+          const { data:almDist } = await supabase.from('almacenes').select('stock_actual,balones_vacios,vacios_5kg,vacios_10kg,vacios_45kg').eq('id',form.almacen_id).single()
+          if(almDist) await supabase.from('almacenes').update({ stock_actual:Math.max(0,(almDist.stock_actual||0)-cant), balones_vacios:(almDist.balones_vacios||0)+cant, [campoVacios]:(almDist[campoVacios]||0)+cant }).eq('id',form.almacen_id)
+        }
       } else {
         const { data:almActual } = await supabase.from('almacenes').select('stock_actual,balones_vacios,vacios_5kg,vacios_10kg,vacios_45kg').eq('id',form.almacen_id).single()
         if(almActual) {
@@ -738,7 +752,7 @@ export default function Ventas() {
                   return(
                     <div style={{marginTop:6,padding:'8px 12px',borderRadius:8,background:'rgba(251,146,60,0.08)',border:'1px solid rgba(251,146,60,0.25)'}}>
                       <p style={{fontSize:11,color:'#fb923c',margin:0,fontWeight:600}}>🚛 Precio FIFO automático</p>
-                      {fifo?<p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Lote {fifo.lote.fecha} · S/{fifo.lote.precio_venta||fifo.lote.precio_unitario}/bal. · {fifo.lote.cantidad_restante} restantes</p>:<p style={{fontSize:11,color:'#f87171',margin:'2px 0 0'}}>⚠️ Sin lotes activos</p>}
+                      {fifo?.lote?<p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Lote {fifo.lote.fecha} · S/{fifo.lote.precio_venta||fifo.lote.precio_unitario}/bal. · {fifo.lote.cantidad_restante} restantes</p>:<p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Precio base · stock directo</p>}
                     </div>
                   )
                 })()}
