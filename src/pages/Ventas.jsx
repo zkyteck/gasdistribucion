@@ -331,6 +331,11 @@ export default function Ventas() {
       if(!form.almacen_id||!cant||!precioBalon) { setError('Completa todos los campos'); return }
       if(precioBalon<=0) { setError('El precio del balón no puede ser cero'); return }
     }
+    // Venta al crédito requiere cliente específico (no Cliente Varios)
+    if(form.es_credito && form.es_varios) {
+      setError('⚠️ Las ventas al crédito requieren un cliente específico. Busca y selecciona el cliente antes de continuar.')
+      return
+    }
 
     setSaving(true); setError('')
     const campoVacios = form.tipo_balon==='5kg'?'vacios_5kg':form.tipo_balon==='45kg'?'vacios_45kg':'vacios_10kg'
