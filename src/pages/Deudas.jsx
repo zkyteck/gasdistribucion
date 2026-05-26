@@ -69,35 +69,35 @@ export default function Deudas() {
   const [tabHistorial, setTabHistorial] = useState('movimientos')
 
   // ─── Carga ──────────────────────────────────────────────────────────────────
-  const cargar = useCallback(async () => {
-    setLoading(true)
-    setPaginaOffset(0)
+  const buildQuery = useCallback((busq='') => {
     let query = supabase.from('deudas').select('*', {count:'exact'}).order('fecha_deuda', {ascending:false})
       .or('eliminado.is.null,eliminado.eq.false')
     if(filtroEstado==='activas') query = query.in('estado',['activa','pagada_parcial'])
     else if(filtroEstado==='liquidadas') query = query.eq('estado','liquidada')
-    // Admin ve todas las deudas — otros usuarios solo ven las de su almacén
     if(!isAdmin && perfil?.almacen_id) query = query.eq('almacen_id', perfil.almacen_id)
-    const { data, count } = await query.range(0, POR_PAGINA-1)
+    // Búsqueda en BD — así funciona con paginación
+    if(busq.trim()) query = query.ilike('nombre_deudor', `%${busq.trim()}%`)
+    return query
+  }, [filtroEstado, isAdmin, perfil?.almacen_id])
+
+  const cargar = useCallback(async (busq='') => {
+    setLoading(true)
+    setPaginaOffset(0)
+    const { data, count } = await buildQuery(busq).range(0, POR_PAGINA-1)
     setDeudas(data||[])
     setHayMas((count||0) > POR_PAGINA)
     setLoading(false)
-  }, [filtroEstado, isAdmin, perfil?.almacen_id])
+  }, [buildQuery])
 
   const cargarMas = useCallback(async () => {
     setCargandoMas(true)
     const nuevaOffset = paginaOffset + POR_PAGINA
-    let query = supabase.from('deudas').select('*', {count:'exact'}).order('fecha_deuda', {ascending:false})
-      .or('eliminado.is.null,eliminado.eq.false')
-    if(filtroEstado==='activas') query = query.in('estado',['activa','pagada_parcial'])
-    else if(filtroEstado==='liquidadas') query = query.eq('estado','liquidada')
-    if(!isAdmin && perfil?.almacen_id) query = query.eq('almacen_id', perfil.almacen_id)
-    const { data, count } = await query.range(nuevaOffset, nuevaOffset+POR_PAGINA-1)
+    const { data, count } = await buildQuery(busqueda).range(nuevaOffset, nuevaOffset+POR_PAGINA-1)
     setDeudas(prev => [...prev, ...(data||[])])
     setHayMas((count||0) > nuevaOffset + POR_PAGINA)
     setPaginaOffset(nuevaOffset)
     setCargandoMas(false)
-  }, [filtroEstado, isAdmin, perfil?.almacen_id, paginaOffset])
+  }, [buildQuery, busqueda, paginaOffset])
 
   const cargarClientes = useCallback(async () => {
     let dQuery = supabase.from('deudas').select('nombre_deudor').in('estado',['activa','pagada_parcial'])
@@ -360,7 +360,7 @@ export default function Deudas() {
   // ─── Filtros y ordenamiento ───────────────────────────────────────────────────
   const deudasFiltradas = useMemo(() => {
     let result = deudas.filter(d => {
-      const matchBusqueda = !busqueda || d.nombre_deudor?.toLowerCase().includes(busqueda.toLowerCase())
+      const matchBusqueda = true // búsqueda se hace en BD via cargar()
       const matchDesde = !filtroFechaDesde || d.fecha_deuda >= filtroFechaDesde
       const matchHasta = !filtroFechaHasta || d.fecha_deuda <= filtroFechaHasta
       return matchBusqueda && matchDesde && matchHasta
@@ -504,7 +504,7 @@ export default function Deudas() {
       {/* Búsqueda */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{color:'var(--app-text-secondary)'}}/>
-        <input className="input pl-9" placeholder="Buscar deudor..." value={busqueda} onChange={e=>setBusqueda(e.target.value)}/>
+        <input className="input pl-9" placeholder="Buscar deudor..." value={busqueda} onChange={e=>{setBusqueda(e.target.value);cargar(e.target.value)}}/>
       </div>
 
       {/* Filtros */}
