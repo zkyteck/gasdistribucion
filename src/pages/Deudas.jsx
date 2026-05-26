@@ -52,6 +52,7 @@ export default function Deudas() {
   const [totalesGlobal, setTotalesGlobal] = useState({dinero:0,balones:0,vales20:0,vales43:0,deudores:0,urgentes:0})
   const sentinelRef = useRef(null)
   const [modal, setModal] = useState(null)
+  const [modalConfirm, setModalConfirm] = useState(null) // {mensaje, onConfirm}
   const [selected, setSelected] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -373,15 +374,24 @@ export default function Deudas() {
 
   // ─── Eliminar deuda ───────────────────────────────────────────────────────────
   const eliminarDeuda = useCallback(async (id) => {
-    if(!confirm('¿Eliminar esta deuda? Esta acción no se puede deshacer.')) return
     const deuda = deudas.find(d => d.id === id)
-    await Promise.all([
-      // Soft delete
-      supabase.from('deudas').update({ eliminado:true, eliminado_por:perfil?.id||null, eliminado_at:new Date().toISOString() }).eq('id',id),
-      // Guardar en historial
-      deuda ? supabase.from('historial_eliminaciones').insert({ tabla:'deudas', registro_id:id, datos_anteriores:deuda, eliminado_por:perfil?.id||null }) : Promise.resolve()
-    ])
-    toast('Deuda eliminada'); cargar()
+    setModalConfirm({
+      mensaje: `¿Eliminar la deuda de ${deuda?.nombre_deudor||'este cliente'}? Esta acción no se puede deshacer.`,
+      onConfirm: async () => {
+        setModalConfirm(null)
+        try {
+          const { error } = await supabase.from('deudas')
+            .update({ eliminado:true, eliminado_por:perfil?.id||null, eliminado_at:new Date().toISOString() })
+            .eq('id', id)
+          if(error) { console.error('Error eliminando deuda:', error); toast('Error: '+error.message, 'error'); return }
+          if(deuda) await supabase.from('historial_eliminaciones')
+            .insert({ tabla:'deudas', registro_id:id, datos_anteriores:deuda, eliminado_por:perfil?.id||null })
+          toast('Deuda eliminada'); cargar()
+        } catch(err) {
+          console.error('Error inesperado:', err); toast('Error al eliminar', 'error')
+        }
+      }
+    })
   }, [cargar, toast, deudas, perfil])
 
   // ─── Filtros y ordenamiento ───────────────────────────────────────────────────
@@ -656,6 +666,19 @@ export default function Deudas() {
           {cargandoMas && <span style={{fontSize:12,color:'var(--app-text-secondary)'}}>Cargando más...</span>}
         </div>
       </div>
+
+      {/* ── Modal confirmar eliminación ── */}
+      {modalConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.7)'}}>
+          <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:16,padding:24,maxWidth:400,width:'100%',boxShadow:'0 25px 50px rgba(0,0,0,0.4)'}}>
+            <p style={{color:'var(--app-text)',fontSize:14,marginBottom:20}}>{modalConfirm.mensaje}</p>
+            <div style={{display:'flex',gap:12}}>
+              <button onClick={()=>setModalConfirm(null)} className="btn-secondary" style={{flex:1}}>Cancelar</button>
+              <button onClick={modalConfirm.onConfirm} style={{flex:1,background:'#ef4444',color:'#fff',border:'none',borderRadius:8,padding:'8px 16px',fontWeight:600,cursor:'pointer'}}>Sí, eliminar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Modal registrar pago ── */}
       {modal==='pago'&&selected&&(
