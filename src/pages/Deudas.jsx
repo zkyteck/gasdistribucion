@@ -49,6 +49,8 @@ export default function Deudas() {
   const [hayMas, setHayMas] = useState(false)
   const [cargandoMas, setCargandoMas] = useState(false)
   const [paginaOffset, setPaginaOffset] = useState(0)
+  const [totalesGlobal, setTotalesGlobal] = useState({dinero:0,balones:0,vales20:0,vales43:0,deudores:0,urgentes:0})
+  const sentinelRef = useRef(null)
   const [modal, setModal] = useState(null)
   const [selected, setSelected] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -70,7 +72,7 @@ export default function Deudas() {
 
   // ─── Carga ──────────────────────────────────────────────────────────────────
   const buildQuery = useCallback((busq='') => {
-    let query = supabase.from('deudas').select('*', {count:'exact'}).order('fecha_deuda', {ascending:false})
+    let query = supabase.from('deudas').select('*', {count:'exact'}).order('fecha_deuda', {ascending:true})
       .or('eliminado.is.null,eliminado.eq.false')
     if(filtroEstado==='activas') query = query.in('estado',['activa','pagada_parcial'])
     else if(filtroEstado==='liquidadas') query = query.eq('estado','liquidada')
@@ -83,6 +85,21 @@ export default function Deudas() {
   const cargar = useCallback(async (busq='') => {
     setLoading(true)
     setPaginaOffset(0)
+    // Cargar totales globales (sin paginación, solo campos numéricos)
+    const { data:todosParaTotales } = await supabase.from('deudas')
+      .select('monto_pendiente,balones_pendiente,vales_20_pendiente,vales_43_pendiente,nombre_deudor,fecha_deuda,estado')
+      .or('eliminado.is.null,eliminado.eq.false')
+      .in('estado',['activa','pagada_parcial'])
+    if(todosParaTotales) {
+      setTotalesGlobal({
+        dinero:   todosParaTotales.reduce((a,d)=>a+(parseFloat(d.monto_pendiente)||0),0),
+        balones:  todosParaTotales.reduce((a,d)=>a+(parseInt(d.balones_pendiente)||0),0),
+        vales20:  todosParaTotales.reduce((a,d)=>a+(parseInt(d.vales_20_pendiente)||0),0),
+        vales43:  todosParaTotales.reduce((a,d)=>a+(parseInt(d.vales_43_pendiente)||0),0),
+        deudores: new Set(todosParaTotales.map(d=>d.nombre_deudor)).size,
+        urgentes: todosParaTotales.filter(d=>differenceInDays(new Date(),new Date(d.fecha_deuda))>=30).length,
+      })
+    }
     const { data, count } = await buildQuery(busq).range(0, POR_PAGINA-1)
     setDeudas(data||[])
     setHayMas((count||0) > POR_PAGINA)
@@ -98,6 +115,16 @@ export default function Deudas() {
     setPaginaOffset(nuevaOffset)
     setCargandoMas(false)
   }, [buildQuery, busqueda, paginaOffset])
+
+  // Scroll infinito — carga más cuando el sentinel entra en pantalla
+  useEffect(() => {
+    if(!sentinelRef.current) return
+    const observer = new IntersectionObserver(entries => {
+      if(entries[0].isIntersecting && hayMas && !cargandoMas) cargarMas()
+    }, { threshold: 0.1 })
+    observer.observe(sentinelRef.current)
+    return () => observer.disconnect()
+  }, [hayMas, cargandoMas, cargarMas])
 
   const cargarClientes = useCallback(async () => {
     let dQuery = supabase.from('deudas').select('nombre_deudor').in('estado',['activa','pagada_parcial'])
@@ -373,12 +400,12 @@ export default function Deudas() {
     })
   }, [deudas, busqueda, filtroFechaDesde, filtroFechaHasta, ordenar])
 
-  const totalDinero   = useMemo(() => deudas.filter(d=>d.estado!=='liquidada').reduce((a,d)=>a+(parseFloat(d.monto_pendiente)||0),0), [deudas])
-  const totalBalones  = useMemo(() => deudas.filter(d=>d.estado!=='liquidada').reduce((a,d)=>a+(parseInt(d.balones_pendiente)||0),0), [deudas])
-  const totalVales20  = useMemo(() => deudas.filter(d=>d.estado!=='liquidada').reduce((a,d)=>a+(parseInt(d.vales_20_pendiente)||0),0), [deudas])
-  const totalVales43  = useMemo(() => deudas.filter(d=>d.estado!=='liquidada').reduce((a,d)=>a+(parseInt(d.vales_43_pendiente)||0),0), [deudas])
-  const totalDeudores = useMemo(() => new Set(deudas.filter(d=>d.estado!=='liquidada').map(d=>d.nombre_deudor)).size, [deudas])
-  const urgentes      = useMemo(() => deudas.filter(d=>d.estado!=='liquidada'&&differenceInDays(new Date(),new Date(d.fecha_deuda))>=30).length, [deudas])
+  const totalDinero   = totalesGlobal.dinero
+  const totalBalones  = totalesGlobal.balones
+  const totalVales20  = totalesGlobal.vales20
+  const totalVales43  = totalesGlobal.vales43
+  const totalDeudores = totalesGlobal.deudores
+  const urgentes      = totalesGlobal.urgentes
 
   const imprimirReporte = () => {
     const hoy = new Date().toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric' })
@@ -624,14 +651,10 @@ export default function Deudas() {
             })}
           </div>
         )}
-        {/* Cargar más */}
-        {hayMas && !loading && (
-          <div style={{display:'flex',justifyContent:'center',padding:'16px'}}>
-            <button onClick={cargarMas} disabled={cargandoMas} className="btn-secondary" style={{fontSize:13}}>
-              {cargandoMas ? 'Cargando...' : 'Ver más deudas'}
-            </button>
-          </div>
-        )}
+        {/* Sentinel para scroll infinito */}
+        <div ref={sentinelRef} style={{height:40,display:'flex',alignItems:'center',justifyContent:'center'}}>
+          {cargandoMas && <span style={{fontSize:12,color:'var(--app-text-secondary)'}}>Cargando más...</span>}
+        </div>
       </div>
 
       {/* ── Modal registrar pago ── */}
