@@ -809,7 +809,7 @@ export default function Ventas() {
             </div>
 
             {/* ── Columna derecha ── */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               {/* Precio balón si aplica */}
               {form.tipo_venta==='gas_balon'&&(
                 <div>
@@ -875,18 +875,18 @@ export default function Ventas() {
 
               {/* Opciones de crédito */}
               {form.es_credito&&(
-                <div style={{background:'rgba(251,146,60,0.06)',border:'1px solid rgba(251,146,60,0.25)',borderRadius:10,padding:'12px 14px'}} className="space-y-3">
-                  <p style={{fontSize:12,fontWeight:600,color:'#fb923c',margin:0}}>⚠️ Tipo de deuda</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[['dinero','💵 Dinero','Debe el monto'],['balon','🔵 Balón','Debe devolver bal.'],['ambos','💵+🔵 Ambos','Dinero + balón']].map(([val,label,desc])=>(
+                <div style={{background:'rgba(251,146,60,0.06)',border:'1px solid rgba(251,146,60,0.25)',borderRadius:10,padding:'8px 12px'}} className="space-y-2">
+                  <p style={{fontSize:11,fontWeight:600,color:'#fb923c',margin:0}}>⚠️ Tipo de deuda</p>
+                  <div className="grid grid-cols-3 gap-1">
+                    {[['dinero','💵 Dinero','monto'],['balon','🔵 Balón','bal.'],['ambos','💵+🔵 Ambos','ambos']].map(([val,label,desc])=>(
                       <button key={val} onClick={()=>setForm(f=>({...f,credito_tipo:val}))} style={{
-                        padding:'8px',borderRadius:8,border:form.credito_tipo===val?'1px solid rgba(251,146,60,0.6)':'1px solid var(--app-card-border)',
+                        padding:'5px 4px',borderRadius:7,border:form.credito_tipo===val?'1px solid rgba(251,146,60,0.6)':'1px solid var(--app-card-border)',
                         background:form.credito_tipo===val?'rgba(251,146,60,0.15)':'var(--app-card-bg-alt)',
                         color:form.credito_tipo===val?'#fb923c':'var(--app-text-secondary)',
-                        fontSize:11,fontWeight:500,cursor:'pointer',textAlign:'center'
+                        fontSize:10,fontWeight:500,cursor:'pointer',textAlign:'center',lineHeight:1.3
                       }}>
-                        <p style={{margin:0}}>{label}</p>
-                        <p style={{margin:'2px 0 0',opacity:0.7,fontWeight:400}}>{desc}</p>
+                        <span style={{display:'block'}}>{label}</span>
+                        <span style={{opacity:0.6,fontSize:9}}>{desc}</span>
                       </button>
                     ))}
                   </div>
@@ -919,11 +919,11 @@ export default function Ventas() {
                     const saldo=Math.max(0,total-pago)
                     const balones=parseInt(form.balones_credito)||cant
                     return(
-                      <div style={{background:'rgba(251,146,60,0.08)',border:'1px solid rgba(251,146,60,0.2)',borderRadius:8,padding:'10px 12px',fontSize:12}}>
-                        {total>0&&<p style={{color:'var(--app-text-secondary)',margin:'0 0 4px'}}>Total venta: <span style={{color:'var(--app-text)',fontWeight:600}}>S/{total.toLocaleString()}</span></p>}
-                        {pago>0&&<p style={{color:'#22c55e',margin:'0 0 4px'}}>Paga ahora: <span style={{fontWeight:600}}>S/{pago.toLocaleString()}</span></p>}
-                        {(form.credito_tipo==='dinero'||form.credito_tipo==='ambos')&&<p style={{color:'#fb923c',margin:'0 0 4px',fontWeight:600}}>Queda debiendo: S/{saldo.toLocaleString()}</p>}
-                        {(form.credito_tipo==='balon'||form.credito_tipo==='ambos')&&<p style={{color:'#fb923c',margin:0,fontWeight:600}}>Debe devolver: {balones} balón(es)</p>}
+                      <div style={{background:'rgba(251,146,60,0.08)',border:'1px solid rgba(251,146,60,0.2)',borderRadius:8,padding:'6px 10px',fontSize:11,display:'flex',flexWrap:'wrap',gap:'4px 12px'}}>
+                        {total>0&&<span style={{color:'var(--app-text-secondary)'}}>Total: <b style={{color:'var(--app-text)'}}>S/{total.toLocaleString()}</b></span>}
+                        {pago>0&&<span style={{color:'#22c55e'}}>Paga: <b>S/{pago.toLocaleString()}</b></span>}
+                        {(form.credito_tipo==='dinero'||form.credito_tipo==='ambos')&&<span style={{color:'#fb923c',fontWeight:600}}>Debe: S/{saldo.toLocaleString()}</span>}
+                        {(form.credito_tipo==='balon'||form.credito_tipo==='ambos')&&<span style={{color:'#fb923c',fontWeight:600}}>Dev: {balones} bal.</span>}
                       </div>
                     )
                   })()}
@@ -976,8 +976,8 @@ export default function Ventas() {
 
               {/* Notas */}
               <div>
-                <label className="label">Notas (opcional)</label>
-                <input className="input" placeholder="Observaciones..." value={form.notas} onChange={e=>setForm(f=>({...f,notas:e.target.value}))}/>
+                <label className="label" style={{fontSize:11}}>Notas (opcional)</label>
+                <input className="input" style={{padding:'6px 10px',fontSize:13}} placeholder="Observaciones..." value={form.notas} onChange={e=>setForm(f=>({...f,notas:e.target.value}))}/>
               </div>
             </div>
             </div>
