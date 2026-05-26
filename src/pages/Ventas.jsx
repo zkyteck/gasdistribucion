@@ -697,7 +697,7 @@ export default function Ventas() {
             <div className="lg:grid lg:grid-cols-2 lg:gap-6 space-y-4 lg:space-y-0">
             {/* ── Columna izquierda ── */}
             <div className="space-y-3">
-              {/* Cliente */
+              {/* Cliente */}
               <div className="relative">
                 <label className="label">Cliente</label>
                 <input className="input" placeholder="Buscar por nombre o teléfono..."
