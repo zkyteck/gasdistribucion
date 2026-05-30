@@ -599,9 +599,32 @@ export default function Distribuidores() {
   }
 
   async function abrirHistorial(d) {
-    setSelected(d); await cargarHistorial(d.id); await cargarMovimientos(d.id); setModal('historial')
+    setSelected(d)
+    await Promise.all([cargarHistorial(d.id), cargarMovimientos(d.id), cargarCuentaCorriente(d.id)])
+    setModal('historial')
   }
 
+  // ── Cerrar período autónomo ───────────────────────────────────────────────
+  async function cerrarPeriodo(dist) {
+    if(!window.confirm(`¿Cerrar el período actual de ${dist.nombre}? Esto archivará el historial y abrirá uno nuevo desde 0.`)) return
+    // Cerrar cuenta activa
+    const { data:cuentaAct } = await supabase.from('cuentas_corrientes_distribuidor')
+      .select('id').eq('distribuidor_id', dist.id).eq('estado','abierta').maybeSingle()
+    if(cuentaAct?.id) {
+      await supabase.from('cuentas_corrientes_distribuidor').update({
+        estado:'cerrada', fecha_cierre: hoyPeru()
+      }).eq('id', cuentaAct.id)
+    }
+    // Abrir nuevo período
+    await supabase.from('cuentas_corrientes_distribuidor').insert({
+      distribuidor_id: dist.id,
+      fecha_inicio: hoyPeru(),
+      saldo_anterior: 0, faltantes_anterior: 0,
+      estado: 'abierta'
+    })
+    cargar()
+    alert(`✅ Período cerrado. Se abrió un nuevo período para ${dist.nombre}.`)
+  }
 
   async function abrirCuenta(d) {
     setSelected(d); setCuentaForm({ vales20: '', vales43: '', adelantos: '', balones_devueltos: '', balones_vendidos: '', notas: '', fecha: hoyPeru() }); setError(''); setModal('cuenta')
@@ -895,8 +918,12 @@ export default function Distribuidores() {
                 ) : (
                   <>
                     <button onClick={() => { setSelected(d); setCargaModal(true); setCargaForm({ cargados:'', descargados:'', tipo_balon:'10kg', notas:'', fecha:hoyPeru() }); cargarCuentaCorriente(d.id) }}
-                      className="col-span-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
+                      className="bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
                       📦 Registrar reposición
+                    </button>
+                    <button onClick={() => cerrarPeriodo(d)}
+                      className="bg-orange-600/20 hover:bg-orange-600/30 border border-orange-600/30 text-orange-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
+                      🔒 Cerrar período
                     </button>
                     <button onClick={() => { setSelected(d); setAcuentaModal(true); setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_30: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru(), fecha_recojo: '' }); cargarAcuentaDist(d.id) }}
                       className="col-span-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/30 text-yellow-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
