@@ -349,19 +349,17 @@ export default function ModalHistorial({ selected, cargasDist, abonosParciales, 
             ))}
           </div>
 
-          {/* Tabs de períodos */}
-          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-            {diasPrevios.length>0&&(
-              <button onClick={()=>setPeriodoActivo('previo')} style={{padding:'6px 14px',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer',border:periodoActivo==='previo'?'1px solid #94a3b8':'1px solid var(--app-card-border)',background:periodoActivo==='previo'?'rgba(148,163,184,0.15)':'var(--app-card-bg-alt)',color:periodoActivo==='previo'?'#94a3b8':'var(--app-text-secondary)'}}>
-                📋 Historial previo
-              </button>
-            )}
-            {periodos.map(p=>(
-              <button key={p.numero} onClick={()=>setPeriodoActivo(String(p.numero))} style={{padding:'6px 14px',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer',border:String(periodoActivo)===String(p.numero)?'1px solid var(--app-accent)':'1px solid var(--app-card-border)',background:String(periodoActivo)===String(p.numero)?'color-mix(in srgb, var(--app-accent) 15%, transparent)':'var(--app-card-bg-alt)',color:String(periodoActivo)===String(p.numero)?'var(--app-accent)':'var(--app-text-secondary)'}}>
-                {p.es_actual?'🟢':''} Período {p.numero} {p.es_actual?'(actual)':''}
-                <span style={{fontSize:10,marginLeft:6,opacity:0.7}}>{p.fecha_inicio}{p.fecha_fin?` → ${p.fecha_fin}`:' → hoy'}</span>
-              </button>
-            ))}
+          {/* Selector de período — dropdown */}
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <label style={{fontSize:12,color:'var(--app-text-secondary)',fontWeight:600,whiteSpace:'nowrap'}}>Ver período:</label>
+            <select value={periodoActivo} onChange={e=>setPeriodoActivo(e.target.value)} className="input" style={{maxWidth:320,fontSize:13}}>
+              {diasPrevios.length>0&&<option value="previo">📋 Historial previo</option>}
+              {[...periodos].reverse().map(p=>(
+                <option key={p.numero} value={String(p.numero)}>
+                  {p.es_actual?'🟢 ':''}Período {p.numero}{p.es_actual?' (actual)':''} — {p.fecha_inicio}{p.fecha_fin?` → ${p.fecha_fin}`:' → hoy'} | {p.totalVendido} bal.
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Contenido del período seleccionado */}
