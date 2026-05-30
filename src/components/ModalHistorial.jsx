@@ -232,40 +232,41 @@ export default function ModalHistorial({ selected, cargasDist, abonosParciales, 
     )
   }
 
-  // Vista Alazan (ventas autónomas)
+  // Vista Alazan (ventas autónomas) — Libro de cuentas continuo
+  const TOTAL_BALONES = 500
 
-  // ── Filtrado por lote ──────────────────────────────────────────────────────
-  const ventasFiltradas = loteFiltro
-    ? (() => {
-        const idx = lotesDistribuidor.findIndex(l => l.id === loteFiltro.id)
-        const fechaInicio = loteFiltro.fecha
-        const loteMasReciente = lotesDistribuidor[idx - 1]
-        const fechaFin = loteMasReciente ? loteMasReciente.fecha : null
-        return ventasDistribuidor.filter(v => {
-          const fv = (v.fecha || '').substring(0, 10)
-          if (fechaFin) return fv >= fechaInicio && fv < fechaFin
-          return fv >= fechaInicio
-        })
-      })()
-    : ventasDistribuidor
-
+  // Agrupar ventas por día
   const ventasPorDia = {}
-  ventasFiltradas.forEach(v => {
+  ventasDistribuidor.forEach(v => {
     const dia = new Date(v.fecha).toLocaleDateString('en-CA', {timeZone:'America/Lima'})
-    if (!ventasPorDia[dia]) ventasPorDia[dia] = { cantidad: 0, monto: 0, v20: 0, v30: 0, v43: 0, efectivo: 0 }
+    if(!ventasPorDia[dia]) ventasPorDia[dia] = { cantidad:0, monto:0, v20:0, v30:0, v43:0, efectivo:0 }
     ventasPorDia[dia].cantidad += v.cantidad || 0
-    ventasPorDia[dia].monto += (v.cantidad||0) * (v.precio_unitario||0)
+    ventasPorDia[dia].monto += (v.cantidad||0)*(v.precio_unitario||0)
     ventasPorDia[dia].v20 += v.vales_20 || 0
     ventasPorDia[dia].v30 += v.vales_30 || 0
     ventasPorDia[dia].v43 += v.vales_43 || 0
     ventasPorDia[dia].efectivo += v.efectivo_dist || 0
   })
-  const diasOrdenados = Object.keys(ventasPorDia).sort((a,b) => b.localeCompare(a))
-  const lotesActivos = lotesDistribuidor.filter(l => !l.cerrado && l.cantidad_restante > 0)
-  const valorCampo = lotesActivos.reduce((s,l) => s + l.cantidad_restante * (l.precio_venta || l.precio_unitario), 0)
-  const loteActivo = lotesActivos[0]
-  const cantVentasFiltradas = ventasFiltradas.reduce((s,v) => s + (v.cantidad||0), 0)
-  const cuadra = loteFiltro ? cantVentasFiltradas === loteFiltro.cantidad_vendida : false
+
+  // Construir timeline unificado: ventas + cargas (reposiciones)
+  const eventos = [
+    ...Object.entries(ventasPorDia).map(([dia,data]) => ({ tipo:'venta', fecha:dia, ...data })),
+    ...(cargasDist||[]).map(cg => ({ tipo:'carga', fecha:(cg.fecha||'').substring(0,10), cantidad:cg.cantidad||0, descargados:cg.descargados||0, notas:cg.notas||'' }))
+  ].sort((a,b) => a.fecha.localeCompare(b.fecha))
+
+  // Calcular balance desde estado actual hacia atrás, luego reversar
+  let llenos = selected.stock_actual || 0
+  let vacios = selected.balones_vacios || 0
+  const timelineRev = [...eventos].reverse().map(ev => {
+    const ld = llenos, vd = vacios
+    if(ev.tipo==='carga') { llenos -= ev.cantidad; vacios += (ev.descargados||0) }
+    else { llenos += ev.cantidad; vacios -= ev.cantidad }
+    return { ...ev, llenos_despues:ld, vacios_despues:Math.max(0,vd), total:ld+vd, cuadra:(ld+vd)===TOTAL_BALONES }
+  })
+  const timeline = timelineRev.reverse()
+
+  const totalVendido = ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0),0)
+  const totalMonto = ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
@@ -277,12 +278,13 @@ export default function ModalHistorial({ selected, cargasDist, abonosParciales, 
         </div>
         <div className="px-6 py-5 space-y-5">
 
+          {/* Stats actuales */}
           <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10}}>
             {[
-              {label:'🟢 Llenos', value:`${selected.stock_actual} bal.`, color:'#34d399'},
-              {label:'⚪ Vacíos', value:`${selected.balones_vacios||0} bal.`, color:'var(--app-text)'},
-              {label:'💰 Precio FIFO', value:loteActivo?`S/${loteActivo.precio_venta||loteActivo.precio_unitario}`:`S/${selected.precio_base}`, color:'#fb923c'},
-              {label:'📦 Valor campo', value:`S/${valorCampo.toLocaleString('es-PE')}`, color:'#60a5fa'},
+              {label:'🟢 Llenos ahora', value:`${selected.stock_actual} bal.`, color:'#34d399'},
+              {label:'⚪ Vacíos ahora', value:`${selected.balones_vacios||0} bal.`, color:'var(--app-text)'},
+              {label:'📊 Total (debe ser 500)', value:`${(selected.stock_actual||0)+(selected.balones_vacios||0)} bal.`, color:(selected.stock_actual||0)+(selected.balones_vacios||0)===TOTAL_BALONES?'#34d399':'#f87171'},
+              {label:'💰 Total vendido', value:`S/${totalMonto.toLocaleString('es-PE')}`, color:'#60a5fa'},
             ].map(({label,value,color}) => (
               <div key={label} style={{background:'var(--app-card-bg-alt)',border:'1px solid var(--app-card-border)',borderRadius:10,padding:'10px',textAlign:'center'}}>
                 <p style={{fontSize:9,color:'var(--app-text-secondary)',margin:'0 0 4px',textTransform:'uppercase'}}>{label}</p>
@@ -291,222 +293,96 @@ export default function ModalHistorial({ selected, cargasDist, abonosParciales, 
             ))}
           </div>
 
+          {/* Libro de cuentas */}
           <div>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
-              <h4 style={{fontSize:15,fontWeight:700,color:'var(--app-text)',margin:0}}>
-                Rendición de ventas
-                {loteFiltro && <span style={{fontSize:12,color:'var(--app-text-secondary)',fontWeight:400,marginLeft:8}}>— Lote {loteFiltro.fecha}</span>}
-              </h4>
-              {loteFiltro && (
-                <button onClick={()=>setLoteFiltro(null)}
-                  style={{fontSize:11,padding:'3px 10px',borderRadius:5,border:'1px solid var(--app-card-border)',background:'none',color:'var(--app-text-secondary)',cursor:'pointer'}}>
-                  ✕ Quitar filtro
-                </button>
-              )}
-            </div>
-            {loteFiltro && (
-              <div style={{
-                background: cuadra ? 'rgba(52,211,153,0.08)' : 'rgba(251,146,60,0.08)',
-                border: `1px solid ${cuadra ? 'rgba(52,211,153,0.3)' : 'rgba(251,146,60,0.3)'}`,
-                borderRadius:10, padding:'12px 16px', marginBottom:12,
-                display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:8
-              }}>
-                <div style={{display:'flex',gap:20,flexWrap:'wrap'}}>
-                  {[
-                    {label:'Entregados',value:loteFiltro.cantidad_inicial,color:'#60a5fa'},
-                    {label:'Vendidos (lote)',value:loteFiltro.cantidad_vendida,color:'#a78bfa'},
-                    {label:'Ventas registradas',value:cantVentasFiltradas,color:cuadra?'#34d399':'#fb923c'},
-                    {label:'Restantes lote',value:loteFiltro.cantidad_restante,color:'#34d399'},
-                  ].map(({label,value,color})=>(
-                    <div key={label} style={{textAlign:'center'}}>
-                      <p style={{fontSize:10,color:'var(--app-text-secondary)',margin:'0 0 2px',textTransform:'uppercase'}}>{label}</p>
-                      <p style={{fontSize:18,fontWeight:800,color,margin:0}}>{value}</p>
-                    </div>
-                  ))}
-                  <div style={{display:'flex',alignItems:'center'}}>
-                    {cuadra
-                      ? <span style={{fontSize:13,fontWeight:700,color:'#34d399',padding:'4px 12px',borderRadius:6,background:'rgba(52,211,153,0.1)'}}>✅ Cuadra</span>
-                      : <span style={{fontSize:13,fontWeight:700,color:'#fb923c',padding:'4px 12px',borderRadius:6,background:'rgba(251,146,60,0.1)'}}>
-                          ⚠️ Diferencia: {Math.abs(cantVentasFiltradas - loteFiltro.cantidad_vendida)} bal.
-                        </span>
-                    }
-                  </div>
-                </div>
-                <button onClick={()=>setLoteFiltro(null)}
-                  style={{fontSize:12,padding:'5px 12px',borderRadius:6,border:'1px solid var(--app-card-border)',background:'var(--app-card-bg)',color:'var(--app-text-secondary)',cursor:'pointer'}}>
-                  Ver todo
-                </button>
-              </div>
-            )}
-            {diasOrdenados.length === 0 ? (
+            <h4 style={{fontSize:15,fontWeight:700,color:'var(--app-text)',margin:'0 0 10px'}}>
+              📒 Libro de cuentas — {selected.nombre}
+            </h4>
+
+            {timeline.length === 0 ? (
               <div style={{textAlign:'center',padding:'24px',color:'var(--app-text-secondary)',fontSize:13,border:'1px solid var(--app-card-border)',borderRadius:10}}>
-                {loteFiltro
-                  ? `Sin ventas registradas en el período de este lote`
-                  : `Sin ventas registradas — registra ventas desde Ventas seleccionando el almacén de ${selected.nombre}`}
+                Sin movimientos registrados
               </div>
             ) : (
               <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden',overflowX:'auto'}}>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 0.9fr 0.6fr 0.6fr 0.6fr 0.9fr 0.8fr',background:'var(--app-accent)',minWidth:800}}>
-                  {['Fecha','Cant.','Monto total','V.S/20','V.S/30','V.S/43','Saldo/Efectivo','Estado'].map(h => (
-                    <div key={h} style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#fff',textTransform:'uppercase',borderRight:'1px solid rgba(255,255,255,0.2)',textAlign:'center'}}>{h}</div>
+                {/* Header */}
+                <div style={{display:'grid',gridTemplateColumns:'0.8fr 0.9fr 0.5fr 0.9fr 0.5fr 0.5fr 0.5fr 0.7fr 0.6fr 0.6fr 0.4fr',background:'var(--app-accent)',minWidth:900}}>
+                  {['Fecha','Evento','Cant.','Monto','V.S/20','V.S/30','V.S/43','Ef.','🟢 Llenos','⚪ Vacíos','✅'].map(h => (
+                    <div key={h} style={{padding:'10px 8px',fontSize:11,fontWeight:700,color:'#fff',textTransform:'uppercase',borderRight:'1px solid rgba(255,255,255,0.2)',textAlign:'center'}}>{h}</div>
                   ))}
                 </div>
-                {diasOrdenados.map((dia,i) => {
-                  const d = ventasPorDia[dia]
-                  const totalVales = d.v20*20 + d.v30*30 + d.v43*43
-                  const totalPagado = totalVales + d.efectivo
-                  const saldo = d.monto - totalPagado
-                  const cancelado = saldo <= 0
-                  // Buscar desglose FIFO para ventas de ese día
-                  const ventasDelDia = ventasFiltradas.filter(v=>(v.fecha||'').substring(0,10)===dia)
-                  const ventaIdsDelDia = ventasDelDia.map(v=>v.id)
-                  const desgloseDelDia = (ventaLoteDetalles||[]).filter(vld=>ventaIdsDelDia.includes(vld.venta_id))
-                  // Agrupar desglose por lote
-                  const desglosePorLote = {}
-                  desgloseDelDia.forEach(vld => {
-                    const key = vld.lote_id
-                    if(!desglosePorLote[key]) desglosePorLote[key] = { fecha:vld.lotes_distribuidor?.fecha||'?', precio:vld.precio_venta, cantidad:0, subtotal:0 }
-                    desglosePorLote[key].cantidad += vld.cantidad
-                    desglosePorLote[key].subtotal += vld.cantidad * vld.precio_venta
-                  })
-                  const desgloseArr = Object.values(desglosePorLote)
-                  const tieneDesglose = desgloseArr.length > 1
+
+                {timeline.map((ev, i) => {
+                  const esRepos = ev.tipo === 'carga'
+                  const bg = esRepos
+                    ? 'rgba(96,165,250,0.10)'
+                    : i%2===0 ? 'transparent' : 'var(--app-row-alt)'
+                  const borderTop = esRepos ? '2px solid rgba(96,165,250,0.4)' : 'none'
+                  const borderBottom = esRepos ? '2px solid rgba(96,165,250,0.4)' : i<timeline.length-1?'1px solid var(--app-card-border)':'none'
+                  const totalColor = ev.cuadra ? '#34d399' : '#f87171'
+
                   return (
-                    <div key={dia}>
-                      <div style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 0.9fr 0.6fr 0.6fr 0.6fr 0.9fr 0.8fr',borderBottom:tieneDesglose?'none':i<diasOrdenados.length-1?'1px solid var(--app-card-border)':'none',minWidth:900,background:i%2===0?'transparent':'var(--app-row-alt)'}}>
-                        <div style={{padding:'14px 10px',fontSize:15,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center',fontWeight:700}}>{dia}</div>
-                        <div style={{padding:'14px 10px',fontSize:20,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.cantidad}</div>
-                        <div style={{padding:'14px 10px',fontSize:18,fontWeight:800,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{d.monto.toLocaleString('es-PE')}</div>
-                        <div style={{padding:'14px 10px',fontSize:18,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.v20>0?d.v20:'—'}</div>
-                        <div style={{padding:'14px 10px',fontSize:18,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.v30>0?d.v30:'—'}</div>
-                        <div style={{padding:'14px 10px',fontSize:18,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.v43>0?d.v43:'—'}</div>
-                        <div style={{padding:'14px 10px',fontSize:16,borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
-                          {cancelado
-                            ? <span style={{color:'#34d399',fontWeight:700}}>✅ Pagado</span>
-                            : <span style={{color:'#f87171',fontWeight:700}}>S/{saldo.toLocaleString('es-PE')}</span>
-                          }
-                          {d.efectivo > 0 && <p style={{fontSize:13,color:'#34d399',margin:'2px 0 0'}}>ef. S/{d.efectivo}</p>}
-                        </div>
-                        <div style={{padding:'8px 5px',textAlign:'center',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                          <span style={{fontSize:13,fontWeight:700,padding:'5px 12px',borderRadius:5,background:cancelado?'rgba(52,211,153,0.15)':'rgba(251,146,60,0.15)',color:cancelado?'#34d399':'#fb923c'}}>
-                            {cancelado?'Pagado':'Pendiente'}
-                          </span>
-                        </div>
-                      </div>
-                      {/* Desglose por lote si cruza múltiples */}
-                      {tieneDesglose && (
-                        <div style={{background:'rgba(99,102,241,0.04)',borderBottom:i<diasOrdenados.length-1?'1px solid var(--app-card-border)':'none',padding:'6px 16px 10px 24px'}}>
-                          <p style={{fontSize:10,color:'#818cf8',fontWeight:600,margin:'0 0 4px',textTransform:'uppercase'}}>📦 Desglose FIFO</p>
-                          {desgloseArr.map((dl,j)=>(
-                            <p key={j} style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0'}}>
-                              {j===desgloseArr.length-1?'└':'├'} {dl.cantidad} bal × S/{dl.precio} (Lote {dl.fecha}) = <strong style={{color:'var(--app-text)'}}>S/{dl.subtotal.toFixed(2)}</strong>
-                            </p>
-                          ))}
-                        </div>
+                    <div key={i} style={{display:'grid',gridTemplateColumns:'0.8fr 0.9fr 0.5fr 0.9fr 0.5fr 0.5fr 0.5fr 0.7fr 0.6fr 0.6fr 0.4fr',background:bg,borderTop,borderBottom,minWidth:900}}>
+                      <div style={{padding:'10px 8px',fontSize:13,fontWeight:600,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{ev.fecha}</div>
+                      {esRepos ? (
+                        <>
+                          <div style={{padding:'10px 8px',borderRight:'1px solid var(--app-card-border)',gridColumn:'span 7'}}>
+                            <span style={{fontSize:12,fontWeight:700,color:'#60a5fa',background:'rgba(96,165,250,0.15)',padding:'3px 10px',borderRadius:6}}>
+                              🔵 REPOSICIÓN +{ev.cantidad} bal.{ev.descargados>0?` (devuelve ${ev.descargados} vacíos)`:''}{ev.notas?` — ${ev.notas}`:''}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{padding:'10px 8px',fontSize:12,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>Venta</div>
+                          <div style={{padding:'10px 8px',fontSize:15,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{ev.cantidad}</div>
+                          <div style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{ev.monto.toLocaleString('es-PE')}</div>
+                          <div style={{padding:'10px 8px',fontSize:14,fontWeight:700,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{ev.v20>0?ev.v20:'—'}</div>
+                          <div style={{padding:'10px 8px',fontSize:14,fontWeight:700,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{ev.v30>0?ev.v30:'—'}</div>
+                          <div style={{padding:'10px 8px',fontSize:14,fontWeight:700,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{ev.v43>0?ev.v43:'—'}</div>
+                          <div style={{padding:'10px 8px',fontSize:13,fontWeight:600,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{ev.efectivo>0?`S/${ev.efectivo}`:'—'}</div>
+                        </>
                       )}
+                      <div style={{padding:'10px 8px',fontSize:15,fontWeight:800,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{ev.llenos_despues}</div>
+                      <div style={{padding:'10px 8px',fontSize:15,fontWeight:800,color:'#94a3b8',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{ev.vacios_despues}</div>
+                      <div style={{padding:'10px 8px',textAlign:'center'}}>
+                        <span style={{fontSize:13,fontWeight:800,color:totalColor}}>{ev.cuadra?'✅':'⚠️'}</span>
+                        {!ev.cuadra && <p style={{fontSize:9,color:'#f87171',margin:'2px 0 0'}}>{ev.total}</p>}
+                      </div>
                     </div>
                   )
                 })}
-                {/* Fila totales */}
-                {diasOrdenados.length > 1 && (() => {
-                  const tCant = ventasFiltradas.reduce((s,v)=>s+(v.cantidad||0),0)
-                  const tMonto = ventasFiltradas.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)
-                  const tv20 = ventasFiltradas.reduce((s,v)=>s+(v.vales_20||0),0)
-                  const tv30 = ventasFiltradas.reduce((s,v)=>s+(v.vales_30||0),0)
-                  const tv43 = ventasFiltradas.reduce((s,v)=>s+(v.vales_43||0),0)
-                  const tEf = ventasFiltradas.reduce((s,v)=>s+(v.efectivo_dist||0),0)
-                  const tVales = tv20*20+tv30*30+tv43*43
-                  const tSaldo = tMonto - tVales - tEf
+
+                {/* Fila de totales */}
+                {timeline.length > 1 && (()=>{
+                  const tCant = ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0),0)
+                  const tv20 = ventasDistribuidor.reduce((s,v)=>s+(v.vales_20||0),0)
+                  const tv30 = ventasDistribuidor.reduce((s,v)=>s+(v.vales_30||0),0)
+                  const tv43 = ventasDistribuidor.reduce((s,v)=>s+(v.vales_43||0),0)
+                  const tEf = ventasDistribuidor.reduce((s,v)=>s+(v.efectivo_dist||0),0)
                   return (
-                    <div style={{display:'grid',gridTemplateColumns:'1fr 0.6fr 0.9fr 0.6fr 0.6fr 0.6fr 0.9fr 0.8fr',background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)',minWidth:720}}>
-                      <div style={{padding:'14px 10px',fontSize:16,fontWeight:800,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)'}}>TOTAL</div>
-                      <div style={{padding:'14px 10px',fontSize:20,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tCant}</div>
-                      <div style={{padding:'14px 10px',fontSize:20,fontWeight:800,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{tMonto.toLocaleString('es-PE')}</div>
-                      <div style={{padding:'8px 5px',fontSize:17,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tv20||'—'}</div>
-                      <div style={{padding:'8px 5px',fontSize:17,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tv30||'—'}</div>
-                      <div style={{padding:'8px 5px',fontSize:17,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tv43||'—'}</div>
-                      <div style={{padding:'8px 5px',fontSize:12,fontWeight:700,color:tSaldo<=0?'#34d399':'#f87171',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
-                        {tSaldo<=0?'✅':'S/'+tSaldo.toLocaleString('es-PE')}
+                    <div style={{display:'grid',gridTemplateColumns:'0.8fr 0.9fr 0.5fr 0.9fr 0.5fr 0.5fr 0.5fr 0.7fr 0.6fr 0.6fr 0.4fr',background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)',minWidth:900}}>
+                      <div style={{padding:'12px 8px',fontWeight:800,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)',fontSize:13}}>TOTAL</div>
+                      <div style={{padding:'12px 8px',borderRight:'1px solid var(--app-card-border)'}}/>
+                      <div style={{padding:'12px 8px',fontSize:18,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tCant}</div>
+                      <div style={{padding:'12px 8px',fontSize:16,fontWeight:800,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{totalMonto.toLocaleString('es-PE')}</div>
+                      <div style={{padding:'12px 8px',fontSize:15,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tv20||'—'}</div>
+                      <div style={{padding:'12px 8px',fontSize:15,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tv30||'—'}</div>
+                      <div style={{padding:'12px 8px',fontSize:15,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tv43||'—'}</div>
+                      <div style={{padding:'12px 8px',fontSize:14,fontWeight:700,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tEf>0?`S/${tEf}`:'—'}</div>
+                      <div style={{padding:'12px 8px',fontSize:16,fontWeight:800,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{selected.stock_actual}</div>
+                      <div style={{padding:'12px 8px',fontSize:16,fontWeight:800,color:'#94a3b8',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{selected.balones_vacios||0}</div>
+                      <div style={{padding:'12px 8px',textAlign:'center',fontSize:16,fontWeight:800,color:(selected.stock_actual||0)+(selected.balones_vacios||0)===TOTAL_BALONES?'#34d399':'#f87171'}}>
+                        {(selected.stock_actual||0)+(selected.balones_vacios||0)===TOTAL_BALONES?'✅':'⚠️'}
                       </div>
-                      <div style={{padding:'8px 5px'}}/>
                     </div>
                   )
                 })()}
               </div>
             )}
           </div>
-          {/* Lotes FIFO — clickeables para filtrar */}
-          {lotesDistribuidor.length > 0 && (
-            <div>
-              <h4 style={{fontSize:15,fontWeight:700,color:'var(--app-text)',margin:'0 0 6px'}}>Lotes de precio (FIFO)</h4>
-              <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 10px'}}>
-                💡 Haz clic en un lote para filtrar la rendición a ese período
-              </p>
-              <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden'}}>
-                <div style={{display:'grid',gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',background:'var(--app-card-bg-alt)',borderBottom:'1px solid var(--app-card-border)'}}>
-                  {['Fecha','P. Venta','Inicial','Vendidos','Restantes','¿Cuadra?','Estado'].map(h => (
-                    <div key={h} style={{padding:'13px 12px',fontSize:13,fontWeight:800,color:'var(--app-text-secondary)',textTransform:'uppercase',borderRight:'1px solid var(--app-card-border)'}}>{h}</div>
-                  ))}
-                </div>
-                {lotesDistribuidor.map((lote,i) => {
-                  const ag = lote.cerrado || lote.cantidad_restante <= 0
-                  const seleccionado = loteFiltro?.id === lote.id
-                  const idxL = i
-                  const lotePrevio = lotesDistribuidor[idxL - 1]
-                  const fInicio = lote.fecha
-                  const fFin = lotePrevio ? lotePrevio.fecha : null
-                  const ventasLote = ventasDistribuidor.filter(v => {
-                    const fv = (v.fecha||'').substring(0,10)
-                    if (fFin) return fv >= fInicio && fv < fFin
-                    return fv >= fInicio
-                  })
-                  const cantRegistradas = ventasLote.reduce((s,v)=>s+(v.cantidad||0),0)
-                  const loteCuadra = cantRegistradas === lote.cantidad_vendida
-                  return (
-                    <div key={lote.id}
-                      onClick={()=>setLoteFiltro(seleccionado ? null : lote)}
-                      style={{
-                        display:'grid', gridTemplateColumns:'1.2fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 0.9fr',
-                        borderBottom:i<lotesDistribuidor.length-1?'1px solid var(--app-card-border)':'none',
-                        cursor:'pointer',
-                        background: seleccionado ? 'color-mix(in srgb, var(--app-accent) 8%, transparent)' : 'transparent',
-                        outline: seleccionado ? '2px solid var(--app-accent)' : 'none',
-                        transition:'background 0.15s'
-                      }}
-                      onMouseEnter={e=>{ if(!seleccionado) e.currentTarget.style.background='var(--app-card-bg-alt)' }}
-                      onMouseLeave={e=>{ if(!seleccionado) e.currentTarget.style.background='transparent' }}
-                    >
-                      <div style={{padding:'13px 12px',fontSize:15,fontWeight:600,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)'}}>
-                        {lote.fecha}
-                        {seleccionado && <span style={{fontSize:10,color:'var(--app-accent)',marginLeft:6}}>● filtrado</span>}
-                      </div>
-                      <div style={{padding:'13px 12px',fontSize:17,fontWeight:800,color:'#fb923c',borderRight:'1px solid var(--app-card-border)'}}>
-                        {lote.precio_venta ? `S/${lote.precio_venta}` : <span style={{color:'#f87171',fontSize:12}}>Sin precio</span>}
-                      </div>
-                      <div style={{padding:'13px 12px',fontSize:16,fontWeight:600,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{lote.cantidad_inicial}</div>
-                      <div style={{padding:'13px 12px',fontSize:17,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{lote.cantidad_vendida}</div>
-                      <div style={{padding:'13px 12px',fontSize:19,fontWeight:800,color:ag?'#9ca3af':'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{lote.cantidad_restante}</div>
-                      <div style={{padding:'13px 12px',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>
-                        {lote.cantidad_vendida === 0
-                          ? <span style={{fontSize:11,color:'var(--app-text-secondary)'}}>—</span>
-                          : loteCuadra
-                            ? <span style={{fontSize:13,color:'#34d399',fontWeight:700}}>✅</span>
-                            : <span style={{fontSize:11,color:'#fb923c',fontWeight:700}}>⚠️ {cantRegistradas} reg.</span>
-                        }
-                      </div>
-                      <div style={{padding:'8px',textAlign:'center'}}>
-                        <span style={{fontSize:13,fontWeight:700,padding:'5px 12px',borderRadius:5,background:ag?'rgba(107,114,128,0.15)':'rgba(52,211,153,0.15)',color:ag?'#9ca3af':'#34d399'}}>
-                          {ag?'Agotado':lote.cantidad_vendida===0?'Nuevo':'Activo'}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
 
-          {/* Botón imprimir Alazan */}
+                    {/* Botón imprimir Alazan */}
           {ventasDistribuidor.length > 0 && (
             <button
               onClick={() => {
