@@ -234,14 +234,19 @@ export default function Reportes() {
       const dias = eachDayOfInterval({ start:parseISO(desdeDate), end:parseISO(hastaDate) })
       const diario = dias.map(dia => {
         const ds = format(dia,'yyyy-MM-dd')
-        const vDia = ventasTienda.filter(v=>v.fecha?.startsWith(ds))
-        const vDistDia = (ventasDist||[]).filter(v=>distAlmacenIds.includes(v.almacen_id)&&v.fecha?.startsWith(ds))
+        const vDia = ventasTienda.filter(v=>new Date(v.fecha).toLocaleDateString('en-CA',{timeZone:'America/Lima'})===ds)
+        const vDistDia = (ventasDist||[]).filter(v=>distAlmacenIds.includes(v.almacen_id)&&new Date(v.fecha).toLocaleDateString('en-CA',{timeZone:'America/Lima'})===ds)
         const iT = vDia.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)
         const gT = vDia.reduce((s,v)=>s+(v.cantidad||0)*((v.precio_unitario||0)-(costos[v.tipo_balon||'10kg']||0)),0)
         const bT = vDia.reduce((s,v)=>s+(v.cantidad||0),0)
         const iD = vDistDia.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)
-        const gD = vDistDia.reduce((s,v)=>s+(v.cantidad||0)*((v.precio_unitario||0)-(costos[v.tipo_balon||'10kg']||costoPromedio)),0)
         const bD = vDistDia.reduce((s,v)=>s+(v.cantidad||0),0)
+        // Ganancia = cobrado (efectivo+vales) - costo de compra
+        const gD = vDistDia.reduce((s,v)=>{
+          const cobrado=(v.vales_20||0)*20+(v.vales_30||0)*30+(v.vales_43||0)*43+(v.efectivo_dist||0)
+          const costo=(v.cantidad||0)*(costos[v.tipo_balon||'10kg']||costoPromedio)
+          return s+cobrado-costo
+        },0)
         return {
           dia: format(dia, dias.length>15?'dd/MM':'EEE dd',{locale:es}),
           Tienda:Math.round(iT), 'Gan.Tienda':Math.round(gT), 'Bal.Tienda':bT,
@@ -625,19 +630,13 @@ export default function Reportes() {
             <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:12,padding:'16px'}}>
               <p style={{fontSize:13,fontWeight:600,color:'var(--app-text)',margin:'0 0 14px'}}>📈 Ganancia diaria {filtroVista==='tienda'?'(tienda)':filtroVista==='distribuidores'?'(distribuidores)':'(total)'}</p>
               <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={data.diario.map(d=>({...d, Ganancia: filtroVista==='distribuidores'?d['Gan.Dist']:filtroVista==='tienda'?d['Gan.Tienda']:(d['Gan.Tienda']||0)+(d['Gan.Dist']||0)}))}>
-                  <defs>
-                    <linearGradient id="gradGan" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--app-card-border)"/>
+                <BarChart data={data.diario.map(d=>({...d, Ganancia: filtroVista==='distribuidores'?d['Gan.Dist']:filtroVista==='tienda'?d['Gan.Tienda']:(d['Gan.Tienda']||0)+(d['Gan.Dist']||0)}))}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--app-card-border)" vertical={false}/>
                   <XAxis dataKey="dia" tick={{fill:'var(--app-text-secondary)',fontSize:10}} axisLine={false} tickLine={false}/>
                   <YAxis tick={{fill:'var(--app-text-secondary)',fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>`S/${v}`} width={55}/>
-                  <Tooltip content={<CustomTooltip/>}/>
-                  <Area type="monotone" dataKey="Ganancia" name="Ganancia" stroke="#22c55e" strokeWidth={2} fill="url(#gradGan)"/>
-                </AreaChart>
+                  <Tooltip formatter={(v)=>[`S/${(v||0).toLocaleString('es-PE')}`,'Ganancia']} labelStyle={{color:'var(--app-text)'}} contentStyle={{background:'var(--app-modal-bg)',border:'1px solid var(--app-card-border)',borderRadius:8}}/>
+                  <Bar dataKey="Ganancia" name="Ganancia" fill="#22c55e" radius={[4,4,0,0]}/>
+                </BarChart>
               </ResponsiveContainer>
             </div>
 
