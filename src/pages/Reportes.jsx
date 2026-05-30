@@ -189,7 +189,7 @@ export default function Reportes() {
       const porDist = {}
       ;(ventasDist||[]).filter(v=>distAlmacenIds.includes(v.almacen_id)).forEach(v => {
         const distNombre = distAlmacenMap[v.almacen_id]||v.almacenes?.nombre||'Sin nombre'
-        if(!porDist[distNombre]) porDist[distNombre]={ ingreso:0, balones:0, costo:0, ganancia:0, vales20:0, vales30:0, vales43:0, cobradoVales:0, cobradoEf:0, totalCobrado:0, pendiente:0 }
+        if(!porDist[distNombre]) porDist[distNombre]={ ingreso:0, balones:0, costo:0, ganancia:0, vales20:0, vales30:0, vales43:0, cobradoVales:0, cobradoEf:0, totalCobrado:0, pendiente:0, saldo:0 }
         const monto=(v.cantidad||0)*(v.precio_unitario||0)
         const costo=(v.cantidad||0)*(costos[v.tipo_balon||'10kg']||costoPromedio)
         const v20=v.vales_20||0, v30=v.vales_30||0, v43=v.vales_43||0
@@ -205,6 +205,7 @@ export default function Reportes() {
         porDist[distNombre].cobradoEf += ef
         porDist[distNombre].totalCobrado += cobrado
         porDist[distNombre].pendiente += Math.max(0, monto-cobrado)
+        porDist[distNombre].saldo += monto-totalVales-ef
       })
       const ingDist=Object.values(porDist).reduce((s,d)=>s+d.ingreso,0)
       const balDist=Object.values(porDist).reduce((s,d)=>s+d.balones,0)
