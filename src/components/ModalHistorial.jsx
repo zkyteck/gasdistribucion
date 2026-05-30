@@ -232,60 +232,116 @@ export default function ModalHistorial({ selected, cargasDist, abonosParciales, 
     )
   }
 
-  // Vista Alazan (ventas autónomas) — Libro de cuentas continuo
+  // Vista Alazan — Sistema de períodos por reposición
   const TOTAL_BALONES = 500
+  const [periodoActivo, setPeriodoActivo] = useState('actual')
 
-  // Agrupar ventas por día
-  const ventasPorDia = {}
-  ventasDistribuidor.forEach(v => {
-    const dia = new Date(v.fecha).toLocaleDateString('en-CA', {timeZone:'America/Lima'})
-    if(!ventasPorDia[dia]) ventasPorDia[dia] = { cantidad:0, monto:0, v20:0, v30:0, v43:0, efectivo:0 }
-    ventasPorDia[dia].cantidad += v.cantidad || 0
-    ventasPorDia[dia].monto += (v.cantidad||0)*(v.precio_unitario||0)
-    ventasPorDia[dia].v20 += v.vales_20 || 0
-    ventasPorDia[dia].v30 += v.vales_30 || 0
-    ventasPorDia[dia].v43 += v.vales_43 || 0
-    ventasPorDia[dia].efectivo += v.efectivo_dist || 0
+  // Cargas ordenadas = límites de períodos
+  const cargasOrd = [...(cargasDist||[])].sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''))
+
+  // Agrupar ventas por día dentro de un rango de fechas
+  const agruparDias = (ventas) => {
+    const m = {}
+    ventas.forEach(v => {
+      const dia = new Date(v.fecha).toLocaleDateString('en-CA',{timeZone:'America/Lima'})
+      if(!m[dia]) m[dia] = {cantidad:0,monto:0,v20:0,v30:0,v43:0,efectivo:0}
+      m[dia].cantidad += v.cantidad||0
+      m[dia].monto += (v.cantidad||0)*(v.precio_unitario||0)
+      m[dia].v20 += v.vales_20||0; m[dia].v30 += v.vales_30||0
+      m[dia].v43 += v.vales_43||0; m[dia].efectivo += v.efectivo_dist||0
+    })
+    return m
+  }
+
+  // Calcular todos los períodos
+  const periodos = cargasOrd.map((carga, i) => {
+    const sig = cargasOrd[i+1]
+    const fi = (carga.fecha||'').substring(0,10)
+    const ff = sig ? (sig.fecha||'').substring(0,10) : null
+    const ventas = ventasDistribuidor.filter(v => {
+      const fv = (v.fecha||'').substring(0,10)
+      return ff ? fv >= fi && fv < ff : fv >= fi
+    })
+    // Balance inicial: período 1 = carga fresca, siguientes = acumulado
+    let llenosIni, vaciosIni
+    if(i===0) { llenosIni = carga.cantidad; vaciosIni = 0 }
+    else {
+      const prev = periodos[i-1] // ya calculado
+      llenosIni = (prev?.llenos_fin||0) + carga.cantidad
+      vaciosIni = Math.max(0, (prev?.vacios_fin||0) - (carga.descargados||0))
+    }
+    const dias = Object.keys(agruparDias(ventas)).sort()
+    const porDia = agruparDias(ventas)
+    let ll = llenosIni, vv = vaciosIni
+    const bal = {}
+    dias.forEach(d => { ll -= porDia[d].cantidad; vv += porDia[d].cantidad; bal[d] = {llenos:ll,vacios:vv,total:ll+vv} })
+    return {
+      numero:i+1, carga, es_actual:!sig,
+      fecha_inicio:fi, fecha_fin:ff,
+      llenosIni, vaciosIni, llenos_fin:ll, vacios_fin:vv,
+      ventas, porDia, dias, bal,
+      totalVendido: ventas.reduce((s,v)=>s+(v.cantidad||0),0),
+      totalMonto: ventas.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0),
+    }
   })
 
-  // Construir timeline unificado: ventas + cargas (reposiciones)
-  const eventos = [
-    ...Object.entries(ventasPorDia).map(([dia,data]) => ({ tipo:'venta', fecha:dia, ...data })),
-    ...(cargasDist||[]).map(cg => ({ tipo:'carga', fecha:(cg.fecha||'').substring(0,10), cantidad:cg.cantidad||0, descargados:cg.descargados||0, notas:cg.notas||'' }))
-  ].sort((a,b) => a.fecha.localeCompare(b.fecha))
+  // Ventas antes del primer período (historial previo)
+  const primeraFecha = cargasOrd[0]?.fecha?.substring(0,10)
+  const ventasPrevias = primeraFecha
+    ? ventasDistribuidor.filter(v=>(v.fecha||'').substring(0,10)<primeraFecha)
+    : ventasDistribuidor
+  const porDiaPrevio = agruparDias(ventasPrevias)
+  const diasPrevios = Object.keys(porDiaPrevio).sort()
 
-  // Calcular balance desde estado actual hacia atrás, luego reversar
-  let llenos = selected.stock_actual || 0
-  let vacios = selected.balones_vacios || 0
-  const timelineRev = [...eventos].reverse().map(ev => {
-    const ld = llenos, vd = vacios
-    if(ev.tipo==='carga') { llenos -= ev.cantidad; vacios += (ev.descargados||0) }
-    else { llenos += ev.cantidad; vacios -= ev.cantidad }
-    return { ...ev, llenos_despues:ld, vacios_despues:Math.max(0,vd), total:ld+vd, cuadra:(ld+vd)===TOTAL_BALONES }
-  })
-  const timeline = timelineRev.reverse()
+  const periodoVisible = periodoActivo==='previo' ? null : periodos.find(p=>String(p.numero)===String(periodoActivo)) || periodos[periodos.length-1]
+  const esPrevio = periodoActivo==='previo'
 
-  const totalVendido = ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0),0)
-  const totalMonto = ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)
+  const colGrid = '0.9fr 0.5fr 0.9fr 0.5fr 0.5fr 0.5fr 0.8fr 0.6fr 0.6fr 0.4fr'
+  const hdrs = ['Fecha','Cant.','Monto','V.S/20','V.S/30','V.S/43','Ef.','🟢 Llenos','⚪ Vacíos','✅']
+
+  const FilaVenta = ({dia, d, bal}) => (
+    <div style={{display:'grid',gridTemplateColumns:colGrid,borderBottom:'1px solid var(--app-card-border)',minWidth:750}}>
+      <div style={{padding:'10px 8px',fontSize:13,fontWeight:600,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{dia}</div>
+      <div style={{padding:'10px 8px',fontSize:15,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.cantidad}</div>
+      <div style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{d.monto.toLocaleString('es-PE')}</div>
+      <div style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.v20>0?d.v20:'—'}</div>
+      <div style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.v30>0?d.v30:'—'}</div>
+      <div style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.v43>0?d.v43:'—'}</div>
+      <div style={{padding:'10px 8px',fontSize:13,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{d.efectivo>0?`S/${d.efectivo}`:'—'}</div>
+      {bal ? <>
+        <div style={{padding:'10px 8px',fontSize:15,fontWeight:800,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{bal.llenos}</div>
+        <div style={{padding:'10px 8px',fontSize:15,fontWeight:800,color:'#94a3b8',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{bal.vacios}</div>
+        <div style={{padding:'10px 8px',textAlign:'center'}}>
+          {bal.total===TOTAL_BALONES
+            ? <span style={{fontSize:14,color:'#34d399'}}>✅</span>
+            : <span style={{fontSize:11,color:'#f87171',fontWeight:700}}>⚠️<br/>{bal.total}</span>}
+        </div>
+      </> : <>
+        <div style={{padding:'10px 8px',borderRight:'1px solid var(--app-card-border)'}}/>
+        <div style={{padding:'10px 8px',borderRight:'1px solid var(--app-card-border)'}}/>
+        <div style={{padding:'10px 8px'}}/>
+      </>}
+    </div>
+  )
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
       <div className="w-full max-w-6xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
         style={{background:'var(--app-modal-bg)',border:'1px solid var(--app-modal-border)'}}>
         <div className="flex items-center justify-between px-6 py-4" style={{borderBottom:'1px solid var(--app-card-border)'}}>
-          <h3 style={{color:'var(--app-text)',fontWeight:700,fontSize:16,margin:0}}>📊 {selected.nombre}</h3>
+          <h3 style={{color:'var(--app-text)',fontWeight:700,fontSize:16,margin:0}}>📒 Libro de cuentas — {selected.nombre}</h3>
           <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'var(--app-text-secondary)'}}>✕</button>
         </div>
-        <div className="px-6 py-5 space-y-5">
+        <div className="px-6 py-5 space-y-4">
 
           {/* Stats actuales */}
           <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10}}>
             {[
               {label:'🟢 Llenos ahora', value:`${selected.stock_actual} bal.`, color:'#34d399'},
-              {label:'⚪ Vacíos ahora', value:`${selected.balones_vacios||0} bal.`, color:'var(--app-text)'},
-              {label:'📊 Total (debe ser 500)', value:`${(selected.stock_actual||0)+(selected.balones_vacios||0)} bal.`, color:(selected.stock_actual||0)+(selected.balones_vacios||0)===TOTAL_BALONES?'#34d399':'#f87171'},
-              {label:'💰 Total vendido', value:`S/${totalMonto.toLocaleString('es-PE')}`, color:'#60a5fa'},
-            ].map(({label,value,color}) => (
+              {label:'⚪ Vacíos ahora', value:`${selected.balones_vacios||0} bal.`, color:'#94a3b8'},
+              {label:'📊 Total', value:`${(selected.stock_actual||0)+(selected.balones_vacios||0)} bal.`, color:(selected.stock_actual||0)+(selected.balones_vacios||0)===TOTAL_BALONES?'#34d399':'#f87171'},
+              {label:'📦 Períodos registrados', value:`${periodos.length}`, color:'#60a5fa'},
+            ].map(({label,value,color})=>(
               <div key={label} style={{background:'var(--app-card-bg-alt)',border:'1px solid var(--app-card-border)',borderRadius:10,padding:'10px',textAlign:'center'}}>
                 <p style={{fontSize:9,color:'var(--app-text-secondary)',margin:'0 0 4px',textTransform:'uppercase'}}>{label}</p>
                 <p style={{fontSize:16,fontWeight:700,color,margin:0}}>{value}</p>
@@ -293,91 +349,107 @@ export default function ModalHistorial({ selected, cargasDist, abonosParciales, 
             ))}
           </div>
 
-          {/* Libro de cuentas */}
-          <div>
-            <h4 style={{fontSize:15,fontWeight:700,color:'var(--app-text)',margin:'0 0 10px'}}>
-              📒 Libro de cuentas — {selected.nombre}
-            </h4>
+          {/* Tabs de períodos */}
+          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+            {diasPrevios.length>0&&(
+              <button onClick={()=>setPeriodoActivo('previo')} style={{padding:'6px 14px',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer',border:periodoActivo==='previo'?'1px solid #94a3b8':'1px solid var(--app-card-border)',background:periodoActivo==='previo'?'rgba(148,163,184,0.15)':'var(--app-card-bg-alt)',color:periodoActivo==='previo'?'#94a3b8':'var(--app-text-secondary)'}}>
+                📋 Historial previo
+              </button>
+            )}
+            {periodos.map(p=>(
+              <button key={p.numero} onClick={()=>setPeriodoActivo(String(p.numero))} style={{padding:'6px 14px',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer',border:String(periodoActivo)===String(p.numero)?'1px solid var(--app-accent)':'1px solid var(--app-card-border)',background:String(periodoActivo)===String(p.numero)?'color-mix(in srgb, var(--app-accent) 15%, transparent)':'var(--app-card-bg-alt)',color:String(periodoActivo)===String(p.numero)?'var(--app-accent)':'var(--app-text-secondary)'}}>
+                {p.es_actual?'🟢':''} Período {p.numero} {p.es_actual?'(actual)':''}
+                <span style={{fontSize:10,marginLeft:6,opacity:0.7}}>{p.fecha_inicio}{p.fecha_fin?` → ${p.fecha_fin}`:' → hoy'}</span>
+              </button>
+            ))}
+          </div>
 
-            {timeline.length === 0 ? (
-              <div style={{textAlign:'center',padding:'24px',color:'var(--app-text-secondary)',fontSize:13,border:'1px solid var(--app-card-border)',borderRadius:10}}>
-                Sin movimientos registrados
-              </div>
-            ) : (
-              <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden',overflowX:'auto'}}>
-                {/* Header */}
-                <div style={{display:'grid',gridTemplateColumns:'0.8fr 0.9fr 0.5fr 0.9fr 0.5fr 0.5fr 0.5fr 0.7fr 0.6fr 0.6fr 0.4fr',background:'var(--app-accent)',minWidth:900}}>
-                  {['Fecha','Evento','Cant.','Monto','V.S/20','V.S/30','V.S/43','Ef.','🟢 Llenos','⚪ Vacíos','✅'].map(h => (
-                    <div key={h} style={{padding:'10px 8px',fontSize:11,fontWeight:700,color:'#fff',textTransform:'uppercase',borderRight:'1px solid rgba(255,255,255,0.2)',textAlign:'center'}}>{h}</div>
-                  ))}
+          {/* Contenido del período seleccionado */}
+          <div style={{border:'1px solid var(--app-card-border)',borderRadius:10,overflow:'hidden',overflowX:'auto'}}>
+
+            {/* Header tabla */}
+            <div style={{display:'grid',gridTemplateColumns:colGrid,background:'var(--app-accent)',minWidth:750}}>
+              {hdrs.map(h=>(
+                <div key={h} style={{padding:'10px 8px',fontSize:11,fontWeight:700,color:'#fff',textTransform:'uppercase',borderRight:'1px solid rgba(255,255,255,0.2)',textAlign:'center'}}>{h}</div>
+              ))}
+            </div>
+
+            {/* Historial previo */}
+            {esPrevio && (
+              <>
+                <div style={{background:'rgba(148,163,184,0.06)',borderBottom:'1px solid var(--app-card-border)',padding:'8px 14px'}}>
+                  <p style={{fontSize:12,color:'var(--app-text-secondary)',margin:0}}>
+                    📋 Historial previo al primer período — {ventasPrevias.reduce((s,v)=>s+(v.cantidad||0),0)} bal. vendidos
+                  </p>
+                </div>
+                {diasPrevios.length===0
+                  ? <div style={{padding:'20px',textAlign:'center',color:'var(--app-text-secondary)',fontSize:13}}>Sin ventas previas</div>
+                  : diasPrevios.map((dia,i)=><FilaVenta key={dia} dia={dia} d={porDiaPrevio[dia]} bal={null}/>)
+                }
+              </>
+            )}
+
+            {/* Período con reposición y balance */}
+            {!esPrevio && periodoVisible && (
+              <>
+                {/* Fila reposición */}
+                <div style={{background:'rgba(96,165,250,0.10)',borderBottom:'2px solid rgba(96,165,250,0.4)',padding:'12px 16px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+                    <span style={{fontSize:22}}>🔵</span>
+                    <div style={{flex:1}}>
+                      <p style={{fontSize:13,fontWeight:800,color:'#60a5fa',margin:0}}>
+                        REPOSICIÓN — {periodoVisible.carga.fecha}
+                      </p>
+                      <div style={{display:'flex',gap:20,marginTop:6,flexWrap:'wrap'}}>
+                        <span style={{fontSize:12,color:'#34d399',fontWeight:700}}>✅ Recibe: +{periodoVisible.carga.cantidad} llenos</span>
+                        {periodoVisible.carga.descargados>0&&<span style={{fontSize:12,color:'#94a3b8',fontWeight:700}}>📤 Entrega: {periodoVisible.carga.descargados} vacíos al proveedor</span>}
+                        {periodoVisible.carga.notas&&<span style={{fontSize:11,color:'var(--app-text-secondary)',fontStyle:'italic'}}>{periodoVisible.carga.notas}</span>}
+                      </div>
+                      <div style={{marginTop:6,display:'flex',gap:16,alignItems:'center'}}>
+                        <span style={{fontSize:12,color:'var(--app-text-secondary)'}}>Inicio período:</span>
+                        <span style={{fontSize:13,fontWeight:700,color:'#34d399'}}>{periodoVisible.llenosIni} 🟢 llenos</span>
+                        <span style={{fontSize:13,fontWeight:700,color:'#94a3b8'}}>{periodoVisible.vaciosIni} ⚪ vacíos</span>
+                        <span style={{fontSize:13,fontWeight:800,color:periodoVisible.llenosIni+periodoVisible.vaciosIni===TOTAL_BALONES?'#34d399':'#f87171'}}>
+                          = {periodoVisible.llenosIni+periodoVisible.vaciosIni} {periodoVisible.llenosIni+periodoVisible.vaciosIni===TOTAL_BALONES?'✅':'⚠️'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                {timeline.map((ev, i) => {
-                  const esRepos = ev.tipo === 'carga'
-                  const bg = esRepos
-                    ? 'rgba(96,165,250,0.10)'
-                    : i%2===0 ? 'transparent' : 'var(--app-row-alt)'
-                  const borderTop = esRepos ? '2px solid rgba(96,165,250,0.4)' : 'none'
-                  const borderBottom = esRepos ? '2px solid rgba(96,165,250,0.4)' : i<timeline.length-1?'1px solid var(--app-card-border)':'none'
-                  const totalColor = ev.cuadra ? '#34d399' : '#f87171'
+                {/* Filas de ventas con balance */}
+                {periodoVisible.dias.length===0
+                  ? <div style={{padding:'20px',textAlign:'center',color:'var(--app-text-secondary)',fontSize:13}}>Sin ventas registradas en este período</div>
+                  : periodoVisible.dias.map(dia=><FilaVenta key={dia} dia={dia} d={periodoVisible.porDia[dia]} bal={periodoVisible.bal[dia]}/>)
+                }
 
-                  return (
-                    <div key={i} style={{display:'grid',gridTemplateColumns:'0.8fr 0.9fr 0.5fr 0.9fr 0.5fr 0.5fr 0.5fr 0.7fr 0.6fr 0.6fr 0.4fr',background:bg,borderTop,borderBottom,minWidth:900}}>
-                      <div style={{padding:'10px 8px',fontSize:13,fontWeight:600,color:'var(--app-text)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{ev.fecha}</div>
-                      {esRepos ? (
-                        <>
-                          <div style={{padding:'10px 8px',borderRight:'1px solid var(--app-card-border)',gridColumn:'span 7'}}>
-                            <span style={{fontSize:12,fontWeight:700,color:'#60a5fa',background:'rgba(96,165,250,0.15)',padding:'3px 10px',borderRadius:6}}>
-                              🔵 REPOSICIÓN +{ev.cantidad} bal.{ev.descargados>0?` (devuelve ${ev.descargados} vacíos)`:''}{ev.notas?` — ${ev.notas}`:''}
-                            </span>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div style={{padding:'10px 8px',fontSize:12,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>Venta</div>
-                          <div style={{padding:'10px 8px',fontSize:15,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{ev.cantidad}</div>
-                          <div style={{padding:'10px 8px',fontSize:13,fontWeight:700,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{ev.monto.toLocaleString('es-PE')}</div>
-                          <div style={{padding:'10px 8px',fontSize:14,fontWeight:700,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{ev.v20>0?ev.v20:'—'}</div>
-                          <div style={{padding:'10px 8px',fontSize:14,fontWeight:700,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{ev.v30>0?ev.v30:'—'}</div>
-                          <div style={{padding:'10px 8px',fontSize:14,fontWeight:700,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{ev.v43>0?ev.v43:'—'}</div>
-                          <div style={{padding:'10px 8px',fontSize:13,fontWeight:600,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{ev.efectivo>0?`S/${ev.efectivo}`:'—'}</div>
-                        </>
-                      )}
-                      <div style={{padding:'10px 8px',fontSize:15,fontWeight:800,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{ev.llenos_despues}</div>
-                      <div style={{padding:'10px 8px',fontSize:15,fontWeight:800,color:'#94a3b8',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{ev.vacios_despues}</div>
-                      <div style={{padding:'10px 8px',textAlign:'center'}}>
-                        <span style={{fontSize:13,fontWeight:800,color:totalColor}}>{ev.cuadra?'✅':'⚠️'}</span>
-                        {!ev.cuadra && <p style={{fontSize:9,color:'#f87171',margin:'2px 0 0'}}>{ev.total}</p>}
-                      </div>
+                {/* Total del período */}
+                {periodoVisible.dias.length>0&&(
+                  <div style={{display:'grid',gridTemplateColumns:colGrid,background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)',minWidth:750}}>
+                    <div style={{padding:'12px 8px',fontWeight:800,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)',fontSize:12}}>TOTAL</div>
+                    <div style={{padding:'12px 8px',fontSize:18,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{periodoVisible.totalVendido}</div>
+                    <div style={{padding:'12px 8px',fontSize:15,fontWeight:800,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{periodoVisible.totalMonto.toLocaleString('es-PE')}</div>
+                    <div style={{padding:'12px 8px',fontSize:14,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{periodoVisible.ventas.reduce((s,v)=>s+(v.vales_20||0),0)||'—'}</div>
+                    <div style={{padding:'12px 8px',fontSize:14,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{periodoVisible.ventas.reduce((s,v)=>s+(v.vales_30||0),0)||'—'}</div>
+                    <div style={{padding:'12px 8px',fontSize:14,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{periodoVisible.ventas.reduce((s,v)=>s+(v.vales_43||0),0)||'—'}</div>
+                    <div style={{padding:'12px 8px',fontSize:13,fontWeight:700,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{periodoVisible.ventas.reduce((s,v)=>s+(v.efectivo_dist||0),0)>0?`S/${periodoVisible.ventas.reduce((s,v)=>s+(v.efectivo_dist||0),0)}`:'—'}</div>
+                    <div style={{padding:'12px 8px',fontSize:16,fontWeight:800,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{periodoVisible.es_actual?selected.stock_actual:periodoVisible.llenos_fin}</div>
+                    <div style={{padding:'12px 8px',fontSize:16,fontWeight:800,color:'#94a3b8',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{periodoVisible.es_actual?(selected.balones_vacios||0):periodoVisible.vacios_fin}</div>
+                    <div style={{padding:'12px 8px',textAlign:'center',fontSize:16,fontWeight:800}}>
+                      {(()=>{
+                        const tot = periodoVisible.es_actual?(selected.stock_actual||0)+(selected.balones_vacios||0):periodoVisible.llenos_fin+periodoVisible.vacios_fin
+                        return <span style={{color:tot===TOTAL_BALONES?'#34d399':'#f87171'}}>{tot===TOTAL_BALONES?'✅':'⚠️'}</span>
+                      })()}
                     </div>
-                  )
-                })}
+                  </div>
+                )}
+              </>
+            )}
 
-                {/* Fila de totales */}
-                {timeline.length > 1 && (()=>{
-                  const tCant = ventasDistribuidor.reduce((s,v)=>s+(v.cantidad||0),0)
-                  const tv20 = ventasDistribuidor.reduce((s,v)=>s+(v.vales_20||0),0)
-                  const tv30 = ventasDistribuidor.reduce((s,v)=>s+(v.vales_30||0),0)
-                  const tv43 = ventasDistribuidor.reduce((s,v)=>s+(v.vales_43||0),0)
-                  const tEf = ventasDistribuidor.reduce((s,v)=>s+(v.efectivo_dist||0),0)
-                  return (
-                    <div style={{display:'grid',gridTemplateColumns:'0.8fr 0.9fr 0.5fr 0.9fr 0.5fr 0.5fr 0.5fr 0.7fr 0.6fr 0.6fr 0.4fr',background:'var(--app-card-bg-alt)',borderTop:'2px solid var(--app-accent)',minWidth:900}}>
-                      <div style={{padding:'12px 8px',fontWeight:800,color:'var(--app-text-secondary)',borderRight:'1px solid var(--app-card-border)',fontSize:13}}>TOTAL</div>
-                      <div style={{padding:'12px 8px',borderRight:'1px solid var(--app-card-border)'}}/>
-                      <div style={{padding:'12px 8px',fontSize:18,fontWeight:800,color:'#60a5fa',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tCant}</div>
-                      <div style={{padding:'12px 8px',fontSize:16,fontWeight:800,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>S/{totalMonto.toLocaleString('es-PE')}</div>
-                      <div style={{padding:'12px 8px',fontSize:15,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tv20||'—'}</div>
-                      <div style={{padding:'12px 8px',fontSize:15,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tv30||'—'}</div>
-                      <div style={{padding:'12px 8px',fontSize:15,fontWeight:800,color:'#fde047',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tv43||'—'}</div>
-                      <div style={{padding:'12px 8px',fontSize:14,fontWeight:700,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{tEf>0?`S/${tEf}`:'—'}</div>
-                      <div style={{padding:'12px 8px',fontSize:16,fontWeight:800,color:'#34d399',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{selected.stock_actual}</div>
-                      <div style={{padding:'12px 8px',fontSize:16,fontWeight:800,color:'#94a3b8',borderRight:'1px solid var(--app-card-border)',textAlign:'center'}}>{selected.balones_vacios||0}</div>
-                      <div style={{padding:'12px 8px',textAlign:'center',fontSize:16,fontWeight:800,color:(selected.stock_actual||0)+(selected.balones_vacios||0)===TOTAL_BALONES?'#34d399':'#f87171'}}>
-                        {(selected.stock_actual||0)+(selected.balones_vacios||0)===TOTAL_BALONES?'✅':'⚠️'}
-                      </div>
-                    </div>
-                  )
-                })()}
+            {/* Sin datos */}
+            {!esPrevio && !periodoVisible && (
+              <div style={{padding:'24px',textAlign:'center',color:'var(--app-text-secondary)',fontSize:13}}>
+                Sin períodos registrados. Registra una reposición para iniciar el primer período.
               </div>
             )}
           </div>
