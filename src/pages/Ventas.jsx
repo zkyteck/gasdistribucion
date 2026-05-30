@@ -154,8 +154,11 @@ export default function Ventas() {
       // Si tiene lotes FIFO activos → usar lotes
       const stockFIFO = lotesDistribuidor.filter(l => l.distribuidor_id===dist.id && l.tipo_balon===tipoBalon && !l.cerrado && l.cantidad_restante>0).reduce((s,l) => s+l.cantidad_restante, 0)
       if(stockFIFO > 0) return stockFIFO
-      // Sin lotes → usar stock_por_tipo directo (como Tienda Principal)
+      // Sin lotes → usar stock_por_tipo por tipo exacto (NO fallback a stock_actual general)
+      const spt = stockPorTipo.find(s => s.almacen_id===almacenId && s.tipo_balon===tipoBalon)
+      return spt?.stock_actual || 0
     }
+    // Tienda Principal y almacenes normales
     const spt = stockPorTipo.find(s => s.almacen_id===almacenId && s.tipo_balon===tipoBalon)
     if(spt?.stock_actual > 0) return spt.stock_actual
     const alm = almacenes.find(a => a.id===almacenId)
