@@ -602,6 +602,7 @@ export default function Distribuidores() {
     setSelected(d); await cargarHistorial(d.id); await cargarMovimientos(d.id); setModal('historial')
   }
 
+
   async function abrirCuenta(d) {
     setSelected(d); setCuentaForm({ vales20: '', vales43: '', adelantos: '', balones_devueltos: '', balones_vendidos: '', notas: '', fecha: hoyPeru() }); setError(''); setModal('cuenta')
   }
@@ -892,10 +893,16 @@ export default function Distribuidores() {
                     </button>
                   </>
                 ) : (
-                  <button onClick={() => { setSelected(d); setAcuentaModal(true); setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_30: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru(), fecha_recojo: '' }); cargarAcuentaDist(d.id) }}
-                    className="col-span-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/30 text-yellow-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
-                    <ClipboardList className="w-3 h-3" />📋 A Cuenta ({d.vales_pendientes || 0} pendientes)
-                  </button>
+                  <>
+                    <button onClick={() => { setSelected(d); setCargaModal(true); setCargaForm({ cargados:'', descargados:'', tipo_balon:'10kg', notas:'', fecha:hoyPeru() }); cargarCuentaCorriente(d.id) }}
+                      className="col-span-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
+                      📦 Registrar reposición
+                    </button>
+                    <button onClick={() => { setSelected(d); setAcuentaModal(true); setAcuentaForm({ nombre_cliente: '', vales_20: '', vales_30: '', vales_43: '', balones: '', notas: '', fecha: hoyPeru(), fecha_recojo: '' }); cargarAcuentaDist(d.id) }}
+                      className="col-span-2 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/30 text-yellow-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
+                      <ClipboardList className="w-3 h-3" />📋 A Cuenta ({d.vales_pendientes || 0} pendientes)
+                    </button>
+                  </>
                 )}
               </div>
             </div>
