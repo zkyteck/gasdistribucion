@@ -189,20 +189,22 @@ export default function Reportes() {
       const porDist = {}
       ;(ventasDist||[]).filter(v=>distAlmacenIds.includes(v.almacen_id)).forEach(v => {
         const distNombre = distAlmacenMap[v.almacen_id]||v.almacenes?.nombre||'Sin nombre'
-        if(!porDist[distNombre]) porDist[distNombre]={ ingreso:0, balones:0, ganancia:0, vales20:0, vales30:0, vales43:0, efectivo:0, saldo:0 }
+        if(!porDist[distNombre]) porDist[distNombre]={ ingreso:0, balones:0, costo:0, ganancia:0, vales20:0, vales30:0, vales43:0, cobradoVales:0, cobradoEf:0, totalCobrado:0, pendiente:0 }
         const monto=(v.cantidad||0)*(v.precio_unitario||0)
-        const costo=(v.cantidad||0)*(costos[v.tipo_balon||'10kg']||costoPromedio) // usa el tipo correcto
+        const costo=(v.cantidad||0)*(costos[v.tipo_balon||'10kg']||costoPromedio)
         const v20=v.vales_20||0, v30=v.vales_30||0, v43=v.vales_43||0
         const ef=v.efectivo_dist||0
         const totalVales=v20*20+v30*30+v43*43
+        const cobrado=totalVales+ef
         porDist[distNombre].ingreso += monto
         porDist[distNombre].balones += v.cantidad||0
-        porDist[distNombre].ganancia += monto-costo
-        porDist[distNombre].vales20 += v20
-        porDist[distNombre].vales30 += v30
-        porDist[distNombre].vales43 += v43
-        porDist[distNombre].efectivo += ef
-        porDist[distNombre].saldo += monto-totalVales-ef
+        porDist[distNombre].costo += costo
+        porDist[distNombre].ganancia += cobrado-costo
+        porDist[distNombre].vales20 += v20; porDist[distNombre].vales30 += v30; porDist[distNombre].vales43 += v43
+        porDist[distNombre].cobradoVales += totalVales
+        porDist[distNombre].cobradoEf += ef
+        porDist[distNombre].totalCobrado += cobrado
+        porDist[distNombre].pendiente += Math.max(0, monto-cobrado)
       })
       const ingDist=Object.values(porDist).reduce((s,d)=>s+d.ingreso,0)
       const balDist=Object.values(porDist).reduce((s,d)=>s+d.balones,0)
@@ -232,14 +234,17 @@ export default function Reportes() {
       const diario = dias.map(dia => {
         const ds = format(dia,'yyyy-MM-dd')
         const vDia = ventasTienda.filter(v=>v.fecha?.startsWith(ds))
+        const vDistDia = (ventasDist||[]).filter(v=>distAlmacenIds.includes(v.almacen_id)&&v.fecha?.startsWith(ds))
         const iT = vDia.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)
         const gT = vDia.reduce((s,v)=>s+(v.cantidad||0)*((v.precio_unitario||0)-(costos[v.tipo_balon||'10kg']||0)),0)
         const bT = vDia.reduce((s,v)=>s+(v.cantidad||0),0)
+        const iD = vDistDia.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0)
+        const gD = vDistDia.reduce((s,v)=>s+(v.cantidad||0)*((v.precio_unitario||0)-(costos[v.tipo_balon||'10kg']||costoPromedio)),0)
+        const bD = vDistDia.reduce((s,v)=>s+(v.cantidad||0),0)
         return {
           dia: format(dia, dias.length>15?'dd/MM':'EEE dd',{locale:es}),
-          Tienda:Math.round(iT),
-          'Gan.Tienda':Math.round(gT),
-          'Bal.Tienda':bT,
+          Tienda:Math.round(iT), 'Gan.Tienda':Math.round(gT), 'Bal.Tienda':bT,
+          Dist:Math.round(iD), 'Gan.Dist':Math.round(gD), 'Bal.Dist':bD,
         }
       })
 
@@ -558,19 +563,68 @@ export default function Reportes() {
         {/* ── TAB GANANCIAS ── */}
         {tab==='ganancias'&&(
           <div className="space-y-5">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <StatCard label="Ingresos" value={`S/${ing.toLocaleString('es-PE')}`} accent="var(--app-accent)" Icon={TrendingUp}/>
-              <StatCard label="Costo de compra" value={`S/${costo.toLocaleString('es-PE',{maximumFractionDigits:0})}`} accent="#f87171" Icon={ShoppingCart}/>
-              <StatCard label="Ganancia neta" value={`S/${gan.toLocaleString('es-PE',{maximumFractionDigits:0})}`} accent="#22c55e" Icon={DollarSign}
-                sub={`Margen: ${(!data?0:filtroVista==='tienda'?data.margenTienda:filtroVista==='distribuidores'?data.margenDist:data.margen).toFixed(1)}%`}/>
-              <StatCard label="Costo promedio/bal." value={`S/${data.costoPromedio.toFixed(2)}`} accent="#eab308"/>
-            </div>
+            {/* Distribuidores: mostrar cobrado vs pendiente vs ganancia */}
+            {filtroVista==='distribuidores' ? (
+              <div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  {Object.entries(data.porDist).map(([nombre,d])=>(
+                    <div key={nombre} style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:12,padding:'14px'}}>
+                      <p style={{fontSize:12,fontWeight:700,color:'var(--app-text)',margin:'0 0 10px'}}>🚛 {nombre}</p>
+                      <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                        <div style={{display:'flex',justifyContent:'space-between',fontSize:12}}>
+                          <span style={{color:'var(--app-text-secondary)'}}>Balones</span>
+                          <span style={{color:'var(--app-accent)',fontWeight:700}}>{d.balones}</span>
+                        </div>
+                        <div style={{display:'flex',justifyContent:'space-between',fontSize:12}}>
+                          <span style={{color:'var(--app-text-secondary)'}}>Ingresos total</span>
+                          <span style={{color:'var(--app-text)',fontWeight:600}}>S/{d.ingreso.toLocaleString('es-PE')}</span>
+                        </div>
+                        <div style={{display:'flex',justifyContent:'space-between',fontSize:12}}>
+                          <span style={{color:'var(--app-text-secondary)'}}>💵 Ef. cobrado</span>
+                          <span style={{color:'#34d399',fontWeight:700}}>S/{d.cobradoEf.toLocaleString('es-PE')}</span>
+                        </div>
+                        <div style={{display:'flex',justifyContent:'space-between',fontSize:12}}>
+                          <span style={{color:'var(--app-text-secondary)'}}>🎫 Vales cobrado</span>
+                          <span style={{color:'#fde047',fontWeight:700}}>S/{d.cobradoVales.toLocaleString('es-PE')}</span>
+                        </div>
+                        <div style={{display:'flex',justifyContent:'space-between',fontSize:12}}>
+                          <span style={{color:'var(--app-text-secondary)'}}>Total cobrado</span>
+                          <span style={{color:'#22c55e',fontWeight:700}}>S/{d.totalCobrado.toLocaleString('es-PE')}</span>
+                        </div>
+                        <div style={{display:'flex',justifyContent:'space-between',fontSize:12}}>
+                          <span style={{color:'var(--app-text-secondary)'}}>Costo compra</span>
+                          <span style={{color:'#f87171',fontWeight:600}}>-S/{d.costo.toLocaleString('es-PE',{maximumFractionDigits:0})}</span>
+                        </div>
+                        <div style={{display:'flex',justifyContent:'space-between',fontSize:13,borderTop:'1px solid var(--app-card-border)',paddingTop:6,marginTop:2}}>
+                          <span style={{color:'var(--app-text)',fontWeight:700}}>🟢 Ganancia</span>
+                          <span style={{color:d.ganancia>=0?'#22c55e':'#f87171',fontWeight:800}}>S/{d.ganancia.toLocaleString('es-PE',{maximumFractionDigits:0})}</span>
+                        </div>
+                        {d.pendiente>0&&(
+                          <div style={{display:'flex',justifyContent:'space-between',fontSize:11}}>
+                            <span style={{color:'#fb923c'}}>⏳ Pendiente cobro</span>
+                            <span style={{color:'#fb923c',fontWeight:700}}>S/{d.pendiente.toLocaleString('es-PE')}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <StatCard label="Ingresos" value={`S/${ing.toLocaleString('es-PE')}`} accent="var(--app-accent)" Icon={TrendingUp}/>
+                <StatCard label="Costo de compra" value={`S/${costo.toLocaleString('es-PE',{maximumFractionDigits:0})}`} accent="#f87171" Icon={ShoppingCart}/>
+                <StatCard label="Ganancia neta" value={`S/${gan.toLocaleString('es-PE',{maximumFractionDigits:0})}`} accent="#22c55e" Icon={DollarSign}
+                  sub={`Margen: ${(!data?0:filtroVista==='tienda'?data.margenTienda:filtroVista==='distribuidores'?data.margenDist:data.margen).toFixed(1)}%`}/>
+                <StatCard label="Costo promedio/bal." value={`S/${data.costoPromedio.toFixed(2)}`} accent="#eab308"/>
+              </div>
+            )}
 
             {/* Gráfica ganancia diaria */}
             <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:12,padding:'16px'}}>
               <p style={{fontSize:13,fontWeight:600,color:'var(--app-text)',margin:'0 0 14px'}}>📈 Ganancia diaria {filtroVista==='tienda'?'(tienda)':filtroVista==='distribuidores'?'(distribuidores)':'(total)'}</p>
               <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={data.diario}>
+                <AreaChart data={data.diario.map(d=>({...d, Ganancia: filtroVista==='distribuidores'?d['Gan.Dist']:filtroVista==='tienda'?d['Gan.Tienda']:(d['Gan.Tienda']||0)+(d['Gan.Dist']||0)}))}>
                   <defs>
                     <linearGradient id="gradGan" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
@@ -581,7 +635,7 @@ export default function Reportes() {
                   <XAxis dataKey="dia" tick={{fill:'var(--app-text-secondary)',fontSize:10}} axisLine={false} tickLine={false}/>
                   <YAxis tick={{fill:'var(--app-text-secondary)',fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>`S/${v}`} width={55}/>
                   <Tooltip content={<CustomTooltip/>}/>
-                  <Area type="monotone" dataKey="Gan.Tienda" name="Ganancia" stroke="#22c55e" strokeWidth={2} fill="url(#gradGan)"/>
+                  <Area type="monotone" dataKey="Ganancia" name="Ganancia" stroke="#22c55e" strokeWidth={2} fill="url(#gradGan)"/>
                 </AreaChart>
               </ResponsiveContainer>
             </div>
