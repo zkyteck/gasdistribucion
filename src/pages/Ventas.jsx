@@ -266,9 +266,15 @@ export default function Ventas() {
       const tipo = venta.tipo_balon||'10kg'
       const campoVacios = tipo==='5kg'?'vacios_5kg':tipo==='10kg'?'vacios_10kg':'vacios_45kg'
       const almacen = almacenes.find(a => a.id===venta.almacen_id)
-      // 1. Restaurar stock
-      await supabase.from('stock_por_tipo').update({ stock_actual:stockActual+venta.cantidad, updated_at:new Date().toISOString() }).eq('almacen_id',venta.almacen_id).eq('tipo_balon',tipo)
-      if(almacen) await supabase.from('almacenes').update({ stock_actual:(almacen.stock_actual||0)+venta.cantidad, balones_vacios:Math.max(0,(almacen.balones_vacios||0)-venta.cantidad), [campoVacios]:Math.max(0,(almacen[campoVacios]||0)-venta.cantidad) }).eq('id',venta.almacen_id)
+      // 1. Restaurar stock — leer DB fresco para sincronizar ambas tablas
+      const { data:almFrescoRev } = await supabase.from('almacenes').select('stock_actual,balones_vacios,vacios_5kg,vacios_10kg,vacios_45kg').eq('id',venta.almacen_id).single()
+      if(almFrescoRev) {
+        const stockRestaurado = (almFrescoRev.stock_actual||0) + venta.cantidad
+        await Promise.all([
+          supabase.from('stock_por_tipo').update({ stock_actual:stockRestaurado, updated_at:new Date().toISOString() }).eq('almacen_id',venta.almacen_id).eq('tipo_balon',tipo),
+          supabase.from('almacenes').update({ stock_actual:stockRestaurado, balones_vacios:Math.max(0,(almFrescoRev.balones_vacios||0)-venta.cantidad), [campoVacios]:Math.max(0,(almFrescoRev[campoVacios]||0)-venta.cantidad) }).eq('id',venta.almacen_id)
+        ])
+      }
       // 2. Borrar detalles FIFO (FK constraint) — verificar error explicitamente
       const { error:errDet } = await supabase.from('venta_lote_detalles').delete().eq('venta_id',venta.id)
       if(errDet) { console.error('Error FK venta_lote_detalles:', errDet); toast('Error FK: '+errDet.message, 'error'); return }
@@ -383,10 +389,15 @@ export default function Ventas() {
           const { data:almDist } = await supabase.from('almacenes').select('balones_vacios,vacios_5kg,vacios_10kg,vacios_45kg').eq('id',form.almacen_id).single()
           await supabase.from('almacenes').update({ stock_actual:totalRestante, balones_vacios:(almDist?.balones_vacios||0)+cant, [campoVacios]:(almDist?.[campoVacios]||0)+cant }).eq('id',form.almacen_id)
         } else {
-          // Sin lotes → stock directo como Tienda Principal
-          await supabase.from('stock_por_tipo').update({ stock_actual:Math.max(0,stockDisp-cant) }).eq('almacen_id',form.almacen_id).eq('tipo_balon',form.tipo_balon)
+          // Sin lotes → leer DB fresco UNA VEZ y actualizar ambas tablas simultáneamente
           const { data:almDist } = await supabase.from('almacenes').select('stock_actual,balones_vacios,vacios_5kg,vacios_10kg,vacios_45kg').eq('id',form.almacen_id).single()
-          if(almDist) await supabase.from('almacenes').update({ stock_actual:Math.max(0,(almDist.stock_actual||0)-cant), balones_vacios:(almDist.balones_vacios||0)+cant, [campoVacios]:(almDist[campoVacios]||0)+cant }).eq('id',form.almacen_id)
+          if(almDist) {
+            const nuevoStock = Math.max(0, (almDist.stock_actual||0) - cant)
+            await Promise.all([
+              supabase.from('stock_por_tipo').update({ stock_actual:nuevoStock }).eq('almacen_id',form.almacen_id).eq('tipo_balon',form.tipo_balon),
+              supabase.from('almacenes').update({ stock_actual:nuevoStock, balones_vacios:(almDist.balones_vacios||0)+cant, [campoVacios]:(almDist[campoVacios]||0)+cant }).eq('id',form.almacen_id)
+            ])
+          }
         }
       } else {
         const { data:almActual } = await supabase.from('almacenes').select('stock_actual,balones_vacios,vacios_5kg,vacios_10kg,vacios_45kg').eq('id',form.almacen_id).single()
