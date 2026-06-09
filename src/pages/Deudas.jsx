@@ -548,11 +548,19 @@ export default function Deudas() {
         </div>
       </div>
 
-      {/* Búsqueda — sticky al scrollear */}
-      <div className="relative" style={{position:'sticky',top:0,zIndex:10,background:'var(--app-bg)',paddingBottom:4}}>
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{color:'var(--app-text-secondary)',pointerEvents:'none'}}/>
-        <input className="input" style={{paddingLeft:'36px'}} placeholder="Buscar deudor..." value={busqueda} onChange={e=>{setBusqueda(e.target.value);cargar(e.target.value)}}/>
-      </div>
+      {/* Búsqueda + Filtros — barra pegada al tope al scrollear */}
+      <div style={{
+        position:'sticky', top:-1, zIndex:20,
+        background:'var(--app-bg)',
+        paddingTop:8, paddingBottom:8,
+        marginTop:-8,
+        display:'flex', flexDirection:'column', gap:8,
+        boxShadow:'0 4px 12px rgba(0,0,0,0.15)'
+      }}>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{color:'var(--app-text-secondary)',pointerEvents:'none'}}/>
+          <input className="input" style={{paddingLeft:'36px'}} placeholder="Buscar deudor..." value={busqueda} onChange={e=>{setBusqueda(e.target.value);cargar(e.target.value)}}/>
+        </div>
 
       {/* Filtros */}
       <div style={{display:'flex',flexWrap:'wrap',gap:8,alignItems:'center'}}>
@@ -580,6 +588,8 @@ export default function Deudas() {
           </div>
         </div>
       </div>
+
+      </div>{/* fin sticky bar */}
 
       {/* Lista */}
       <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:12,overflow:'hidden'}}>
