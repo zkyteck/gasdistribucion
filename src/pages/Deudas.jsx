@@ -548,10 +548,10 @@ export default function Deudas() {
         </div>
       </div>
 
-      {/* Búsqueda */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{color:'var(--app-text-secondary)'}}/>
-        <input className="input pl-9" placeholder="Buscar deudor..." value={busqueda} onChange={e=>{setBusqueda(e.target.value);cargar(e.target.value)}}/>
+      {/* Búsqueda — sticky al scrollear */}
+      <div className="relative" style={{position:'sticky',top:0,zIndex:10,background:'var(--app-bg)',paddingBottom:4}}>
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{color:'var(--app-text-secondary)',pointerEvents:'none'}}/>
+        <input className="input" style={{paddingLeft:'36px'}} placeholder="Buscar deudor..." value={busqueda} onChange={e=>{setBusqueda(e.target.value);cargar(e.target.value)}}/>
       </div>
 
       {/* Filtros */}
