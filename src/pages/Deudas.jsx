@@ -417,9 +417,19 @@ export default function Deudas() {
   const totalDeudores = totalesGlobal.deudores
   const urgentes      = totalesGlobal.urgentes
 
-  const imprimirReporte = () => {
+  const imprimirReporte = async () => {
+    // Cargar TODAS las deudas desde DB (sin paginación) para el reporte completo
+    let queryImp = supabase.from('deudas').select('*').order('fecha_deuda', {ascending:true})
+      .or('eliminado.is.null,eliminado.eq.false')
+    if(filtroEstado==='activas') queryImp = queryImp.in('estado',['activa','pagada_parcial'])
+    else if(filtroEstado==='liquidadas') queryImp = queryImp.eq('estado','liquidada')
+    if(!isAdmin && perfil?.almacen_id) queryImp = queryImp.eq('almacen_id', perfil.almacen_id)
+    if(busqueda.trim()) queryImp = queryImp.ilike('nombre_deudor', `%${busqueda.trim()}%`)
+    const { data:todasDeudas } = await queryImp
+    const deudasParaImprimir = todasDeudas || deudasFiltradas
+
     const hoy = new Date().toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric' })
-    const filas = deudasFiltradas.map((d, i) => {
+    const filas = deudasParaImprimir.map((d, i) => {
       const dias = differenceInDays(new Date(), new Date(d.fecha_deuda))
       const importancia = dias >= 60 ? '🔴 Urgente' : dias >= 30 ? '🟠 Atrasado' : dias >= 7 ? '🟡 Reciente' : '⚪ Normal'
       const debe = resumenDeuda(d)
@@ -434,8 +444,8 @@ export default function Deudas() {
       </tr>`
     }).join('')
 
-    const totalDineroImp = deudasFiltradas.reduce((a,d)=>a+(parseFloat(d.monto_pendiente)||0),0)
-    const totalBalonesImp = deudasFiltradas.reduce((a,d)=>a+(parseInt(d.balones_pendiente)||0),0)
+    const totalDineroImp = deudasParaImprimir.reduce((a,d)=>a+(parseFloat(d.monto_pendiente)||0),0)
+    const totalBalonesImp = deudasParaImprimir.reduce((a,d)=>a+(parseInt(d.balones_pendiente)||0),0)
 
     const win = window.open('', '_blank')
     win.document.write(`
@@ -454,7 +464,7 @@ export default function Deudas() {
       </style>
       </head><body>
       <h1>📋 Reporte de Deudas — Centro Gas Paucara</h1>
-      <p class="sub">Generado el ${hoy} · ${deudasFiltradas.length} deudores · Filtro: ${filtroEstado==='activas'?'Con deuda':filtroEstado==='liquidadas'?'Liquidadas':'Todas'} · Orden: ${ordenar==='dias_desc'?'Más días primero':ordenar==='monto_desc'?'Mayor monto':ordenar==='nombre'?'Por nombre':'Más reciente'}</p>
+      <p class="sub">Generado el ${hoy} · ${deudasParaImprimir.length} deudores · Filtro: ${filtroEstado==='activas'?'Con deuda':filtroEstado==='liquidadas'?'Liquidadas':'Todas'} · Orden: ${ordenar==='dias_desc'?'Más días primero':ordenar==='monto_desc'?'Mayor monto':ordenar==='nombre'?'Por nombre':'Más reciente'}</p>
       <table>
         <thead><tr>
           <th style="width:40px">#</th>
@@ -469,7 +479,7 @@ export default function Deudas() {
       <div class="totales">
         <div><strong style="color:#c0392b">S/${totalDineroImp.toLocaleString('es-PE',{maximumFractionDigits:0})}</strong>Total en dinero</div>
         ${totalBalonesImp>0?`<div><strong style="color:#e67e22">${totalBalonesImp} bal.</strong>Total balones</div>`:''}
-        <div><strong>${deudasFiltradas.length}</strong>Deudores</div>
+        <div><strong>${deudasParaImprimir.length}</strong>Deudores</div>
       </div>
       <script>window.print()</script>
       </body></html>
