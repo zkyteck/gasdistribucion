@@ -177,6 +177,23 @@ export default function Compras() {
             fecha: form.fecha,
           })
           if (eLote) console.error('Error creando lote FIFO:', eLote.message)
+        } else if (dist?.data && !dist.data.usa_fifo) {
+          // ── Distribuidor de stock directo (ej. Felix/Alazan) ──────────────
+          // Cada asignación desde Compras = NUEVA reposición = NUEVO período.
+          // La rendición arma los períodos desde cargas_distribuidor, así que
+          // insertar una carga crea el período nuevo automáticamente.
+          // descargados=0: no se asume devolución de vacíos al proveedor.
+          // (Si el proveedor sí recoge vacíos en cada entrega, se captura aparte.)
+          const { error: eCarga } = await supabase.from('cargas_distribuidor').insert({
+            distribuidor_id: dist.data.id,
+            fecha: form.fecha,
+            cantidad: d.cantidad,
+            descargados: 0,
+            tipo_balon: d.tipo_balon,
+            precio_por_balon: dist.data.precio_base || 0,
+            notas: 'Reposición desde Compras'
+          })
+          if (eCarga) console.error('Error creando carga/período:', eCarga.message)
         }
       })
     )
