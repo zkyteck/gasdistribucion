@@ -254,7 +254,11 @@ export default function ModalHistorial({ selected, cargasDist, abonosParciales, 
   }
 
   // Calcular todos los períodos
-  const periodos = cargasOrd.map((carga, i) => {
+  // (usamos un array ya inicializado + forEach para poder leer el período previo
+  //  sin caer en TDZ; antes era `const periodos = cargasOrd.map(... periodos[i-1] ...)`
+  //  lo cual lanzaba "Cannot access 'periodos' before initialization" con 2+ períodos)
+  const periodos = []
+  cargasOrd.forEach((carga, i) => {
     const sig = cargasOrd[i+1]
     const fi = (carga.fecha||'').substring(0,10)
     const ff = sig ? (sig.fecha||'').substring(0,10) : null
@@ -266,7 +270,7 @@ export default function ModalHistorial({ selected, cargasDist, abonosParciales, 
     let llenosIni, vaciosIni
     if(i===0) { llenosIni = carga.cantidad; vaciosIni = 0 }
     else {
-      const prev = periodos[i-1] // ya calculado
+      const prev = periodos[i-1] // ya calculado y dentro del array inicializado
       llenosIni = (prev?.llenos_fin||0) + carga.cantidad
       vaciosIni = Math.max(0, (prev?.vacios_fin||0) - (carga.descargados||0))
     }
@@ -275,14 +279,14 @@ export default function ModalHistorial({ selected, cargasDist, abonosParciales, 
     let ll = llenosIni, vv = vaciosIni
     const bal = {}
     dias.forEach(d => { ll -= porDia[d].cantidad; vv += porDia[d].cantidad; bal[d] = {llenos:ll,vacios:vv,total:ll+vv} })
-    return {
+    periodos.push({
       numero:i+1, carga, es_actual:!sig,
       fecha_inicio:fi, fecha_fin:ff,
       llenosIni, vaciosIni, llenos_fin:ll, vacios_fin:vv,
       ventas, porDia, dias, bal,
       totalVendido: ventas.reduce((s,v)=>s+(v.cantidad||0),0),
       totalMonto: ventas.reduce((s,v)=>s+(v.cantidad||0)*(v.precio_unitario||0),0),
-    }
+    })
   })
 
   // Ventas antes del primer período (historial previo)
