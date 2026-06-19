@@ -72,7 +72,9 @@ export default function VentaRapida({ onClose, onGuardado, almacenes, precioTipo
 
   // Stock del almacén/tipo
   const getStock = useCallback((tipo) => {
-    const dist = distribuidores.find(d => d.almacen_id === almacenId)
+    // Solo tratan FIFO los distribuidores con usa_fifo = true (ej. Cristian).
+    // Felix (Alazan) => usa_fifo = false => stock directo desde stock_por_tipo.
+    const dist = distribuidores.find(d => d.almacen_id === almacenId && d.usa_fifo)
     if(dist) {
       return lotesDistribuidor.filter(l => l.distribuidor_id===dist.id && l.tipo_balon===tipo && !l.cerrado && l.cantidad_restante>0).reduce((s,l)=>s+l.cantidad_restante,0)
     }
@@ -152,7 +154,8 @@ export default function VentaRapida({ onClose, onGuardado, almacenes, precioTipo
 
     setSaving(true); setError('')
     const campoVacios = tipoBalon==='5kg'?'vacios_5kg':tipoBalon==='45kg'?'vacios_45kg':'vacios_10kg'
-    const dist = distribuidores.find(d => d.almacen_id === almacenId)
+    // Solo FIFO si el distribuidor lo usa; Felix (Alazan) cae a stock directo.
+    const dist = distribuidores.find(d => d.almacen_id === almacenId && d.usa_fifo)
 
     const { error:e } = await supabase.from('ventas').insert({
       cliente_id: clienteId || null,

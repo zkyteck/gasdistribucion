@@ -59,6 +59,11 @@ export default function Distribuidores() {
   const [valeForm, setValeForm] = useState({ nombre_cliente: '', cliente_id: '', tipo_vale: '20', fecha: hoyPeru(), notas: '' })
   const [clienteRapidoForm, setClienteRapidoForm] = useState({ nombre: '', telefono: '' })
   const [subModal, setSubModal] = useState(null) // 'clienteRapido'
+  // Observaciones (balones prestados / perdidos / por arreglar)
+  const [observaciones, setObservaciones] = useState([]) // pendientes, todos los almacenes
+  const [obsModal, setObsModal] = useState(null) // distribuidor seleccionado
+  const [obsForm, setObsForm] = useState({ cantidad: '', motivo: 'prestado', nota: '' })
+  const [savingObs, setSavingObs] = useState(false)
 
 
   const cargar = useCallback(async () => {
@@ -86,6 +91,10 @@ export default function Distribuidores() {
     })
     setDistribuidores(distEnriquecidos)
     setAlmacenes(a || [])
+    // Observaciones pendientes (todos los almacenes)
+    const { data: obs } = await supabase.from('balones_observacion')
+      .select('*').eq('estado', 'pendiente').order('fecha_registro', { ascending: false })
+    setObservaciones(obs || [])
     setLoading(false)
   }, [])
 
@@ -134,11 +143,12 @@ export default function Distribuidores() {
     const desc = parseInt(cargaForm.descargados) || 0
     if (cant <= 0) { setError('Ingresa la cantidad a cargar'); return }
     setSaving(true); setError('')
-    // Para cuenta_corriente usar precio_base del distribuidor; para autónomo usar lote FIFO
+    // Para cuenta_corriente usar precio_base; para autónomo CON FIFO usar lote.
+    // Felix (Alazan) tiene usa_fifo=false => siempre precio_base, sin lotes.
     const esCuentaCorriente = selected.modalidad === 'cuenta_corriente'
     let precio = selected.precio_base || 0
     let loteActivo = null
-    if (!esCuentaCorriente) {
+    if (!esCuentaCorriente && selected.usa_fifo) {
       const { data: loteData } = await supabase.from('lotes_distribuidor')
         .select('*').eq('distribuidor_id', selected.id).eq('cerrado', false)
         .gt('cantidad_restante', 0).order('fecha', { ascending: true }).limit(1).maybeSingle()
@@ -555,10 +565,97 @@ export default function Distribuidores() {
     setModal(null); cargar()
   }, [form, selected, cargar])
 
+  // ── Observaciones (prestados / perdidos / por arreglar) ───────────────────
+  const obsDeAlmacen = (almacenId) => observaciones.filter(o => o.almacen_id === almacenId)
+  const totalObs = (almacenId) => obsDeAlmacen(almacenId).reduce((s, o) => s + (o.cantidad || 0), 0)
+
+  async function agregarObservacion() {
+    const cant = parseInt(obsForm.cantidad)
+    if (!obsModal) return
+    if (!cant || cant <= 0) { setError('Ingresa una cantidad válida'); return }
+    setSavingObs(true); setError('')
+    const { error: e } = await supabase.from('balones_observacion').insert({
+      almacen_id: obsModal.almacen_id,
+      cantidad: cant,
+      motivo: obsForm.motivo,
+      nota: obsForm.nota || null
+    })
+    setSavingObs(false)
+    if (e) { setError(e.message); return }
+    setObsModal(null); setObsForm({ cantidad: '', motivo: 'prestado', nota: '' })
+    cargar()
+  }
+
+  async function resolverObservacion(obs) {
+    if (!window.confirm(`¿Marcar como resuelto ${obs.cantidad} balón(es) (${obs.motivo})? Saldrá de observación.`)) return
+    await supabase.from('balones_observacion')
+      .update({ estado: 'resuelto', fecha_resuelto: hoyPeru() })
+      .eq('id', obs.id)
+    cargar()
+  }
+
+  const MOTIVO_LABEL = { prestado: '🤝 Prestado', perdido: '❌ Perdido', por_arreglar: '🔧 Por arreglar' }
+
   async function guardarReposicion() {
     const cant = parseInt(repoForm.cantidad)
     if (!cant || cant <= 0) { setError('Ingresa una cantidad válida'); return }
     const almacen = almacenes.find(a => a.id === selected.almacen_id)
+
+    // ── MODELO DIRECTO (usa_fifo = false, ej. Felix) ──────────────────────────
+    // El proveedor descarga balones AL almacén del distribuidor: SUMA stock.
+    // Además cada reposición = nuevo período (cierra el activo y abre uno nuevo).
+    if (!selected.usa_fifo) {
+      setSaving(true); setError('')
+      // Registro de la reposición
+      const { error: eRepo } = await supabase.from('reposiciones_distribuidor').insert({
+        distribuidor_id: selected.id,
+        almacen_origen_id: selected.almacen_id,
+        cantidad: cant,
+        stock_antes_dist: almacen?.stock_actual || 0,
+        stock_despues_dist: (almacen?.stock_actual || 0) + cant,
+        notas: repoForm.notas,
+        fecha: new Date().toISOString()
+      })
+      if (eRepo) { setError(eRepo.message); setSaving(false); return }
+
+      // SUMA al almacén (stock_actual) y a stock_por_tipo (10kg) — leer fresco
+      const { data: almFresco } = await supabase.from('almacenes')
+        .select('stock_actual').eq('id', selected.almacen_id).single()
+      const { data: sptFresco } = await supabase.from('stock_por_tipo')
+        .select('stock_actual').eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg').maybeSingle()
+      await Promise.all([
+        supabase.from('almacenes')
+          .update({ stock_actual: (almFresco?.stock_actual || 0) + cant, updated_at: new Date().toISOString() })
+          .eq('id', selected.almacen_id),
+        sptFresco
+          ? supabase.from('stock_por_tipo')
+              .update({ stock_actual: (sptFresco.stock_actual || 0) + cant, updated_at: new Date().toISOString() })
+              .eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg')
+          : supabase.from('stock_por_tipo')
+              .insert({ almacen_id: selected.almacen_id, tipo_balon: '10kg', stock_actual: cant })
+      ])
+
+      // Nuevo período: cerrar la cuenta activa y abrir una nueva
+      const { data: cuentaAct } = await supabase.from('cuentas_corrientes_distribuidor')
+        .select('id').eq('distribuidor_id', selected.id).eq('estado', 'abierta').maybeSingle()
+      if (cuentaAct?.id) {
+        await supabase.from('cuentas_corrientes_distribuidor')
+          .update({ estado: 'cerrada', fecha_cierre: hoyPeru() }).eq('id', cuentaAct.id)
+      }
+      await supabase.from('cuentas_corrientes_distribuidor').insert({
+        distribuidor_id: selected.id,
+        fecha_inicio: hoyPeru(),
+        saldo_anterior: 0, faltantes_anterior: 0,
+        estado: 'abierta'
+      })
+
+      setSaving(false)
+      setModal(null); setRepoForm({ cantidad: '', notas: '' }); cargar()
+      return
+    }
+
+    // ── MODELO FIFO / CAMPO (usa_fifo = true, ej. Cristian) ───────────────────
+    // El balón sale de la bodega al campo del distribuidor: DESCUENTA bodega.
     if (!almacen || almacen.stock_actual < cant) { setError(`Stock insuficiente en almacén. Disponible: ${almacen?.stock_actual || 0}`); return }
     setSaving(true); setError('')
     const { error: e } = await supabase.from('reposiciones_distribuidor').insert({
@@ -882,6 +979,39 @@ export default function Distribuidores() {
                   <span className="text-orange-400 font-bold text-sm">{d.balones_por_cobrar} bal.</span>
                 </div>
               )}
+              {/* Observaciones: balones prestados / perdidos / por arreglar */}
+              <div className="bg-amber-900/15 border border-amber-700/30 rounded-lg p-2 mb-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-amber-300 font-medium flex items-center gap-1">
+                    <ClipboardList className="w-3 h-3" /> Observaciones
+                    {totalObs(d.almacen_id) > 0 && <span className="text-amber-400 font-bold">· {totalObs(d.almacen_id)} bal.</span>}
+                  </span>
+                  <button onClick={() => { setSelected(d); setObsModal(d); setObsForm({ cantidad: '', motivo: 'prestado', nota: '' }); setError('') }}
+                    className="text-amber-400 hover:text-amber-300 text-xs font-medium flex items-center gap-0.5">
+                    <Plus className="w-3 h-3" /> Agregar
+                  </button>
+                </div>
+                {obsDeAlmacen(d.almacen_id).length === 0 ? (
+                  <p className="text-[11px] text-gray-500">Sin balones en observación.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {obsDeAlmacen(d.almacen_id).map(o => (
+                      <div key={o.id} className="flex items-center justify-between text-[11px] bg-black/10 rounded px-2 py-1">
+                        <span className="text-gray-300">
+                          <span className="font-bold text-amber-300">{o.cantidad}</span> · {MOTIVO_LABEL[o.motivo] || o.motivo}
+                          {o.nota ? <span className="text-gray-500"> — {o.nota}</span> : null}
+                        </span>
+                        <button onClick={() => resolverObservacion(o)}
+                          className="text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5 shrink-0 ml-2"
+                          title="Marcar como resuelto">
+                          <CheckCircle className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-2 mb-4">
                 <div className="bg-transparent rounded-lg p-3 text-center">
                   <p className="text-xl font-bold text-blue-400">S/{d.precio_base}</p>
@@ -961,6 +1091,30 @@ export default function Distribuidores() {
       )}
 
       {/* Modal reponer */}
+      {/* Modal: agregar observación */}
+      {obsModal && (
+        <Modal title={`Observación — ${obsModal.nombre}`} onClose={() => setObsModal(null)}>
+          <div className="space-y-4">
+            {error && <div className="flex items-center gap-2 bg-red-900/30 border border-red-800 text-red-400 rounded-lg px-3 py-2 text-sm"><AlertCircle className="w-4 h-4" />{error}</div>}
+            <p className="text-xs text-gray-400">Registra balones que no están como llenos ni vacíos normales: prestados, perdidos o por arreglar. Suman al control pero no al stock vendible.</p>
+            <div><label className="label">Cantidad</label><input type="number" className="input" placeholder="Ej: 3" value={obsForm.cantidad} onChange={e => setObsForm({ ...obsForm, cantidad: e.target.value })} /></div>
+            <div>
+              <label className="label">Motivo</label>
+              <select className="input" value={obsForm.motivo} onChange={e => setObsForm({ ...obsForm, motivo: e.target.value })}>
+                <option value="prestado">🤝 Prestado</option>
+                <option value="perdido">❌ Perdido</option>
+                <option value="por_arreglar">🔧 Por arreglar</option>
+              </select>
+            </div>
+            <div><label className="label">Nota (opcional)</label><textarea className="input" rows={2} placeholder="Ej: 3 los tiene Juan del mercado" value={obsForm.nota} onChange={e => setObsForm({ ...obsForm, nota: e.target.value })} /></div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setObsModal(null)} className="btn-secondary flex-1">Cancelar</button>
+              <button onClick={agregarObservacion} disabled={savingObs} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-4 py-2 rounded-lg transition-all flex-1 justify-center flex items-center gap-2">{savingObs ? 'Guardando...' : '✓ Registrar'}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {modal === 'reponer' && selected && (
         <Modal title={`Reponer stock — ${selected.nombre}`} onClose={() => setModal(null)}>
           <div className="space-y-4">

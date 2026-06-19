@@ -156,8 +156,8 @@ export default function Compras() {
     await Promise.all(
       form.distribucion.map(async d => {
         const dist = await supabase.from('distribuidores')
-          .select('id,precio_base').eq('almacen_id', d.almacen_id).eq('activo', true).maybeSingle()
-        if (dist?.data) {
+          .select('id,precio_base,usa_fifo').eq('almacen_id', d.almacen_id).eq('activo', true).maybeSingle()
+        if (dist?.data && dist.data.usa_fifo) {
           const { data: pdt } = await supabase.from('precio_distribuidor_tipo')
             .select('precio')
             .eq('distribuidor_id', dist.data.id)

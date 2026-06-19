@@ -97,7 +97,7 @@ export default function Ventas() {
       supabase.from('clientes').select('id,nombre,tipo,es_varios,telefono,precio_personalizado,tipo_balon_personalizado').order('nombre').limit(200),
       supabase.from('precio_tipo_balon').select('*'),
       supabase.from('stock_por_tipo').select('*'),
-      supabase.from('distribuidores').select('id,nombre,almacen_id,precio_base').eq('activo',true),
+      supabase.from('distribuidores').select('id,nombre,almacen_id,precio_base,usa_fifo').eq('activo',true),
       supabase.from('lotes_distribuidor').select('*').eq('cerrado',false).order('fecha',{ascending:true})
     ])
     setVentas(v||[]); setHayMas((totalV||0) > POR_PAGINA); setAlmacenes(a||[]); setPrecioTipos(pt||[])
@@ -137,7 +137,9 @@ export default function Ventas() {
   }, [preciosPorTipo])
 
   const getDistribuidor = useCallback((almacenId) => {
-    return distribuidores.find(d => d.almacen_id===almacenId) || null
+    // Solo se considera "distribuidor FIFO" si usa_fifo = true (ej. Cristian).
+    // Felix (Alazan) => usa_fifo = false => se trata como almacén normal (stock directo).
+    return distribuidores.find(d => d.almacen_id===almacenId && d.usa_fifo) || null
   }, [distribuidores])
 
   const getPrecioFIFO = useCallback((distribuidorId, tipoBalon='10kg') => {
