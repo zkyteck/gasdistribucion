@@ -181,21 +181,23 @@ export default function Distribuidores() {
       notas: cargaForm.notas || null
     })
 
-    // Actualizar almacén: descuenta llenos, suma vacíos
+    // Actualizar almacén: descuenta llenos, suma vacíos (respetando el tipo de balón elegido)
     const almacen = almacenes.find(a => a.id === selected.almacen_id)
+    const tipoBalonCarga = cargaForm.tipo_balon || '10kg'
+    const campoVaciosCarga = tipoBalonCarga === '5kg' ? 'vacios_5kg' : tipoBalonCarga === '45kg' ? 'vacios_45kg' : 'vacios_10kg'
     if (almacen) {
       await supabase.from('almacenes').update({
         stock_actual: Math.max(0, (almacen.stock_actual || 0) - cant),
         balones_vacios: (almacen.balones_vacios || 0) + desc,
-        vacios_10kg: (almacen.vacios_10kg || 0) + desc,
+        [campoVaciosCarga]: (almacen[campoVaciosCarga] || 0) + desc,
         updated_at: new Date().toISOString()
       }).eq('id', selected.almacen_id)
       // stock_por_tipo
       const { data: spt } = await supabase.from('stock_por_tipo')
-        .select('stock_actual').eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg').single()
+        .select('stock_actual').eq('almacen_id', selected.almacen_id).eq('tipo_balon', tipoBalonCarga).single()
       if (spt) await supabase.from('stock_por_tipo')
         .update({ stock_actual: Math.max(0, spt.stock_actual - cant) })
-        .eq('almacen_id', selected.almacen_id).eq('tipo_balon', '10kg')
+        .eq('almacen_id', selected.almacen_id).eq('tipo_balon', tipoBalonCarga)
     }
 
     // Aplicar FIFO al lote (solo para autónomo)
@@ -1050,6 +1052,10 @@ export default function Distribuidores() {
                     <button onClick={() => { setSelected(d); setCargaModal(true); setCargaForm({ cargados:'', descargados:'', tipo_balon:'10kg', notas:'', fecha:hoyPeru() }); cargarCuentaCorriente(d.id) }}
                       className="bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/30 text-emerald-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
                       📦 Registrar reposición
+                    </button>
+                    <button onClick={() => abrirCuenta(d)}
+                      className="bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-600/30 text-indigo-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
+                      🧾 Rendir cuenta
                     </button>
                     <button onClick={() => cerrarPeriodo(d)}
                       className="bg-orange-600/20 hover:bg-orange-600/30 border border-orange-600/30 text-orange-400 text-xs font-medium py-2 rounded-lg transition-all flex items-center justify-center gap-1">
