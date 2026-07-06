@@ -187,18 +187,19 @@ export default function Deudas() {
     const tipoBalonDeuda = deudaForm.tipo_balon||'10kg'
     const entradaHistorial = { tipo:'deuda', fecha:deudaForm.fecha, monto, balones, tipo_balon:balones>0?tipoBalonDeuda:null, vales_20:vales20, vales_43:vales43, notas:deudaForm.notas||null }
 
-    // Solo descontar stock si hay balones — sin crear venta ficticia
-    if(balones > 0) {
-      const { data:alms } = await supabase.from('almacenes').select('id,nombre,stock_actual').eq('activo',true)
-      const almId = perfil?.almacen_id
-      const tienda = almId ? alms?.find(a=>a.id===almId) : alms?.find(a=>a.nombre?.toLowerCase().includes('tienda'))||alms?.[0]
-      if(tienda) {
-        const { data:almFresco } = await supabase.from('almacenes').select('stock_actual').eq('id',tienda.id).single()
-        await Promise.all([
-          supabase.from('almacenes').update({ stock_actual:Math.max(0,(almFresco?.stock_actual||0)-balones), updated_at:new Date().toISOString() }).eq('id',tienda.id),
-          supabase.from('stock_por_tipo').update({ stock_actual:0 }).eq('almacen_id',tienda.id).eq('tipo_balon',tipoBalonDeuda)
-        ])
-      }
+    // Ubicar el almacén de esta deuda (para descontar stock Y para la venta reflejo)
+    const { data:alms } = await supabase.from('almacenes').select('id,nombre,stock_actual').eq('activo',true)
+    const almId = perfil?.almacen_id
+    const tienda = almId ? alms?.find(a=>a.id===almId) : alms?.find(a=>a.nombre?.toLowerCase().includes('tienda'))||alms?.[0]
+
+    // Descontar stock lleno si hay balones (el balón físicamente salió del almacén)
+    if(balones > 0 && tienda) {
+      const { data:almFresco } = await supabase.from('almacenes').select('stock_actual').eq('id',tienda.id).single()
+      const { data:sptFresco } = await supabase.from('stock_por_tipo').select('stock_actual').eq('almacen_id',tienda.id).eq('tipo_balon',tipoBalonDeuda).maybeSingle()
+      await Promise.all([
+        supabase.from('almacenes').update({ stock_actual:Math.max(0,(almFresco?.stock_actual||0)-balones), updated_at:new Date().toISOString() }).eq('id',tienda.id),
+        supabase.from('stock_por_tipo').update({ stock_actual:Math.max(0,(sptFresco?.stock_actual||0)-balones) }).eq('almacen_id',tienda.id).eq('tipo_balon',tipoBalonDeuda)
+      ])
     }
 
     const { error:e } = await supabase.from('deudas').insert({
@@ -212,8 +213,24 @@ export default function Deudas() {
       historial:[entradaHistorial], usuario_id:perfil?.id||null,
       almacen_id: perfil?.almacen_id||null
     })
+    if(e) { setSaving(false); setError(e.message); return }
+
+    // Reflejar como venta al crédito para que sume en el resumen de Ventas y en Reportes
+    // (misma lógica que una venta al crédito normal: no cuenta como ingreso hasta que se cobre)
+    if((monto>0||balones>0) && tienda) {
+      const cantidadRef = balones>0 ? balones : 1
+      const precioRef = cantidadRef>0 ? (monto/cantidadRef) : 0
+      await supabase.from('ventas').insert({
+        cliente_id: deudaForm.cliente_id||null, almacen_id: tienda.id,
+        tipo_balon: tipoBalonDeuda,
+        fecha: deudaForm.fecha===hoyPeru() ? new Date().toISOString() : (deudaForm.fecha+'T12:00:00-05:00'),
+        cantidad: cantidadRef, precio_unitario: precioRef, metodo_pago: 'credito',
+        notas: `🕐 Registrado manualmente en Deudas${deudaForm.notas?' — '+deudaForm.notas:''}`,
+        usuario_id: perfil?.id||null
+      })
+    }
+
     setSaving(false)
-    if(e) { setError(e.message); return }
     setDeudaPendiente(null); setModal(null); setDeudaForm(emptyDeudaForm)
     toast('Deuda registrada'); cargar()
     const resumenNotif = monto > 0 ? `S/${monto}` : balones > 0 ? `${balones} balón(es)` : ''
@@ -231,13 +248,16 @@ export default function Deudas() {
     const tipoBalonAdd = deudaForm.tipo_balon||'10kg'
     const entradaHistorial = { tipo:'deuda', fecha:deudaForm.fecha, monto, balones, tipo_balon:balones>0?tipoBalonAdd:null, vales_20:vales20, vales_43:vales43, notas:deudaForm.notas||null }
 
-    if(balones > 0) {
-      const { data:alms } = await supabase.from('almacenes').select('id,nombre,stock_actual').eq('activo',true)
-      const almAdd = perfil?.almacen_id ? alms?.find(a=>a.id===perfil.almacen_id) : alms?.find(a=>a.nombre?.toLowerCase().includes('tienda'))||alms?.[0]
-      if(almAdd) {
-        await supabase.from('almacenes').update({ stock_actual:Math.max(0,(almAdd.stock_actual||0)-balones), updated_at:new Date().toISOString() }).eq('id',almAdd.id)
-        await supabase.from('stock_por_tipo').update({ stock_actual:0 }).eq('almacen_id',almAdd.id).eq('tipo_balon',tipoBalonAdd)
-      }
+    const { data:alms } = await supabase.from('almacenes').select('id,nombre,stock_actual').eq('activo',true)
+    const almAdd = perfil?.almacen_id ? alms?.find(a=>a.id===perfil.almacen_id) : alms?.find(a=>a.nombre?.toLowerCase().includes('tienda'))||alms?.[0]
+
+    if(balones > 0 && almAdd) {
+      const { data:almFresco } = await supabase.from('almacenes').select('stock_actual').eq('id',almAdd.id).single()
+      const { data:sptFresco } = await supabase.from('stock_por_tipo').select('stock_actual').eq('almacen_id',almAdd.id).eq('tipo_balon',tipoBalonAdd).maybeSingle()
+      await Promise.all([
+        supabase.from('almacenes').update({ stock_actual:Math.max(0,(almFresco?.stock_actual||0)-balones), updated_at:new Date().toISOString() }).eq('id',almAdd.id),
+        supabase.from('stock_por_tipo').update({ stock_actual:Math.max(0,(sptFresco?.stock_actual||0)-balones) }).eq('almacen_id',almAdd.id).eq('tipo_balon',tipoBalonAdd)
+      ])
     }
 
     const { error:e } = await supabase.from('deudas').update({
@@ -251,8 +271,23 @@ export default function Deudas() {
       fecha_deuda:deudaForm.fecha,
       updated_at:new Date().toISOString()
     }).eq('id',deudaPendiente.id)
+    if(e) { setSaving(false); setError(e.message); return }
+
+    // Reflejar como venta al crédito, igual que en guardarDeuda
+    if((monto>0||balones>0) && almAdd) {
+      const cantidadRef = balones>0 ? balones : 1
+      const precioRef = cantidadRef>0 ? (monto/cantidadRef) : 0
+      await supabase.from('ventas').insert({
+        cliente_id: deudaPendiente.cliente_id||null, almacen_id: almAdd.id,
+        tipo_balon: tipoBalonAdd,
+        fecha: deudaForm.fecha===hoyPeru() ? new Date().toISOString() : (deudaForm.fecha+'T12:00:00-05:00'),
+        cantidad: cantidadRef, precio_unitario: precioRef, metodo_pago: 'credito',
+        notas: `🕐 Registrado manualmente en Deudas${deudaForm.notas?' — '+deudaForm.notas:''}`,
+        usuario_id: perfil?.id||null
+      })
+    }
+
     setSaving(false)
-    if(e) { setError(e.message); return }
     setDeudaPendiente(null); setModal(null); setDeudaForm(emptyDeudaForm)
     toast('Deuda actualizada'); cargar()
     const resumenNotifAdd = monto > 0 ? `S/${monto}` : balones > 0 ? `${balones} balón(es)` : ''
@@ -315,8 +350,9 @@ export default function Deudas() {
       }
     }
 
-    // Registrar cobro en ventas para reportes
-    if(totalPago > 0) {
+    // Registrar cobro/devolución en ventas para reportes y para el resumen del día en Ventas
+    // (siempre, aunque sea solo devolución de balón sin dinero, para que quede un registro trazable)
+    if(totalPago > 0 || balones > 0) {
       const almacenIngreso = selected.almacen_id||perfil?.almacen_id
       if(almacenIngreso) {
         ops.push(supabase.from('ventas').insert({

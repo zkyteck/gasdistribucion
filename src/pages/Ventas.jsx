@@ -500,6 +500,16 @@ export default function Ventas() {
   const totalCredito = ventas.filter(v=>v.metodo_pago==='credito').reduce((s,v) => s+(v.cantidad*v.precio_unitario),0)
   const totalCreditos = ventas.filter(v=>v.metodo_pago==='credito').length
 
+  // ─── Resumen en 3 bloques: ventas del día / créditos otorgados hoy / cobros y devoluciones recibidos hoy ──
+  // Los "cobros" (metodo_pago='cobro_credito') son pagos o devoluciones de deudas de otros días —
+  // no se cuentan como "venta del día" para no inflar el conteo de balones vendidos hoy.
+  const ventasDelDia   = ventasFiltradas.filter(v => v.metodo_pago !== 'cobro_credito')
+  const creditosHoy    = ventasFiltradas.filter(v => v.metodo_pago === 'credito')
+  const cobrosHoy      = ventasFiltradas.filter(v => v.metodo_pago === 'cobro_credito')
+  const totalCreditosHoy = creditosHoy.reduce((s,v) => s+(v.cantidad*v.precio_unitario), 0)
+  const totalCobrosHoy   = cobrosHoy.reduce((s,v) => s+(v.cantidad*v.precio_unitario), 0)
+  const balonesCobrosHoy = cobrosHoy.filter(v => (v.notas||'').includes('bal. devuelto')).length
+
   // ─── Reporte del día ───────────────────────────────────────────────────────
   const imprimirReporte = useCallback(() => {
     const ventasPorTipo = TIPOS_BALON.map(tipo => {
@@ -565,6 +575,66 @@ export default function Ventas() {
         <div style={{background:'var(--app-card-bg)',border:`1px solid ${totalCreditos>0?'rgba(251,146,60,0.3)':'var(--app-card-border)'}`,borderRadius:12,padding:'12px 16px'}}>
           <p style={{fontSize:20,fontWeight:700,color:totalCreditos>0?'#fb923c':'var(--app-text-secondary)',margin:0}}>S/{totalCredito.toLocaleString('es-PE',{maximumFractionDigits:0})}</p>
           <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Crédito ({totalCreditos} ventas)</p>
+        </div>
+      </div>
+
+      {/* Resumen en 3 bloques */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        {/* Bloque 1: Ventas del día */}
+        <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:12,overflow:'hidden'}}>
+          <div style={{padding:'10px 14px',borderBottom:'1px solid var(--app-card-border)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <p style={{fontSize:12,fontWeight:700,color:'var(--app-text)',margin:0}}>🛒 Ventas del día</p>
+            <span className="badge-blue" style={{fontSize:10}}>{ventasDelDia.length}</span>
+          </div>
+          <div style={{padding:'10px 14px',maxHeight:180,overflowY:'auto'}}>
+            {ventasDelDia.length===0?(
+              <p style={{fontSize:12,color:'var(--app-text-secondary)',margin:0}}>Sin ventas aún</p>
+            ):ventasDelDia.slice(0,8).map(v=>(
+              <div key={v.id} style={{display:'flex',justifyContent:'space-between',gap:8,padding:'4px 0',fontSize:12}}>
+                <span style={{color:'var(--app-text-secondary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v.clientes?.nombre||'Varios'} · {v.cantidad} bal.</span>
+                <span style={{color:'var(--app-text)',fontWeight:600,flexShrink:0}}>S/{(v.cantidad*v.precio_unitario).toLocaleString('es-PE',{maximumFractionDigits:0})}</span>
+              </div>
+            ))}
+            {ventasDelDia.length>8&&<p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'4px 0 0'}}>+{ventasDelDia.length-8} más…</p>}
+          </div>
+        </div>
+
+        {/* Bloque 2: Créditos otorgados hoy */}
+        <div style={{background:'var(--app-card-bg)',border:`1px solid ${creditosHoy.length>0?'rgba(251,146,60,0.3)':'var(--app-card-border)'}`,borderRadius:12,overflow:'hidden'}}>
+          <div style={{padding:'10px 14px',borderBottom:'1px solid var(--app-card-border)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <p style={{fontSize:12,fontWeight:700,color:'#fb923c',margin:0}}>🟠 Créditos otorgados hoy</p>
+            <span style={{fontSize:11,fontWeight:700,color:'#fb923c'}}>S/{totalCreditosHoy.toLocaleString('es-PE',{maximumFractionDigits:0})}</span>
+          </div>
+          <div style={{padding:'10px 14px',maxHeight:180,overflowY:'auto'}}>
+            {creditosHoy.length===0?(
+              <p style={{fontSize:12,color:'var(--app-text-secondary)',margin:0}}>Nadie quedó a deber hoy</p>
+            ):creditosHoy.slice(0,8).map(v=>(
+              <div key={v.id} style={{display:'flex',justifyContent:'space-between',gap:8,padding:'4px 0',fontSize:12}}>
+                <span style={{color:'var(--app-text-secondary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v.clientes?.nombre||'Varios'}{v.notas?.includes('manualmente')?' · manual':''}</span>
+                <span style={{color:'#fb923c',fontWeight:600,flexShrink:0}}>S/{(v.cantidad*v.precio_unitario).toLocaleString('es-PE',{maximumFractionDigits:0})}</span>
+              </div>
+            ))}
+            {creditosHoy.length>8&&<p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'4px 0 0'}}>+{creditosHoy.length-8} más…</p>}
+          </div>
+        </div>
+
+        {/* Bloque 3: Cobros y devoluciones recibidos hoy (de deudas de cualquier fecha) */}
+        <div style={{background:'var(--app-card-bg)',border:`1px solid ${cobrosHoy.length>0?'rgba(34,197,94,0.3)':'var(--app-card-border)'}`,borderRadius:12,overflow:'hidden'}}>
+          <div style={{padding:'10px 14px',borderBottom:'1px solid var(--app-card-border)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <p style={{fontSize:12,fontWeight:700,color:'#22c55e',margin:0}}>✅ Cobros y devoluciones hoy</p>
+            <span style={{fontSize:11,fontWeight:700,color:'#22c55e'}}>S/{totalCobrosHoy.toLocaleString('es-PE',{maximumFractionDigits:0})}</span>
+          </div>
+          <div style={{padding:'10px 14px',maxHeight:180,overflowY:'auto'}}>
+            {cobrosHoy.length===0?(
+              <p style={{fontSize:12,color:'var(--app-text-secondary)',margin:0}}>Sin cobros de deudas hoy</p>
+            ):cobrosHoy.slice(0,8).map(v=>(
+              <div key={v.id} style={{display:'flex',justifyContent:'space-between',gap:8,padding:'4px 0',fontSize:12}}>
+                <span style={{color:'var(--app-text-secondary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{(v.notas||'').replace('Cobro deuda — ','')}</span>
+                <span style={{color:'#22c55e',fontWeight:600,flexShrink:0}}>{v.precio_unitario>0?`S/${(v.cantidad*v.precio_unitario).toLocaleString('es-PE',{maximumFractionDigits:0})}`:'balón'}</span>
+              </div>
+            ))}
+            {balonesCobrosHoy>0&&<p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'4px 0 0'}}>⚪ Incluye devolución de balones vacíos</p>}
+          </div>
         </div>
       </div>
 
