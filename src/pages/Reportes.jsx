@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { hoyPeru } from '../lib/fechas'
-import { TrendingUp, Package, Ticket, AlertCircle, Printer, RefreshCw, DollarSign, ShoppingCart, Store, Truck, BarChart2 } from 'lucide-react'
+import { TrendingUp, Package, Ticket, AlertCircle, Printer, RefreshCw, DollarSign, ShoppingCart, Store, Truck, BarChart2, FileSpreadsheet } from 'lucide-react'
+import { exportarExcelMultiHoja } from '../lib/exportar'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend
@@ -308,6 +309,35 @@ export default function Reportes() {
     cursor:'pointer', transition:'all 0.15s'
   })
 
+  // ─── Exportar a Excel (varias hojas) ───────────────────────────────────────
+  const exportarExcelReporte = useCallback(() => {
+    if(!data) return
+    const resumenFilas = [{
+      'Ingreso Tienda': data.ingTienda, 'Ganancia Tienda': data.ganTienda, 'Balones Tienda': data.balTienda,
+      'Ingreso Distribuidores': data.ingDist, 'Ganancia Distribuidores': data.ganDist, 'Balones Distribuidores': data.balDist,
+      'Ingreso Total': data.ingTotal, 'Ganancia Total': data.ganTotal, 'Balones Total': data.balTotal,
+      'Margen %': data.margen?.toFixed(1), 'Crédito otorgado (pendiente)': data.ingCredito, 'Cobrado de crédito': data.ingCobroCredito,
+    }]
+    const porBalonFilas = Object.entries(data.porBalon||{}).map(([tipo,d]) => ({
+      Tipo: tipo, Balones: d.balones, Ingreso: Math.round(d.ingreso), Ganancia: Math.round(d.ganancia),
+    }))
+    const porDistFilas = Object.entries(data.porDist||{}).map(([nombre,d]) => ({
+      Distribuidor: nombre, Balones: d.balones, Ingreso: Math.round(d.ingreso), Costo: Math.round(d.costo),
+      Ganancia: Math.round(d.ganancia), 'Cobrado efectivo': Math.round(d.cobradoEf), 'Cobrado vales': Math.round(d.cobradoVales),
+      'Total cobrado': Math.round(d.totalCobrado), Pendiente: Math.round(d.pendiente),
+    }))
+    const diarioFilas = (data.diario||[]).map(d => ({
+      Día: d.dia, 'Ingreso Tienda': d.Tienda, 'Ganancia Tienda': d['Gan.Tienda'], 'Balones Tienda': d['Bal.Tienda'],
+      'Ingreso Dist.': d.Dist, 'Ganancia Dist.': d['Gan.Dist'], 'Balones Dist.': d['Bal.Dist'],
+    }))
+    exportarExcelMultiHoja([
+      { nombre:'Resumen', filas:resumenFilas },
+      { nombre:'Por tipo de balón', filas:porBalonFilas },
+      { nombre:'Por distribuidor', filas:porDistFilas },
+      { nombre:'Evolución diaria', filas:diarioFilas },
+    ], `reportes_${filtroVista}_${periodo}`)
+  }, [data, filtroVista, periodo])
+
   return (
     <div className="space-y-5" id="reporte-print">
 
@@ -325,6 +355,9 @@ export default function Reportes() {
           </button>
           <button onClick={()=>window.print()} className="btn-secondary">
             <Printer className="w-3.5 h-3.5"/>Imprimir
+          </button>
+          <button onClick={exportarExcelReporte} disabled={!data} className="btn-secondary" style={{opacity:!data?0.5:1}}>
+            <FileSpreadsheet className="w-3.5 h-3.5"/>Excel
           </button>
         </div>
       </div>

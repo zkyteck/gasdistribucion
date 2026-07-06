@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { hoyPeru } from '../lib/fechas'
-import { Users, X, AlertCircle, Search, Clock, CheckCircle, AlertTriangle, TrendingDown, Printer } from 'lucide-react'
+import { Users, X, AlertCircle, Search, Clock, CheckCircle, AlertTriangle, TrendingDown, Printer, FileSpreadsheet } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useAuth } from '../context/AuthContext'
@@ -9,6 +9,7 @@ import { Notif } from '../lib/notificaciones'
 import Modal from '../components/Modal'
 import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
+import { exportarExcel } from '../lib/exportar'
 
 
 
@@ -523,6 +524,35 @@ export default function Deudas() {
     win.document.close()
   }
 
+  // ─── Exportar a Excel ───────────────────────────────────────────────────────
+  const exportarExcelDeudas = async () => {
+    let queryExp = supabase.from('deudas').select('*').order('fecha_deuda', {ascending:true})
+      .or('eliminado.is.null,eliminado.eq.false')
+    if(filtroEstado==='activas') queryExp = queryExp.in('estado',['activa','pagada_parcial'])
+    else if(filtroEstado==='liquidadas') queryExp = queryExp.eq('estado','liquidada')
+    if(!isAdmin && perfil?.almacen_id) queryExp = queryExp.eq('almacen_id', perfil.almacen_id)
+    if(busqueda.trim()) queryExp = queryExp.ilike('nombre_deudor', `%${busqueda.trim()}%`)
+    const { data:todasDeudas } = await queryExp
+    const deudasParaExportar = todasDeudas || deudasFiltradas
+
+    const filas = deudasParaExportar.map(d => {
+      const dias = differenceInDays(new Date(), new Date(d.fecha_deuda))
+      return {
+        Cliente: d.nombre_deudor,
+        'Monto pendiente S/': parseFloat(d.monto_pendiente)||0,
+        'Balones pendientes': parseInt(d.balones_pendiente)||0,
+        'Vales S/20 pendientes': parseInt(d.vales_20_pendiente)||0,
+        'Vales S/43 pendientes': parseInt(d.vales_43_pendiente)||0,
+        'Días de atraso': dias,
+        Urgencia: dias>=60?'Urgente':dias>=30?'Atrasado':dias>=7?'Reciente':'Normal',
+        Estado: d.estado,
+        'Fecha deuda': format(new Date(d.fecha_deuda+'T12:00:00'),'dd/MM/yyyy',{locale:es}),
+        Notas: d.notas || '',
+      }
+    })
+    exportarExcel(filas, `deudas_${hoyPeru()}`, 'Deudas')
+  }
+
   const cardStyle = { background:'var(--app-card-bg)', border:'1px solid var(--app-card-border)', borderRadius:12, padding:'14px 16px' }
 
   return (
@@ -538,6 +568,9 @@ export default function Deudas() {
         <div style={{display:'flex',gap:8}}>
           <button onClick={imprimirReporte} className="btn-secondary" style={{fontSize:12}}>
             <Printer style={{width:13,height:13}}/> Imprimir reporte
+          </button>
+          <button onClick={exportarExcelDeudas} className="btn-secondary" style={{fontSize:12}}>
+            <FileSpreadsheet style={{width:13,height:13}}/> Excel
           </button>
           {isAdmin && (
             <button onClick={()=>{setDeudaForm(emptyDeudaForm);setDeudaPendiente(null);setSelected(null);setError('');cargarClientes();setModal('deuda')}} className="btn-secondary" style={{fontSize:12}}>

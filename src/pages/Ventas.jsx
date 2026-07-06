@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { hoyPeru } from '../lib/fechas'
-import { ShoppingCart, Plus, X, AlertCircle, Trash2, Search, Printer, CheckCircle, AlertTriangle } from 'lucide-react'
+import { ShoppingCart, Plus, X, AlertCircle, Trash2, Search, Printer, CheckCircle, AlertTriangle, FileSpreadsheet } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useAuth } from '../context/AuthContext'
@@ -10,6 +10,7 @@ import VentaRapida from './VentaRapida'
 import Modal from '../components/Modal'
 import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
+import { exportarExcel } from '../lib/exportar'
 
 const TIPOS_BALON = ['5kg', '10kg', '45kg']
 
@@ -540,6 +541,22 @@ export default function Ventas() {
     win.document.close()
   }, [ventas, ventasFiltradas, filtroFecha, totalDia, totalBalones, totalEfectivo, totalCredito, totalCreditos])
 
+  // ─── Exportar a Excel ───────────────────────────────────────────────────────
+  const exportarExcelDia = useCallback(() => {
+    const filas = ventasFiltradas.map(v => ({
+      Fecha: format(new Date(v.fecha), 'dd/MM/yyyy HH:mm', { locale: es }),
+      Cliente: v.clientes?.nombre || 'Varios',
+      'Tipo balón': v.tipo_balon || '10kg',
+      Cantidad: v.cantidad,
+      'Precio unit.': v.precio_unitario,
+      Total: v.cantidad * v.precio_unitario,
+      'Método de pago': v.metodo_pago,
+      Categoría: v.metodo_pago === 'cobro_credito' ? 'Cobro/devolución' : v.metodo_pago === 'credito' ? 'Crédito otorgado' : 'Venta normal',
+      Notas: v.notas || '',
+    }))
+    exportarExcel(filas, `ventas_${filtroFecha}`, 'Ventas')
+  }, [ventasFiltradas, filtroFecha])
+
 
   // ─── RENDER ────────────────────────────────────────────────────────────────
   return (
@@ -646,6 +663,9 @@ export default function Ventas() {
         </div>
         <button onClick={imprimirReporte} className="btn-secondary" title="Imprimir reporte del día">
           <Printer className="w-4 h-4"/>Reporte
+        </button>
+        <button onClick={exportarExcelDia} className="btn-secondary" title="Exportar a Excel">
+          <FileSpreadsheet className="w-4 h-4"/>Excel
         </button>
       </div>
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
-import { Warehouse, Plus, Edit2, Trash2, Package, X, AlertCircle, TestTube, AlertTriangle } from 'lucide-react'
+import { Warehouse, Plus, Edit2, Trash2, Package, X, AlertCircle, TestTube, AlertTriangle, Printer, FileSpreadsheet } from 'lucide-react'
+import { exportarExcel } from '../lib/exportar'
 
 function Modal({ title, onClose, children }) {
   return (
@@ -128,6 +129,51 @@ export default function Almacenes() {
   const stockBajos = almacenes.filter(a => (a.stock_actual||0) < UMBRAL_BAJO && !a.es_prueba)
   const totalBalones = almacenes.reduce((s,a) => s+(a.stock_actual||0), 0)
 
+  // ─── Exportar a Excel ───────────────────────────────────────────────────────
+  const exportarExcelAlmacenes = useCallback(() => {
+    const filas = almacenes.map(a => ({
+      Almacén: a.nombre,
+      Responsable: a.responsable,
+      Ubicación: a.ubicacion,
+      'Stock lleno (total)': a.stock_actual||0,
+      '5kg lleno': getStockTipo(a.id,'5kg'),
+      '10kg lleno': getStockTipo(a.id,'10kg'),
+      '45kg lleno': getStockTipo(a.id,'45kg'),
+      'Vacíos (total)': a.balones_vacios||0,
+      '5kg vacío': a.vacios_5kg||0,
+      '10kg vacío': a.vacios_10kg||0,
+      '45kg vacío': a.vacios_45kg||0,
+    }))
+    exportarExcel(filas, `almacenes_stock_${new Date().toISOString().split('T')[0]}`, 'Almacenes')
+  }, [almacenes, getStockTipo])
+
+  // ─── Imprimir reporte ───────────────────────────────────────────────────────
+  const imprimirAlmacenes = useCallback(() => {
+    const hoy = new Date().toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric' })
+    const filas = almacenes.map(a => `<tr>
+      <td style="padding:8px;font-weight:600">${a.nombre}</td>
+      <td style="padding:8px">${a.responsable}</td>
+      <td style="padding:8px;text-align:center;font-weight:700">${a.stock_actual||0}</td>
+      <td style="padding:8px;text-align:center">${getStockTipo(a.id,'5kg')}</td>
+      <td style="padding:8px;text-align:center">${getStockTipo(a.id,'10kg')}</td>
+      <td style="padding:8px;text-align:center">${getStockTipo(a.id,'45kg')}</td>
+      <td style="padding:8px;text-align:center">${a.balones_vacios||0}</td>
+    </tr>`).join('')
+    const win = window.open('','_blank')
+    win.document.write(`
+      <html><head><title>Reporte de Almacenes — ${hoy}</title>
+      <style>body{font-family:Arial;max-width:700px;margin:0 auto;padding:20px}h1{font-size:18px}table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid #ccc}th{background:#f5f5f5;padding:8px;text-align:left}tfoot td{font-weight:bold;background:#eee}</style>
+      </head><body>
+      <h1>📦 Reporte de Almacenes — ${hoy}</h1>
+      <table><thead><tr><th>Almacén</th><th>Responsable</th><th>Lleno total</th><th>5kg</th><th>10kg</th><th>45kg</th><th>Vacíos</th></tr></thead>
+      <tbody>${filas}</tbody>
+      <tfoot><tr><td colspan="2">TOTAL</td><td style="text-align:center">${totalBalones}</td><td colspan="4"></td></tr></tfoot>
+      </table>
+      <script>window.print()</script></body></html>
+    `)
+    win.document.close()
+  }, [almacenes, getStockTipo, totalBalones])
+
   return (
     <div className="space-y-5">
 
@@ -137,7 +183,11 @@ export default function Almacenes() {
           <h2 style={{fontSize:20,fontWeight:700,color:'var(--app-text)',margin:0}}>Almacenes</h2>
           <p style={{fontSize:13,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Gestión de almacenes y stock</p>
         </div>
-        <button onClick={abrirNuevo} className="btn-primary"><Plus className="w-4 h-4"/>Nuevo almacén</button>
+        <div style={{display:'flex',gap:8}}>
+          <button onClick={imprimirAlmacenes} className="btn-secondary" title="Imprimir reporte de stock"><Printer className="w-4 h-4"/>Imprimir</button>
+          <button onClick={exportarExcelAlmacenes} className="btn-secondary" title="Exportar a Excel"><FileSpreadsheet className="w-4 h-4"/>Excel</button>
+          <button onClick={abrirNuevo} className="btn-primary"><Plus className="w-4 h-4"/>Nuevo almacén</button>
+        </div>
       </div>
 
       {/* Alerta stock bajo */}
