@@ -34,7 +34,7 @@ function urgenciaStyle(dias, estado) {
 }
 
 const emptyDeudaForm = { nombre_deudor:'', cliente_id:'', monto:'', balones:'', tipo_balon:'10kg', vales_20:'', vales_43:'', fecha:hoyPeru(), notas:'' }
-const emptyPagoForm  = { monto:'', balones:'', vales_20:'', vales_43:'', metodo_pago:'efectivo', fecha:hoyPeru(), notas:'' }
+const emptyPagoForm  = { monto_efectivo:'', monto_yape:'', balones:'', vales_20:'', vales_43:'', fecha:hoyPeru(), notas:'' }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 const POR_PAGINA = 30
@@ -298,7 +298,9 @@ export default function Deudas() {
   // ─── Registrar pago ──────────────────────────────────────────────────────────
   const registrarPago = useCallback(async () => {
     if(!selected) return
-    const monto = parseFloat(pagoForm.monto)||0
+    const montoEf = parseFloat(pagoForm.monto_efectivo)||0
+    const montoYa = parseFloat(pagoForm.monto_yape)||0
+    const monto = montoEf + montoYa
     const balones = parseInt(pagoForm.balones)||0
     const vales20 = parseInt(pagoForm.vales_20)||0
     const vales43 = parseInt(pagoForm.vales_43)||0
@@ -320,8 +322,9 @@ export default function Deudas() {
     const nuevoV20 = Math.max(0,vales20Pend-vales20)
     const nuevoV43 = Math.max(0,vales43Pend-vales43)
     const liquidada = nuevoMonto===0&&nuevoBal===0&&nuevoV20===0&&nuevoV43===0
-    const metodo = vales20>0||vales43>0?(monto>0?'mixto':'vale'):pagoForm.metodo_pago
-    const entradaHistorial = { tipo:'pago', fecha:pagoForm.fecha, monto:totalPago, balones, vales_20:vales20, vales_43:vales43, metodo_pago:metodo, notas:pagoForm.notas||null }
+    const metodo = [montoEf>0&&'efectivo',montoYa>0&&'yape',(vales20>0||vales43>0)&&'vale'].filter(Boolean)
+    const metodoLabel = metodo.length>1?'mixto':(metodo[0]||'efectivo')
+    const entradaHistorial = { tipo:'pago', fecha:pagoForm.fecha, monto:totalPago, balones, vales_20:vales20, vales_43:vales43, metodo_pago:metodoLabel, notas:pagoForm.notas||null }
 
     // Si pagó con balones → sumarlos al almacén
     const ops = [
@@ -351,7 +354,8 @@ export default function Deudas() {
       }
     }
 
-    // Registrar cobro/devolución en ventas para reportes y para el resumen del día en Ventas
+    // Registrar cobro/devolución en ventas para reportes, para el resumen del día en Ventas
+    // y para que la caja sepa exactamente cuánto efectivo físico entró (vs. yape/vale).
     // (siempre, aunque sea solo devolución de balón sin dinero, para que quede un registro trazable)
     if(totalPago > 0 || balones > 0) {
       const almacenIngreso = selected.almacen_id||perfil?.almacen_id
@@ -362,7 +366,9 @@ export default function Deudas() {
           fecha:new Date().toISOString(),
           cantidad:1, precio_unitario:totalPago,
           metodo_pago:'cobro_credito',
-          notas:`Cobro deuda — ${selected.nombre_deudor}${balones>0?` (${balones} bal. devuelto${balones>1?'s':''})`:''} `,
+          monto_efectivo: montoEf, monto_yape: montoYa,
+          vales_20: vales20||null, vales_43: vales43||null,
+          notas:`Cobro deuda — ${selected.nombre_deudor}${balones>0?` (${balones} bal. devuelto${balones>1?'s':''})`:''} [${metodoLabel}]`,
           usuario_id:perfil?.id||null
         }))
       }
@@ -786,13 +792,22 @@ export default function Deudas() {
 
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
               {parseFloat(selected.monto_pendiente)>0&&(
-                <div>
-                  <label className="label">Monto S/ que paga</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{color:'var(--app-text-secondary)'}}>S/</span>
-                    <input type="number" min="0" max={selected.monto_pendiente} className="input" style={{paddingLeft:'2rem'}} value={pagoForm.monto} onChange={e=>setPagoForm(f=>({...f,monto:e.target.value}))} placeholder={`Máx: S/${selected.monto_pendiente}`}/>
+                <>
+                  <div>
+                    <label className="label">💵 Efectivo S/</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{color:'var(--app-text-secondary)'}}>S/</span>
+                      <input type="number" min="0" max={selected.monto_pendiente} className="input" style={{paddingLeft:'2rem'}} value={pagoForm.monto_efectivo} onChange={e=>setPagoForm(f=>({...f,monto_efectivo:e.target.value}))} placeholder="0"/>
+                    </div>
                   </div>
-                </div>
+                  <div>
+                    <label className="label">📱 Yape S/</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{color:'var(--app-text-secondary)'}}>S/</span>
+                      <input type="number" min="0" max={selected.monto_pendiente} className="input" style={{paddingLeft:'2rem'}} value={pagoForm.monto_yape} onChange={e=>setPagoForm(f=>({...f,monto_yape:e.target.value}))} placeholder="0"/>
+                    </div>
+                  </div>
+                </>
               )}
               {parseInt(selected.balones_pendiente)>0&&(
                 <div>
@@ -814,17 +829,9 @@ export default function Deudas() {
               )}
             </div>
 
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <div>
-                <label className="label">Método de pago</label>
-                <select className="input" value={pagoForm.metodo_pago} onChange={e=>setPagoForm(f=>({...f,metodo_pago:e.target.value}))}>
-                  {['efectivo','yape','transferencia','vale','mixto'].map(m=><option key={m} value={m}>{m}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="label">Fecha del pago</label>
-                <input type="date" className="input" value={pagoForm.fecha} onChange={e=>setPagoForm(f=>({...f,fecha:e.target.value}))}/>
-              </div>
+            <div>
+              <label className="label">Fecha del pago</label>
+              <input type="date" className="input" value={pagoForm.fecha} onChange={e=>setPagoForm(f=>({...f,fecha:e.target.value}))}/>
             </div>
 
             <div>
@@ -833,8 +840,8 @@ export default function Deudas() {
             </div>
 
             {/* Preview pago */}
-            {(parseFloat(pagoForm.monto)||parseInt(pagoForm.balones)||parseInt(pagoForm.vales_20)||parseInt(pagoForm.vales_43))>0&&(()=>{
-              const m=parseFloat(pagoForm.monto)||0
+            {((parseFloat(pagoForm.monto_efectivo)||0)+(parseFloat(pagoForm.monto_yape)||0)||parseInt(pagoForm.balones)||parseInt(pagoForm.vales_20)||parseInt(pagoForm.vales_43))>0&&(()=>{
+              const m=(parseFloat(pagoForm.monto_efectivo)||0)+(parseFloat(pagoForm.monto_yape)||0)
               const b=parseInt(pagoForm.balones)||0
               const v20=parseInt(pagoForm.vales_20)||0
               const v43=parseInt(pagoForm.vales_43)||0

@@ -39,6 +39,48 @@ function PagoBadge({ metodo }) {
 
 const POR_PAGINA = 50
 
+// ─── Historial de cajas (aperturas/cierres pasados) ────────────────────────
+function CajaHistorial({ almacenId }) {
+  const [cajas, setCajas] = useState([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    if(!almacenId) return
+    setLoading(true)
+    supabase.from('cajas_diarias').select('*').eq('almacen_id',almacenId).eq('estado','cerrada')
+      .order('cerrada_at',{ascending:false}).limit(10)
+      .then(({data}) => { setCajas(data||[]); setLoading(false) })
+  }, [almacenId])
+  if(loading) return null
+  if(cajas.length===0) return (
+    <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:12,padding:'16px',textAlign:'center'}}>
+      <p style={{fontSize:12,color:'var(--app-text-secondary)',margin:0}}>Aún no hay cierres de caja registrados.</p>
+    </div>
+  )
+  return (
+    <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:12,overflow:'hidden'}}>
+      <div style={{padding:'10px 14px',borderBottom:'1px solid var(--app-card-border)'}}>
+        <p style={{fontSize:12,fontWeight:700,color:'var(--app-text)',margin:0}}>📜 Últimos cierres de caja</p>
+      </div>
+      <div style={{maxHeight:260,overflowY:'auto'}}>
+        {cajas.map(c => {
+          const dif = c.diferencia||0
+          const color = Math.abs(dif)<0.01?'#22c55e':dif<0?'#f87171':'#eab308'
+          const label = Math.abs(dif)<0.01?'✅ Cuadró':dif<0?`🔴 Faltó S/${Math.abs(dif).toLocaleString('es-PE',{maximumFractionDigits:2})}`:`🟡 Sobró S/${dif.toLocaleString('es-PE',{maximumFractionDigits:2})}`
+          return (
+            <div key={c.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 14px',borderBottom:'1px solid var(--app-card-border)',fontSize:12}}>
+              <div>
+                <p style={{margin:0,color:'var(--app-text)'}}>{new Date(c.cerrada_at).toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'})}</p>
+                <p style={{margin:'2px 0 0',color:'var(--app-text-secondary)',fontSize:11}}>Esperado S/{(c.efectivo_esperado||0).toLocaleString('es-PE',{maximumFractionDigits:2})} · Contado S/{(c.efectivo_contado||0).toLocaleString('es-PE',{maximumFractionDigits:2})}</p>
+              </div>
+              <span style={{color,fontWeight:700,fontSize:12}}>{label}</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function Ventas() {
   const { perfil } = useAuth()
   const { toasts, toast } = useToast()
@@ -72,6 +114,17 @@ export default function Ventas() {
   const [clienteRapidoForm, setClienteRapidoForm] = useState({ nombre:'', telefono:'' })
   const [deudaExistente, setDeudaExistente] = useState(null)
   const [loadingDeuda, setLoadingDeuda] = useState(false)
+  const [tab, setTab] = useState('registrar') // 'registrar' | 'resumen' | 'caja'
+
+  // ── Caja ──
+  const [cajaHoy, setCajaHoy] = useState(null)
+  const [loadingCaja, setLoadingCaja] = useState(false)
+  const [modalCaja, setModalCaja] = useState(null) // 'abrir' | 'cerrar' | null
+  const DENOMINACIONES = [100,50,20,10]
+  const emptyDenom = { 100:'', 50:'', 20:'', 10:'', monedas:'' }
+  const [denomForm, setDenomForm] = useState(emptyDenom)
+  const [savingCaja, setSavingCaja] = useState(false)
+  const [errorCaja, setErrorCaja] = useState('')
 
   // Cierre/apertura
 
@@ -126,6 +179,69 @@ export default function Ventas() {
   }, [filtroFecha, paginaOffset])
 
   useEffect(() => { cargar() }, [cargar])
+
+  // ─── Caja: cargar estado del día para el almacén del usuario ────────────────
+  const almacenCajaId = perfil?.almacen_id || almacenes[0]?.id
+  const cargarCaja = useCallback(async () => {
+    if(!almacenCajaId) return
+    setLoadingCaja(true)
+    const { data } = await supabase.from('cajas_diarias').select('*')
+      .eq('almacen_id', almacenCajaId).eq('estado','abierta').order('abierta_at',{ascending:false}).limit(1).maybeSingle()
+    setCajaHoy(data||null)
+    setLoadingCaja(false)
+  }, [almacenCajaId])
+  useEffect(() => { cargarCaja() }, [cargarCaja])
+
+  const totalDenom = (d) => (parseInt(d[100])||0)*100 + (parseInt(d[50])||0)*50 + (parseInt(d[20])||0)*20 + (parseInt(d[10])||0)*10 + (parseFloat(d.monedas)||0)
+
+  const abrirCaja = useCallback(async () => {
+    if(!almacenCajaId) return
+    setSavingCaja(true); setErrorCaja('')
+    const fondo = totalDenom(denomForm)
+    const { error:e } = await supabase.from('cajas_diarias').insert({
+      almacen_id: almacenCajaId, fondo_inicial: fondo,
+      denominaciones_apertura: denomForm, usuario_apertura_id: perfil?.id||null,
+    })
+    setSavingCaja(false)
+    if(e) { setErrorCaja(e.message.includes('idx_caja_abierta_unica')?'Ya hay una caja abierta para este almacén':e.message); return }
+    setModalCaja(null); setDenomForm(emptyDenom); cargarCaja()
+  }, [almacenCajaId, denomForm, perfil, cargarCaja])
+
+  // Efectivo esperado ahora mismo = fondo inicial + efectivo de ventas + efectivo de cobros de deuda (desde que se abrió la caja)
+  // Consulta directa a la BD (no la lista paginada en pantalla) para que sea exacto aunque el día tenga muchas ventas.
+  const efectivoEsperadoCaja = useCallback(async () => {
+    if(!cajaHoy) return 0
+    const { data:ventasDesdeApertura } = await supabase.from('ventas')
+      .select('metodo_pago,monto_efectivo,cantidad,precio_unitario')
+      .eq('almacen_id', cajaHoy.almacen_id)
+      .gte('fecha', cajaHoy.abierta_at)
+      .or('eliminado.is.null,eliminado.eq.false')
+      .in('metodo_pago', ['efectivo','mixto','cobro_credito'])
+    const efTotal = (ventasDesdeApertura||[]).reduce((s,v) => {
+      if(v.metodo_pago==='efectivo') return s+(v.monto_efectivo!=null?v.monto_efectivo:v.cantidad*v.precio_unitario)
+      return s+(v.monto_efectivo||0) // 'mixto' y 'cobro_credito'
+    }, 0)
+    return cajaHoy.fondo_inicial + efTotal
+  }, [cajaHoy])
+
+  const [efectivoEsperadoActual, setEfectivoEsperadoActual] = useState(0)
+  useEffect(() => { if(cajaHoy) efectivoEsperadoCaja().then(setEfectivoEsperadoActual) }, [cajaHoy, efectivoEsperadoCaja])
+
+  const cerrarCaja = useCallback(async () => {
+    if(!cajaHoy) return
+    setSavingCaja(true); setErrorCaja('')
+    const contado = totalDenom(denomForm)
+    const esperado = await efectivoEsperadoCaja()
+    const { error:e } = await supabase.from('cajas_diarias').update({
+      estado:'cerrada', efectivo_esperado: esperado, efectivo_contado: contado,
+      denominaciones_cierre: denomForm, diferencia: contado-esperado,
+      usuario_cierre_id: perfil?.id||null, cerrada_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }).eq('id', cajaHoy.id)
+    setSavingCaja(false)
+    if(e) { setErrorCaja(e.message); return }
+    setModalCaja(null); setDenomForm(emptyDenom); cargarCaja()
+  }, [cajaHoy, denomForm, efectivoEsperadoCaja, perfil, cargarCaja])
 
   // Auto-seleccionar cliente cuando hay coincidencia exacta en búsqueda
   useEffect(() => {
@@ -603,8 +719,19 @@ export default function Ventas() {
         </div>
         <button onClick={()=>setModalRapido(true)} className="btn-primary"><Plus className="w-4 h-4"/>Nueva venta</button>
       </div>
-      {/* ── TAB VENTAS ── */}
 
+      {/* Tabs */}
+      <div style={{display:'flex',gap:4,borderBottom:'1px solid var(--app-card-border)'}}>
+        {[['registrar','🧾 Ventas'],['resumen','📋 Resumen del día'],['caja','💰 Caja']].map(([id,label])=>(
+          <button key={id} onClick={()=>setTab(id)} style={{
+            padding:'8px 16px', fontSize:13, fontWeight:600, cursor:'pointer',
+            background:'transparent', border:'none', borderBottom:tab===id?'2px solid var(--app-accent)':'2px solid transparent',
+            color:tab===id?'var(--app-accent)':'var(--app-text-secondary)', marginBottom:-1
+          }}>{label}{id==='caja'&&cajaHoy&&<span style={{marginLeft:6,width:7,height:7,borderRadius:'50%',background:'#22c55e',display:'inline-block'}}/>}</button>
+        ))}
+      </div>
+
+      {tab==='registrar' && (<>
       {/* Resumen del día */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:12,padding:'12px 16px'}}>
@@ -638,25 +765,26 @@ export default function Ventas() {
           <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Vales S/43 recibidos</p>
         </div>
       </div>
+      </>)}
 
+      {tab==='resumen' && (<>
       {/* Resumen en 3 bloques */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Bloque 1: Ventas del día */}
         <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:12,overflow:'hidden'}}>
           <div style={{padding:'10px 14px',borderBottom:'1px solid var(--app-card-border)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
             <p style={{fontSize:12,fontWeight:700,color:'var(--app-text)',margin:0}}>🛒 Ventas del día</p>
-            <span className="badge-blue" style={{fontSize:10}}>{ventasDelDia.length}</span>
+            <span className="badge-blue" style={{fontSize:10}}>{ventasDelDia.length} · {ventasDelDia.reduce((s,v)=>s+v.cantidad,0)} bal.</span>
           </div>
-          <div style={{padding:'10px 14px',maxHeight:180,overflowY:'auto'}}>
+          <div style={{padding:'10px 14px',maxHeight:340,overflowY:'auto'}}>
             {ventasDelDia.length===0?(
               <p style={{fontSize:12,color:'var(--app-text-secondary)',margin:0}}>Sin ventas aún</p>
-            ):ventasDelDia.slice(0,8).map(v=>(
-              <div key={v.id} style={{display:'flex',justifyContent:'space-between',gap:8,padding:'4px 0',fontSize:12}}>
-                <span style={{color:'var(--app-text-secondary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v.clientes?.nombre||'Varios'} · {v.cantidad} bal.</span>
+            ):ventasDelDia.map(v=>(
+              <div key={v.id} style={{display:'flex',justifyContent:'space-between',gap:8,padding:'5px 0',fontSize:12,borderBottom:'1px solid var(--app-card-border)'}}>
+                <span style={{color:'var(--app-text-secondary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v.clientes?.nombre||'Varios'} · {v.cantidad} bal. <PagoBadge metodo={v.metodo_pago}/></span>
                 <span style={{color:'var(--app-text)',fontWeight:600,flexShrink:0}}>S/{(v.cantidad*v.precio_unitario).toLocaleString('es-PE',{maximumFractionDigits:0})}</span>
               </div>
             ))}
-            {ventasDelDia.length>8&&<p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'4px 0 0'}}>+{ventasDelDia.length-8} más…</p>}
           </div>
         </div>
 
@@ -666,16 +794,15 @@ export default function Ventas() {
             <p style={{fontSize:12,fontWeight:700,color:'#fb923c',margin:0}}>🟠 Créditos otorgados hoy</p>
             <span style={{fontSize:11,fontWeight:700,color:'#fb923c'}}>S/{totalCreditosHoy.toLocaleString('es-PE',{maximumFractionDigits:0})}</span>
           </div>
-          <div style={{padding:'10px 14px',maxHeight:180,overflowY:'auto'}}>
+          <div style={{padding:'10px 14px',maxHeight:340,overflowY:'auto'}}>
             {creditosHoy.length===0?(
               <p style={{fontSize:12,color:'var(--app-text-secondary)',margin:0}}>Nadie quedó a deber hoy</p>
-            ):creditosHoy.slice(0,8).map(v=>(
-              <div key={v.id} style={{display:'flex',justifyContent:'space-between',gap:8,padding:'4px 0',fontSize:12}}>
-                <span style={{color:'var(--app-text-secondary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v.clientes?.nombre||'Varios'}{v.notas?.includes('manualmente')?' · manual':''}</span>
+            ):creditosHoy.map(v=>(
+              <div key={v.id} style={{display:'flex',justifyContent:'space-between',gap:8,padding:'5px 0',fontSize:12,borderBottom:'1px solid var(--app-card-border)'}}>
+                <span style={{color:'var(--app-text-secondary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v.clientes?.nombre||'Varios'}{v.notas?.includes('manualmente')?' · manual':''} · {v.cantidad} bal.</span>
                 <span style={{color:'#fb923c',fontWeight:600,flexShrink:0}}>S/{(v.cantidad*v.precio_unitario).toLocaleString('es-PE',{maximumFractionDigits:0})}</span>
               </div>
             ))}
-            {creditosHoy.length>8&&<p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'4px 0 0'}}>+{creditosHoy.length-8} más…</p>}
           </div>
         </div>
 
@@ -685,20 +812,26 @@ export default function Ventas() {
             <p style={{fontSize:12,fontWeight:700,color:'#22c55e',margin:0}}>✅ Cobros y devoluciones hoy</p>
             <span style={{fontSize:11,fontWeight:700,color:'#22c55e'}}>S/{totalCobrosHoy.toLocaleString('es-PE',{maximumFractionDigits:0})}</span>
           </div>
-          <div style={{padding:'10px 14px',maxHeight:180,overflowY:'auto'}}>
+          <div style={{padding:'10px 14px',maxHeight:340,overflowY:'auto'}}>
             {cobrosHoy.length===0?(
               <p style={{fontSize:12,color:'var(--app-text-secondary)',margin:0}}>Sin cobros de deudas hoy</p>
-            ):cobrosHoy.slice(0,8).map(v=>(
-              <div key={v.id} style={{display:'flex',justifyContent:'space-between',gap:8,padding:'4px 0',fontSize:12}}>
-                <span style={{color:'var(--app-text-secondary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{(v.notas||'').replace('Cobro deuda — ','')}</span>
-                <span style={{color:'#22c55e',fontWeight:600,flexShrink:0}}>{v.precio_unitario>0?`S/${(v.cantidad*v.precio_unitario).toLocaleString('es-PE',{maximumFractionDigits:0})}`:'balón'}</span>
-              </div>
-            ))}
-            {balonesCobrosHoy>0&&<p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'4px 0 0'}}>⚪ Incluye devolución de balones vacíos</p>}
+            ):cobrosHoy.map(v=>{
+              const matchTipo = (v.notas||'').match(/\[(\w+)\]/)
+              const tipo = matchTipo?matchTipo[1]:(v.precio_unitario>0?'efectivo':'balón')
+              const tipoTag = {efectivo:'💵 Efectivo',yape:'📱 Yape',vale:'🎫 Vale',mixto:'🔀 Mixto',balón:'🔵 Balón'}[tipo]||tipo
+              return (
+                <div key={v.id} style={{display:'flex',justifyContent:'space-between',gap:8,padding:'5px 0',fontSize:12,borderBottom:'1px solid var(--app-card-border)'}}>
+                  <span style={{color:'var(--app-text-secondary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{(v.notas||'').replace('Cobro deuda — ','').replace(/\s*\[\w+\]\s*$/,'')} · <span style={{color:'#22c55e'}}>{tipoTag}</span></span>
+                  <span style={{color:'#22c55e',fontWeight:600,flexShrink:0}}>{v.precio_unitario>0?`S/${(v.cantidad*v.precio_unitario).toLocaleString('es-PE',{maximumFractionDigits:0})}`:'—'}</span>
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>
+      </>)}
 
+      {tab==='registrar' && (<>
       {/* Filtros y acciones */}
       <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
         <div className="relative flex-1" style={{minWidth:200}}>
@@ -823,8 +956,48 @@ export default function Ventas() {
           </div>
         )}
       </div>
+      </>)}
 
-      {/* ── MODAL VENTA ── */}
+      {/* Caja: apertura y cierre */}
+      {tab==='caja' && (
+        <div className="space-y-4">
+          {errorCaja&&<div style={{display:'flex',alignItems:'center',gap:8,background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#f87171',borderRadius:8,padding:'10px 14px',fontSize:13}}><AlertCircle style={{width:16,height:16}}/>{errorCaja}</div>}
+
+          {!cajaHoy ? (
+            <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:12,padding:'24px',textAlign:'center'}}>
+              <p style={{fontSize:14,color:'var(--app-text-secondary)',margin:'0 0 14px'}}>No hay una caja abierta ahora mismo.</p>
+              <button onClick={()=>{setDenomForm(emptyDenom);setModalCaja('abrir')}} className="btn-primary">💰 Abrir caja</button>
+            </div>
+          ) : (
+            <div style={{background:'var(--app-card-bg)',border:'1px solid rgba(34,197,94,0.3)',borderRadius:12,padding:'20px'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:12}}>
+                <div>
+                  <p style={{fontSize:12,color:'var(--app-text-secondary)',margin:'0 0 4px'}}>Caja abierta desde</p>
+                  <p style={{fontSize:14,fontWeight:600,color:'var(--app-text)',margin:0}}>{new Date(cajaHoy.abierta_at).toLocaleString('es-PE',{dateStyle:'medium',timeStyle:'short'})}</p>
+                </div>
+                <button onClick={()=>{setDenomForm(emptyDenom);setModalCaja('cerrar')}} className="btn-primary" style={{background:'#ef4444'}}>🔒 Cerrar caja</button>
+              </div>
+              <div className="grid grid-cols-2 gap-3" style={{marginTop:18}}>
+                <div style={{background:'var(--app-card-bg-alt)',borderRadius:10,padding:'14px'}}>
+                  <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 4px'}}>Fondo inicial</p>
+                  <p style={{fontSize:20,fontWeight:700,color:'var(--app-text)',margin:0}}>S/{cajaHoy.fondo_inicial.toLocaleString('es-PE')}</p>
+                </div>
+                <div style={{background:'rgba(34,197,94,0.08)',borderRadius:10,padding:'14px'}}>
+                  <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 4px'}}>Efectivo esperado ahora</p>
+                  <p style={{fontSize:20,fontWeight:700,color:'#22c55e',margin:0}}>S/{efectivoEsperadoActual.toLocaleString('es-PE',{maximumFractionDigits:2})}</p>
+                </div>
+              </div>
+              <p style={{fontSize:11,color:'var(--app-text-secondary)',marginTop:12}}>
+                = Fondo inicial + efectivo de ventas de hoy + efectivo cobrado de deudas — desde que se abrió esta caja.
+              </p>
+            </div>
+          )}
+
+          {/* Historial reciente de cajas */}
+          <CajaHistorial almacenId={almacenCajaId}/>
+        </div>
+      )}
+
       {modal&&(
         <Modal title="Registrar venta" onClose={()=>setModal(false)} wide maxHeight={720}>
           <div className="space-y-4">
@@ -1223,6 +1396,62 @@ export default function Ventas() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal abrir/cerrar caja */}
+      {modalCaja&&(
+        <Modal title={modalCaja==='abrir'?'💰 Abrir caja':'🔒 Cerrar caja'} onClose={()=>setModalCaja(null)}>
+          <div className="space-y-4">
+            {modalCaja==='cerrar'&&(
+              <div style={{background:'rgba(34,197,94,0.08)',border:'1px solid rgba(34,197,94,0.25)',borderRadius:10,padding:'12px 14px'}}>
+                <p style={{fontSize:12,color:'var(--app-text-secondary)',margin:'0 0 4px'}}>Efectivo esperado según el sistema:</p>
+                <p style={{fontSize:18,fontWeight:700,color:'#22c55e',margin:0}}>S/{efectivoEsperadoActual.toLocaleString('es-PE',{maximumFractionDigits:2})}</p>
+              </div>
+            )}
+            {errorCaja&&<div style={{display:'flex',alignItems:'center',gap:8,background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#f87171',borderRadius:8,padding:'8px 12px',fontSize:13}}><AlertCircle style={{width:16,height:16}}/>{errorCaja}</div>}
+
+            <p style={{fontSize:12,fontWeight:600,color:'var(--app-text-secondary)',margin:0}}>
+              {modalCaja==='abrir'?'Cuenta el efectivo físico con el que abres hoy:':'Cuenta el efectivo físico que hay ahora en caja:'}
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {DENOMINACIONES.map(d=>(
+                <div key={d}>
+                  <label className="label" style={{fontSize:11}}>Billetes de S/{d}</label>
+                  <input type="number" min="0" className="input text-center" placeholder="0" value={denomForm[d]} onChange={e=>setDenomForm(f=>({...f,[d]:e.target.value}))}/>
+                  {parseInt(denomForm[d])>0&&<p style={{fontSize:10,color:'var(--app-text-secondary)',margin:'2px 0 0',textAlign:'center'}}>= S/{((parseInt(denomForm[d])||0)*d).toLocaleString('es-PE')}</p>}
+                </div>
+              ))}
+              <div>
+                <label className="label" style={{fontSize:11}}>Monedas (total S/)</label>
+                <input type="number" min="0" step="0.10" className="input text-center" placeholder="0" value={denomForm.monedas} onChange={e=>setDenomForm(f=>({...f,monedas:e.target.value}))}/>
+              </div>
+            </div>
+
+            <div style={{display:'flex',justifyContent:'space-between',padding:'10px 14px',borderRadius:8,background:'var(--app-card-bg-alt)',border:'1px solid var(--app-card-border)'}}>
+              <span style={{fontSize:13,color:'var(--app-text-secondary)'}}>Total contado</span>
+              <span style={{fontSize:16,fontWeight:700,color:'var(--app-text)'}}>S/{totalDenom(denomForm).toLocaleString('es-PE',{maximumFractionDigits:2})}</span>
+            </div>
+
+            {modalCaja==='cerrar'&&(()=>{
+              const dif = totalDenom(denomForm)-efectivoEsperadoActual
+              if(totalDenom(denomForm)===0) return null
+              const color = Math.abs(dif)<0.01?'#22c55e':dif<0?'#f87171':'#eab308'
+              const label = Math.abs(dif)<0.01?'✅ Cuadra perfecto':dif<0?`🔴 Falta S/${Math.abs(dif).toLocaleString('es-PE',{maximumFractionDigits:2})}`:`🟡 Sobra S/${dif.toLocaleString('es-PE',{maximumFractionDigits:2})}`
+              return (
+                <div style={{textAlign:'center',padding:'10px',borderRadius:8,background:`${color}18`,border:`1px solid ${color}40`}}>
+                  <span style={{fontWeight:700,color}}>{label}</span>
+                </div>
+              )
+            })()}
+
+            <div className="flex gap-3 pt-2">
+              <button onClick={()=>setModalCaja(null)} className="btn-secondary flex-1">Cancelar</button>
+              <button onClick={modalCaja==='abrir'?abrirCaja:cerrarCaja} disabled={savingCaja} className="btn-primary flex-1 justify-center">
+                {savingCaja?'Guardando...':modalCaja==='abrir'?'✓ Abrir caja':'✓ Cerrar caja'}
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       <Toast toasts={toasts}/>
