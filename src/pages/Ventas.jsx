@@ -25,6 +25,7 @@ function PagoBadge({ metodo }) {
     yape:          { bg:'rgba(99,102,241,0.12)', color:'#818cf8',  label:'Yape' },
     vale:          { bg:'rgba(234,179,8,0.12)',  color:'#eab308',  label:'Vale' },
     credito:       { bg:'rgba(251,146,60,0.12)', color:'#fb923c',  label:'Crédito' },
+    mixto:         { bg:'rgba(234,179,8,0.12)',  color:'#eab308',  label:'Combinado' },
     cobro_credito: { bg:'rgba(59,130,246,0.12)', color:'#60a5fa',  label:'Cobro' },
     transferencia: { bg:'rgba(168,85,247,0.12)', color:'#c084fc',  label:'Transfer.' },
   }
@@ -83,6 +84,8 @@ export default function Ventas() {
     tipo_venta:'gas', precio_balon:'100', balones_credito:'',
     vales20:'', vales30:'', vales43:'', efectivoDist:'',
     pago_al_momento:'', // ← nuevo: pago parcial al registrar crédito
+    // ── Desglose de pago (vale / combinado) para ventas normales ──
+    pago_vale20:'', pago_vale43:'', pago_efectivo_combo:'', pago_yape_combo:'',
   })
 
   // ─── Carga ─────────────────────────────────────────────────────────────────
@@ -200,6 +203,7 @@ export default function Ventas() {
       metodo_pago:'efectivo', notas:'', es_credito:false, credito_tipo:'dinero', balones_credito:'',
       fecha:hoyPeru(), tipo_venta:'gas', precio_balon:'100',
       vales20:'', vales30:'', vales43:'', efectivoDist:'', pago_al_momento:'',
+      pago_vale20:'', pago_vale43:'', pago_efectivo_combo:'', pago_yape_combo:'',
     })
     setDeudaExistente(null); setError(''); setModal(true); setBusquedaCliente(''); setSubModal(null)
   }, [clientes, almacenes, precioTipos, perfil, getPrecio])
@@ -352,6 +356,15 @@ export default function Ventas() {
       setError('⚠️ Las ventas al crédito requieren un cliente específico. Busca y selecciona el cliente antes de continuar.')
       return
     }
+    // Validar que el desglose de vale/combinado cuadre con el total de la venta
+    if(!form.es_distribuidor && !form.es_credito && (form.metodo_pago==='vale'||form.metodo_pago==='mixto')) {
+      const totalVentaChk = cant*precioGas
+      const v20chk = parseInt(form.pago_vale20)||0, v43chk = parseInt(form.pago_vale43)||0
+      const efChk = form.metodo_pago==='mixto' ? (parseFloat(form.pago_efectivo_combo)||0) : 0
+      const yaChk = form.metodo_pago==='mixto' ? (parseFloat(form.pago_yape_combo)||0) : 0
+      const totalPagadoChk = v20chk*20+v43chk*43+efChk+yaChk
+      if(Math.abs(totalPagadoChk-totalVentaChk) > 0.01) { setError(`El desglose de pago (S/${totalPagadoChk}) no cuadra con el total de la venta (S/${totalVentaChk})`); return }
+    }
 
     setSaving(true); setError('')
     const campoVacios = form.tipo_balon==='5kg'?'vacios_5kg':form.tipo_balon==='45kg'?'vacios_45kg':'vacios_10kg'
@@ -365,6 +378,7 @@ export default function Ventas() {
     // ── Venta gas normal ──────────────────────────────────────────────────────
     if(form.tipo_venta==='gas') {
       const stockDisp = getStock(form.almacen_id, form.tipo_balon)
+      const esComboPago = !form.es_distribuidor && !esCred && (form.metodo_pago==='vale'||form.metodo_pago==='mixto')
       const { error:e } = await supabase.from('ventas').insert({
         cliente_id:form.cliente_id||null, almacen_id:form.almacen_id,
         precio_tipo_id:form.precio_tipo_id||null, tipo_balon:form.tipo_balon,
@@ -372,10 +386,12 @@ export default function Ventas() {
         cantidad:cant, precio_unitario:precioGas,
         metodo_pago:debeDinero?'credito':form.metodo_pago,
         notas:form.notas, usuario_id:perfil?.id||null,
-        vales_20:form.es_distribuidor?(parseInt(form.vales20)||0):null,
+        vales_20:form.es_distribuidor?(parseInt(form.vales20)||0):(esComboPago?(parseInt(form.pago_vale20)||0):null),
         vales_30:form.es_distribuidor?(parseInt(form.vales30)||0):null,
-        vales_43:form.es_distribuidor?(parseInt(form.vales43)||0):null,
-        efectivo_dist:form.es_distribuidor?(parseFloat(form.efectivoDist)||0):null
+        vales_43:form.es_distribuidor?(parseInt(form.vales43)||0):(esComboPago?(parseInt(form.pago_vale43)||0):null),
+        efectivo_dist:form.es_distribuidor?(parseFloat(form.efectivoDist)||0):null,
+        monto_efectivo: form.es_distribuidor||esCred ? null : (form.metodo_pago==='efectivo' ? cant*precioGas : form.metodo_pago==='mixto' ? (parseFloat(form.pago_efectivo_combo)||0) : 0),
+        monto_yape: form.es_distribuidor||esCred ? null : (form.metodo_pago==='yape' ? cant*precioGas : form.metodo_pago==='mixto' ? (parseFloat(form.pago_yape_combo)||0) : 0),
       })
       if(e) { setError(e.message); setSaving(false); return }
       if(!form.es_distribuidor) {
@@ -497,7 +513,19 @@ export default function Ventas() {
   )
   const totalDia = ventas.reduce((s,v) => s+(v.cantidad*v.precio_unitario),0)
   const totalBalones = ventas.reduce((s,v) => s+v.cantidad,0)
-  const totalEfectivo = ventas.filter(v=>v.metodo_pago==='efectivo').reduce((s,v) => s+(v.cantidad*v.precio_unitario),0)
+  // Efectivo/Yape/Vales — incluye la parte correspondiente de ventas combinadas ('mixto')
+  const totalEfectivo = ventas.reduce((s,v) => {
+    if(v.metodo_pago==='efectivo') return s+(v.monto_efectivo!=null?v.monto_efectivo:v.cantidad*v.precio_unitario)
+    if(v.metodo_pago==='mixto') return s+(v.monto_efectivo||0)
+    return s
+  }, 0)
+  const totalYape = ventas.reduce((s,v) => {
+    if(v.metodo_pago==='yape') return s+(v.monto_yape!=null?v.monto_yape:v.cantidad*v.precio_unitario)
+    if(v.metodo_pago==='mixto') return s+(v.monto_yape||0)
+    return s
+  }, 0)
+  const totalVale20 = ventas.reduce((s,v) => (v.metodo_pago==='vale'||v.metodo_pago==='mixto') ? s+(v.vales_20||0) : s, 0)
+  const totalVale43 = ventas.reduce((s,v) => (v.metodo_pago==='vale'||v.metodo_pago==='mixto') ? s+(v.vales_43||0) : s, 0)
   const totalCredito = ventas.filter(v=>v.metodo_pago==='credito').reduce((s,v) => s+(v.cantidad*v.precio_unitario),0)
   const totalCreditos = ventas.filter(v=>v.metodo_pago==='credito').length
 
@@ -551,6 +579,10 @@ export default function Ventas() {
       'Precio unit.': v.precio_unitario,
       Total: v.cantidad * v.precio_unitario,
       'Método de pago': v.metodo_pago,
+      'Efectivo S/': v.monto_efectivo || (v.metodo_pago==='efectivo' ? v.cantidad*v.precio_unitario : 0),
+      'Yape S/': v.monto_yape || (v.metodo_pago==='yape' ? v.cantidad*v.precio_unitario : 0),
+      'Vales S/20': v.vales_20 || 0,
+      'Vales S/43': v.vales_43 || 0,
       Categoría: v.metodo_pago === 'cobro_credito' ? 'Cobro/devolución' : v.metodo_pago === 'credito' ? 'Crédito otorgado' : 'Venta normal',
       Notas: v.notas || '',
     }))
@@ -592,6 +624,18 @@ export default function Ventas() {
         <div style={{background:'var(--app-card-bg)',border:`1px solid ${totalCreditos>0?'rgba(251,146,60,0.3)':'var(--app-card-border)'}`,borderRadius:12,padding:'12px 16px'}}>
           <p style={{fontSize:20,fontWeight:700,color:totalCreditos>0?'#fb923c':'var(--app-text-secondary)',margin:0}}>S/{totalCredito.toLocaleString('es-PE',{maximumFractionDigits:0})}</p>
           <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Crédito ({totalCreditos} ventas)</p>
+        </div>
+        <div style={{background:'var(--app-card-bg)',border:'1px solid rgba(99,102,241,0.3)',borderRadius:12,padding:'12px 16px'}}>
+          <p style={{fontSize:20,fontWeight:700,color:'#818cf8',margin:0}}>S/{totalYape.toLocaleString('es-PE',{maximumFractionDigits:0})}</p>
+          <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Yape del día</p>
+        </div>
+        <div style={{background:'var(--app-card-bg)',border:'1px solid rgba(234,179,8,0.3)',borderRadius:12,padding:'12px 16px'}}>
+          <p style={{fontSize:20,fontWeight:700,color:'#eab308',margin:0}}>{totalVale20}<span style={{fontSize:12,fontWeight:500}}> ×S/20</span></p>
+          <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Vales S/20 recibidos</p>
+        </div>
+        <div style={{background:'var(--app-card-bg)',border:'1px solid rgba(234,179,8,0.3)',borderRadius:12,padding:'12px 16px'}}>
+          <p style={{fontSize:20,fontWeight:700,color:'#eab308',margin:0}}>{totalVale43}<span style={{fontSize:12,fontWeight:500}}> ×S/43</span></p>
+          <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Vales S/43 recibidos</p>
         </div>
       </div>
 
@@ -966,7 +1010,7 @@ export default function Ventas() {
               <div>
                 <label className="label">Método de pago</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {[['efectivo','💵 Efectivo'],['yape','📱 Yape'],['vale','🎫 Vale'],['transferencia','🏦 Transfer.'],['cobro_credito','✅ Cobro deuda'],].map(([val,label])=>(
+                  {[['efectivo','💵 Efectivo'],['yape','📱 Yape'],['vale','🎫 Vale'],['mixto','🔀 Combinado'],['transferencia','🏦 Transfer.'],['cobro_credito','✅ Cobro deuda'],].map(([val,label])=>(
                     <button key={val} onClick={()=>setForm(f=>({...f,metodo_pago:val,es_credito:false}))} style={{
                       padding:'8px 4px', borderRadius:8, fontSize:11, fontWeight:500, cursor:'pointer', textAlign:'center', transition:'all 0.15s',
                       background:form.metodo_pago===val?'color-mix(in srgb, var(--app-accent) 15%, transparent)':'var(--app-card-bg-alt)',
@@ -976,6 +1020,39 @@ export default function Ventas() {
                   ))}
                 </div>
               </div>
+
+              {/* Desglose de pago: vale (denominación) o combinado (varios medios) */}
+              {(form.metodo_pago==='vale'||form.metodo_pago==='mixto')&&(()=>{
+                const totalVenta = (parseInt(form.cantidad)||0)*(parseFloat(form.precio_unitario)||0)
+                const v20 = parseInt(form.pago_vale20)||0, v43 = parseInt(form.pago_vale43)||0
+                const ef = form.metodo_pago==='mixto' ? (parseFloat(form.pago_efectivo_combo)||0) : 0
+                const ya = form.metodo_pago==='mixto' ? (parseFloat(form.pago_yape_combo)||0) : 0
+                const totalPagado = v20*20 + v43*43 + ef + ya
+                const saldo = totalVenta - totalPagado
+                return (
+                  <div style={{background:'rgba(234,179,8,0.06)',border:'1px solid rgba(234,179,8,0.25)',borderRadius:10,padding:'12px 14px'}}>
+                    <p style={{fontSize:12,fontWeight:700,color:'#eab308',margin:'0 0 10px'}}>
+                      {form.metodo_pago==='mixto'?'🔀 Desglose del pago combinado':'🎫 Vales entregados'}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2" style={{marginBottom:form.metodo_pago==='mixto'?8:0}}>
+                      <div><label className="label" style={{fontSize:10}}>Vales S/20</label><input type="number" min="0" className="input text-center" placeholder="0" value={form.pago_vale20} onChange={e=>setForm(f=>({...f,pago_vale20:e.target.value}))}/></div>
+                      <div><label className="label" style={{fontSize:10}}>Vales S/43</label><input type="number" min="0" className="input text-center" placeholder="0" value={form.pago_vale43} onChange={e=>setForm(f=>({...f,pago_vale43:e.target.value}))}/></div>
+                    </div>
+                    {form.metodo_pago==='mixto'&&(
+                      <div className="grid grid-cols-2 gap-2">
+                        <div><label className="label" style={{fontSize:10}}>💵 Efectivo</label><input type="number" min="0" step="0.50" className="input text-center" placeholder="0" value={form.pago_efectivo_combo} onChange={e=>setForm(f=>({...f,pago_efectivo_combo:e.target.value}))}/></div>
+                        <div><label className="label" style={{fontSize:10}}>📱 Yape</label><input type="number" min="0" step="0.50" className="input text-center" placeholder="0" value={form.pago_yape_combo} onChange={e=>setForm(f=>({...f,pago_yape_combo:e.target.value}))}/></div>
+                      </div>
+                    )}
+                    {totalVenta>0&&(
+                      <div style={{display:'flex',justifyContent:'space-between',padding:'8px 10px',borderRadius:8,marginTop:10,background:saldo===0?'rgba(34,197,94,0.08)':'rgba(239,68,68,0.08)',border:`1px solid ${saldo===0?'rgba(34,197,94,0.2)':'rgba(239,68,68,0.2)'}`}}>
+                        <span style={{fontSize:11,color:'var(--app-text-secondary)'}}>Total: S/{totalVenta.toLocaleString()} · Cubierto: S/{totalPagado.toLocaleString()}</span>
+                        <span style={{fontSize:12,fontWeight:700,color:saldo===0?'#22c55e':'#f87171'}}>{saldo===0?'✅ Cuadra':saldo>0?`Falta S/${saldo.toLocaleString()}`:`Sobra S/${Math.abs(saldo).toLocaleString()}`}</span>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
 
               {/* Toggle crédito */}
               {!['cobro_credito'].includes(form.metodo_pago)&&(

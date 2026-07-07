@@ -159,12 +159,26 @@ export default function Reportes() {
       })
 
       // ── Por método de pago (solo tienda) ─────────────────────────────────
+      // Las ventas 'mixto' se reparten en sus componentes reales (efectivo/yape/vale)
+      // para que el desglose refleje cuánto dinero entró por cada medio.
       const porPago = {}
+      const sumarPago = (tipo, monto, count=0) => {
+        if(!porPago[tipo]) porPago[tipo]={ ingreso:0, count:0 }
+        porPago[tipo].ingreso += monto
+        porPago[tipo].count += count
+      }
       ventasTienda.forEach(v => {
         const t = v.metodo_pago||'efectivo'
-        if(!porPago[t]) porPago[t]={ ingreso:0, count:0 }
-        porPago[t].ingreso += (v.cantidad||0)*(v.precio_unitario||0)
-        porPago[t].count += v.cantidad||0
+        const totalV = (v.cantidad||0)*(v.precio_unitario||0)
+        if(t==='mixto') {
+          const ef = v.monto_efectivo||0, ya = v.monto_yape||0
+          const v20 = (v.vales_20||0)*20, v43 = (v.vales_43||0)*43
+          if(ef>0) sumarPago('efectivo', ef)
+          if(ya>0) sumarPago('yape', ya)
+          if(v20+v43>0) sumarPago('vale', v20+v43)
+        } else {
+          sumarPago(t, totalV, v.cantidad||0)
+        }
       })
 
       // ── Top clientes (solo tienda) ────────────────────────────────────────
