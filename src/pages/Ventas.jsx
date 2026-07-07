@@ -6,7 +6,6 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useAuth } from '../context/AuthContext'
 import { Notif } from '../lib/notificaciones'
-import VentaRapida from './VentaRapida'
 import Modal from '../components/Modal'
 import Toast from '../components/Toast'
 import { useToast } from '../hooks/useToast'
@@ -101,7 +100,6 @@ export default function Ventas() {
   const [cargandoMas, setCargandoMas] = useState(false)
   const [paginaOffset, setPaginaOffset] = useState(0)
   const [modal, setModal] = useState(false)
-  const [modalRapido, setModalRapido] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [busqueda, setBusqueda] = useState('')
@@ -281,8 +279,13 @@ export default function Ventas() {
       return spt?.stock_actual || 0
     }
     // Tienda Principal y almacenes normales
-    const spt = stockPorTipo.find(s => s.almacen_id===almacenId && s.tipo_balon===tipoBalon)
-    if(spt?.stock_actual > 0) return spt.stock_actual
+    const sptAlmacen = stockPorTipo.filter(s => s.almacen_id===almacenId)
+    if(sptAlmacen.length > 0) {
+      // Ya está desglosado por tipo en este almacén → confiar SOLO en el tipo exacto (0 si no hay fila para ese tipo)
+      const spt = sptAlmacen.find(s => s.tipo_balon===tipoBalon)
+      return spt?.stock_actual || 0
+    }
+    // Nunca se desglosó por tipo en este almacén → usar el agregado como único dato disponible
     const alm = almacenes.find(a => a.id===almacenId)
     return alm?.stock_actual || 0
   }, [getDistribuidor, lotesDistribuidor, stockPorTipo, almacenes])
@@ -717,7 +720,7 @@ export default function Ventas() {
           <h2 style={{fontSize:20,fontWeight:700,color:'var(--app-text)',margin:0}}>Ventas</h2>
           <p style={{fontSize:13,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Registro de ventas diarias</p>
         </div>
-        <button onClick={()=>setModalRapido(true)} className="btn-primary"><Plus className="w-4 h-4"/>Nueva venta</button>
+        <button onClick={abrirModal} className="btn-primary"><Plus className="w-4 h-4"/>Nueva venta</button>
       </div>
 
       {/* Tabs */}
@@ -1379,7 +1382,6 @@ export default function Ventas() {
         </Modal>
       )}
 
-      {modalRapido&&(<VentaRapida onClose={()=>setModalRapido(false)} onGuardado={()=>{cargar();}} onAbrirDetallado={()=>{setModalRapido(false);abrirModal()}} almacenes={almacenes} precioTipos={precioTipos} preciosPorTipo={preciosPorTipo} stockPorTipo={stockPorTipo} clientes={clientes} distribuidores={distribuidores} lotesDistribuidor={lotesDistribuidor}/>)}
       {/* Modal confirmación eliminar */}
       {modalConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(0,0,0,0.7)'}}>
