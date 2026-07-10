@@ -194,13 +194,17 @@ export default function Deudas() {
     const tienda = almId ? alms?.find(a=>a.id===almId) : alms?.find(a=>a.nombre?.toLowerCase().includes('tienda'))||alms?.[0]
 
     // Descontar stock lleno si hay balones (el balón físicamente salió del almacén)
+    // El total agregado NUNCA se decrementa por su cuenta — siempre se recalcula
+    // sumando stock_por_tipo, para que jamás pueda desincronizarse del desglose.
     if(balones > 0 && tienda) {
-      const { data:almFresco } = await supabase.from('almacenes').select('stock_actual').eq('id',tienda.id).single()
       const { data:sptFresco } = await supabase.from('stock_por_tipo').select('stock_actual').eq('almacen_id',tienda.id).eq('tipo_balon',tipoBalonDeuda).maybeSingle()
-      await Promise.all([
-        supabase.from('almacenes').update({ stock_actual:Math.max(0,(almFresco?.stock_actual||0)-balones), updated_at:new Date().toISOString() }).eq('id',tienda.id),
-        supabase.from('stock_por_tipo').update({ stock_actual:Math.max(0,(sptFresco?.stock_actual||0)-balones) }).eq('almacen_id',tienda.id).eq('tipo_balon',tipoBalonDeuda)
-      ])
+      await supabase.from('stock_por_tipo').upsert({
+        almacen_id:tienda.id, tipo_balon:tipoBalonDeuda,
+        stock_actual:Math.max(0,(sptFresco?.stock_actual||0)-balones), updated_at:new Date().toISOString()
+      }, { onConflict:'almacen_id,tipo_balon' })
+      const { data:tiposFrescos } = await supabase.from('stock_por_tipo').select('stock_actual').eq('almacen_id',tienda.id)
+      const totalRecalculado = (tiposFrescos||[]).reduce((s,t)=>s+(t.stock_actual||0),0)
+      await supabase.from('almacenes').update({ stock_actual:totalRecalculado, updated_at:new Date().toISOString() }).eq('id',tienda.id)
     }
 
     const { error:e } = await supabase.from('deudas').insert({
@@ -253,12 +257,14 @@ export default function Deudas() {
     const almAdd = perfil?.almacen_id ? alms?.find(a=>a.id===perfil.almacen_id) : alms?.find(a=>a.nombre?.toLowerCase().includes('tienda'))||alms?.[0]
 
     if(balones > 0 && almAdd) {
-      const { data:almFresco } = await supabase.from('almacenes').select('stock_actual').eq('id',almAdd.id).single()
       const { data:sptFresco } = await supabase.from('stock_por_tipo').select('stock_actual').eq('almacen_id',almAdd.id).eq('tipo_balon',tipoBalonAdd).maybeSingle()
-      await Promise.all([
-        supabase.from('almacenes').update({ stock_actual:Math.max(0,(almFresco?.stock_actual||0)-balones), updated_at:new Date().toISOString() }).eq('id',almAdd.id),
-        supabase.from('stock_por_tipo').update({ stock_actual:Math.max(0,(sptFresco?.stock_actual||0)-balones) }).eq('almacen_id',almAdd.id).eq('tipo_balon',tipoBalonAdd)
-      ])
+      await supabase.from('stock_por_tipo').upsert({
+        almacen_id:almAdd.id, tipo_balon:tipoBalonAdd,
+        stock_actual:Math.max(0,(sptFresco?.stock_actual||0)-balones), updated_at:new Date().toISOString()
+      }, { onConflict:'almacen_id,tipo_balon' })
+      const { data:tiposFrescos } = await supabase.from('stock_por_tipo').select('stock_actual').eq('almacen_id',almAdd.id)
+      const totalRecalculado = (tiposFrescos||[]).reduce((s,t)=>s+(t.stock_actual||0),0)
+      await supabase.from('almacenes').update({ stock_actual:totalRecalculado, updated_at:new Date().toISOString() }).eq('id',almAdd.id)
     }
 
     const { error:e } = await supabase.from('deudas').update({
