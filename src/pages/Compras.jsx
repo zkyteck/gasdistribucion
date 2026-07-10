@@ -26,6 +26,7 @@ export default function Compras() {
     notas: '',
     precios: { '10kg': '', '5kg': '', '45kg': '' },
     distribucion: [],
+    vaciosEntregados: [], // [{almacen_id, tipo_balon, cantidad}] — si no hay entrada, se asume = a lo comprado (1:1)
   }
   const [form, setForm] = useState(emptyForm)
 
@@ -58,6 +59,20 @@ export default function Compras() {
   const getDistribucion = (almacenId, tipo) => {
     const found = form.distribucion.find(d => d.almacen_id === almacenId && d.tipo_balon === tipo)
     return found?.cantidad || ''
+  }
+
+  // ─── Vacíos entregados a cambio (por defecto 1:1 con lo comprado, editable) ─
+  const setVaciosEntregados = (almacenId, tipo, cantidad) => {
+    setForm(f => {
+      const arr = f.vaciosEntregados.filter(v => !(v.almacen_id === almacenId && v.tipo_balon === tipo))
+      if (cantidad !== '' && cantidad !== null) arr.push({ almacen_id: almacenId, tipo_balon: tipo, cantidad: parseInt(cantidad) || 0 })
+      return { ...f, vaciosEntregados: arr }
+    })
+  }
+  const getVaciosEntregados = (almacenId, tipo) => {
+    const found = form.vaciosEntregados.find(v => v.almacen_id === almacenId && v.tipo_balon === tipo)
+    if (found) return found.cantidad
+    return getDistribucion(almacenId, tipo) // por defecto: trueque 1:1 con lo comprado
   }
 
   // ─── Totales ───────────────────────────────────────────────────────────────
@@ -109,6 +124,7 @@ export default function Compras() {
       tipo_balon: d.tipo_balon,
       cantidad: d.cantidad,
       precio_unitario: parseFloat(form.precios[d.tipo_balon]) || 0,
+      vacios_entregados: getVaciosEntregados(d.almacen_id, d.tipo_balon),
     }))
 
     const { error: e2 } = await supabase.from('compra_detalles').insert(detalles)
@@ -147,6 +163,25 @@ export default function Compras() {
             stock_actual: d.cantidad
           })
         }
+      })
+    )
+
+    // Descontar los balones vacíos realmente entregados al proveedor a cambio
+    // (no siempre es igual a la cantidad comprada — puede haber préstamo del proveedor)
+    const campoVacios = (t) => t==='5kg'?'vacios_5kg':t==='45kg'?'vacios_45kg':'vacios_10kg'
+    await Promise.all(
+      form.distribucion.map(async d => {
+        const vaciosEnt = getVaciosEntregados(d.almacen_id, d.tipo_balon)
+        if (vaciosEnt <= 0) return
+        const campo = campoVacios(d.tipo_balon)
+        const { data: almFresco } = await supabase.from('almacenes')
+          .select('balones_vacios,vacios_5kg,vacios_10kg,vacios_45kg').eq('id', d.almacen_id).single()
+        if (!almFresco) return
+        const nuevoTipo = Math.max(0, (almFresco[campo]||0) - vaciosEnt)
+        const nuevoTotal = Math.max(0, (almFresco.balones_vacios||0) - vaciosEnt)
+        await supabase.from('almacenes').update({
+          [campo]: nuevoTipo, balones_vacios: nuevoTotal, updated_at: new Date().toISOString()
+        }).eq('id', d.almacen_id)
       })
     )
 
@@ -208,6 +243,13 @@ export default function Compras() {
 
   const totalComprado = compras.reduce((s, c) => s + (parseFloat(c.monto_total) || 0), 0)
   const totalBalonesCom = compras.reduce((s, c) => s + (parseInt(c.cantidad_total) || 0), 0)
+  // Deuda de vacíos con el proveedor: suma de (comprado − entregado) en todos los detalles.
+  // Positivo = el proveedor te prestó balones que aún le debes en vacíos.
+  // Negativo = ya entregaste de más (a favor tuyo).
+  const deudaVacios = compras.reduce((s, c) => s + (c.compra_detalles||[]).reduce((s2,d) => {
+    const entregado = d.vacios_entregados!=null ? d.vacios_entregados : d.cantidad
+    return s2 + (d.cantidad - entregado)
+  }, 0), 0)
 
   return (
     <div className="space-y-5">
@@ -224,11 +266,13 @@ export default function Compras() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           {label:'Total compras',value:compras.length,color:'var(--app-text)',icon:'📋'},
           {label:'Balones comprados',value:totalBalonesCom,color:'#60a5fa',icon:'🔵'},
           {label:'Total invertido',value:`S/${totalComprado.toLocaleString('es-PE',{maximumFractionDigits:0})}`,color:'#f87171',icon:'💰'},
+          {label:deudaVacios>0?'Debes al proveedor (vacíos)':deudaVacios<0?'El proveedor te debe (vacíos)':'Vacíos con el proveedor',
+           value:deudaVacios===0?'Al día ✅':Math.abs(deudaVacios),color:deudaVacios>0?'#f87171':deudaVacios<0?'#22c55e':'#94a3b8',icon:'⚪'},
         ].map(({label,value,color,icon})=>(
           <div key={label} style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:12,padding:'14px 16px'}}>
             <p style={{fontSize:10,margin:'0 0 4px'}}>{icon}</p>
@@ -363,6 +407,9 @@ export default function Compras() {
             {/* Distribución por almacén */}
             <div>
               <label className="label">Distribución por almacén</label>
+              <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 8px'}}>
+                💡 Por defecto se asume trueque 1:1 (entregas la misma cantidad de vacíos que recibes de llenos). Si el proveedor te prestó parte de los balones, ajusta "Vacíos entregados" abajo.
+              </p>
               <div style={{display:'flex',flexDirection:'column',gap:8}}>
                 {almacenes.map(alm => (
                   <div key={alm.id} style={{background:'var(--app-card-bg-alt)',borderRadius:10,padding:'12px',border:'1px solid var(--app-card-border)'}}>
@@ -370,7 +417,7 @@ export default function Compras() {
                     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
                       {TIPOS.map(tipo => (
                         <div key={tipo}>
-                          <p style={{fontSize:10,color:'var(--app-text-secondary)',margin:'0 0 3px'}}>{tipo}</p>
+                          <p style={{fontSize:10,color:'var(--app-text-secondary)',margin:'0 0 3px'}}>{tipo} comprado</p>
                           <input
                             type="number" min="0"
                             className="input" style={{padding:'6px 10px',fontSize:13}}
@@ -381,6 +428,33 @@ export default function Compras() {
                         </div>
                       ))}
                     </div>
+                    {TIPOS.some(tipo=>parseInt(getDistribucion(alm.id,tipo))>0) && (
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginTop:8,paddingTop:8,borderTop:'1px solid var(--app-card-border)'}}>
+                        {TIPOS.map(tipo => {
+                          const comprado = parseInt(getDistribucion(alm.id,tipo))||0
+                          if(comprado<=0) return <div key={tipo}/>
+                          const entregado = parseInt(getVaciosEntregados(alm.id,tipo))||0
+                          const prestamo = comprado - entregado
+                          return (
+                            <div key={tipo}>
+                              <p style={{fontSize:10,color:'#eab308',margin:'0 0 3px'}}>Vacíos entregados</p>
+                              <input
+                                type="number" min="0"
+                                className="input" style={{padding:'6px 10px',fontSize:13}}
+                                placeholder="0"
+                                value={getVaciosEntregados(alm.id, tipo)}
+                                onChange={e=>setVaciosEntregados(alm.id, tipo, e.target.value)}
+                              />
+                              {prestamo!==0 && (
+                                <p style={{fontSize:10,margin:'2px 0 0',color:prestamo>0?'#f87171':'#22c55e'}}>
+                                  {prestamo>0?`🔴 Proveedor presta ${prestamo}`:`🟢 Devuelves ${Math.abs(prestamo)} de más`}
+                                </p>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
