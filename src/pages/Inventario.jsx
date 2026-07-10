@@ -141,11 +141,19 @@ export default function Inventario() {
     const v45 = parseInt(editStockVal['45kg']) || 0
     const totalLlenos = v5 + v10 + v45
 
+    const vac5  = parseInt(editStockVal.vacios_5kg)  || 0
+    const vac10 = parseInt(editStockVal.vacios_10kg) || 0
+    const vac45 = parseInt(editStockVal.vacios_45kg) || 0
+    const totalVacios = vac5 + vac10 + vac45
+
     await Promise.all([
-      // Actualiza total en almacenes
+      // Actualiza total en almacenes — el total de vacíos SIEMPRE se calcula
+      // sumando los tres tipos, igual que ya se hacía con los llenos,
+      // para que nunca quede desincronizado del desglose por tipo.
       supabase.from('almacenes').update({
         stock_actual: totalLlenos,
-        balones_vacios: parseInt(editStockVal.vacios) || 0,
+        balones_vacios: totalVacios,
+        vacios_5kg: vac5, vacios_10kg: vac10, vacios_45kg: vac45,
         updated_at: new Date().toISOString()
       }).eq('id', modalEditStock.id),
 
@@ -250,7 +258,9 @@ export default function Inventario() {
                               '5kg':  getStock(alm.id, '5kg'),
                               '10kg': getStock(alm.id, '10kg'),
                               '45kg': getStock(alm.id, '45kg'),
-                              vacios: alm.balones_vacios || 0
+                              vacios_5kg:  alm.vacios_5kg  || 0,
+                              vacios_10kg: alm.vacios_10kg || 0,
+                              vacios_45kg: alm.vacios_45kg || 0,
                             })
                           }}
                           style={{background:'none',border:'none',cursor:'pointer',color:'var(--app-text-secondary)',padding:4}}>
@@ -429,7 +439,7 @@ export default function Inventario() {
         <Modal title={`Editar stock — ${modalEditStock.nombre}`} onClose={()=>setModalEditStock(null)}>
           <div className="space-y-4">
             <div style={{background:'rgba(234,179,8,0.08)',border:'1px solid rgba(234,179,8,0.25)',borderRadius:8,padding:'10px 14px',fontSize:12,color:'var(--app-text-secondary)'}}>
-              ⚠️ Esto ajusta el stock directamente. El total se calcula automáticamente sumando los tres tipos.
+              ⚠️ Esto ajusta el stock directamente. Los totales (llenos y vacíos) se calculan automáticamente sumando los tres tipos.
             </div>
 
             <div>
@@ -454,10 +464,27 @@ export default function Inventario() {
             </div>
 
             <div>
-              <label className="label">Balones vacíos (total)</label>
-              <input type="number" min="0" className="input" value={editStockVal.vacios}
-                onChange={e=>setEditStockVal(f=>({...f,vacios:e.target.value}))}
-                placeholder="0"/>
+              <label className="label">Balones vacíos por tipo</label>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+                {TIPOS.map(tipo => {
+                  const key = `vacios_${tipo}`
+                  return (
+                    <div key={key}>
+                      <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 4px'}}>{tipo}</p>
+                      <input type="number" min="0" className="input" style={{padding:'6px 10px'}}
+                        value={editStockVal[key]}
+                        onChange={e=>setEditStockVal(f=>({...f,[key]:e.target.value}))}
+                        placeholder="0"/>
+                    </div>
+                  )
+                })}
+              </div>
+              <p style={{fontSize:12,color:'var(--app-text-secondary)',marginTop:6}}>
+                Total vacíos:{' '}
+                <strong style={{color:'#94a3b8'}}>
+                  {(parseInt(editStockVal.vacios_5kg)||0) + (parseInt(editStockVal.vacios_10kg)||0) + (parseInt(editStockVal.vacios_45kg)||0)} balones
+                </strong>
+              </p>
             </div>
 
             <div className="flex gap-3 pt-2">
