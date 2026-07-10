@@ -130,39 +130,43 @@ export default function Compras() {
     const { error: e2 } = await supabase.from('compra_detalles').insert(detalles)
     if (e2) { setError(e2.message); setSaving(false); return }
 
-    // Actualizar stock en almacenes
+    // NOTA: el total de llenos por almacén (almacenes.stock_actual) ya NO se
+    // incrementa de forma independiente aquí — se recalcula más abajo a partir
+    // de stock_por_tipo, después del upsert, para que nunca puedan desincronizarse.
     const porAlmacen = {}
     form.distribucion.forEach(d => {
       if (!porAlmacen[d.almacen_id]) porAlmacen[d.almacen_id] = 0
       porAlmacen[d.almacen_id] += d.cantidad
     })
 
-    await Promise.all(
-      Object.entries(porAlmacen).map(async ([almId, cant]) => {
-        const { data: alm } = await supabase.from('almacenes').select('stock_actual').eq('id', almId).single()
-        await supabase.from('almacenes').update({
-          stock_actual: (alm?.stock_actual || 0) + cant,
-          updated_at: new Date().toISOString()
-        }).eq('id', almId)
-      })
-    )
-
-    // Actualizar stock_por_tipo
+    // Actualizar stock_por_tipo (upsert real — ahora que existe la restricción de
+    // unicidad en almacen_id+tipo_balon, esto es atómico y no crea duplicados)
+    const erroresStock = []
     await Promise.all(
       form.distribucion.map(async d => {
         const { data: spt } = await supabase.from('stock_por_tipo')
           .select('stock_actual').eq('almacen_id', d.almacen_id).eq('tipo_balon', d.tipo_balon).maybeSingle()
-        if (spt) {
-          await supabase.from('stock_por_tipo').update({
-            stock_actual: (spt.stock_actual || 0) + d.cantidad,
-            updated_at: new Date().toISOString()
-          }).eq('almacen_id', d.almacen_id).eq('tipo_balon', d.tipo_balon)
-        } else {
-          await supabase.from('stock_por_tipo').insert({
-            almacen_id: d.almacen_id, tipo_balon: d.tipo_balon,
-            stock_actual: d.cantidad
-          })
-        }
+        const { error: eSpt } = await supabase.from('stock_por_tipo').upsert({
+          almacen_id: d.almacen_id, tipo_balon: d.tipo_balon,
+          stock_actual: (spt?.stock_actual || 0) + d.cantidad,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'almacen_id,tipo_balon' })
+        if (eSpt) erroresStock.push(`${d.tipo_balon} en almacén: ${eSpt.message}`)
+      })
+    )
+    if (erroresStock.length > 0) {
+      setError(`La compra se guardó, pero hubo un problema actualizando el stock: ${erroresStock.join(' · ')}. Revisa el stock manualmente en Inventario.`)
+    }
+
+    // Recalcular el total de llenos por almacén SUMANDO stock_por_tipo (ya limpio),
+    // en vez de incrementar un contador aparte — así nunca puede desincronizarse.
+    await Promise.all(
+      Object.keys(porAlmacen).map(async (almId) => {
+        const { data: tipos } = await supabase.from('stock_por_tipo').select('stock_actual').eq('almacen_id', almId)
+        const total = (tipos||[]).reduce((s,t) => s+(t.stock_actual||0), 0)
+        await supabase.from('almacenes').update({
+          stock_actual: total, updated_at: new Date().toISOString()
+        }).eq('id', almId)
       })
     )
 
