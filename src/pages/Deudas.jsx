@@ -438,13 +438,32 @@ export default function Deudas() {
       onConfirm: async () => {
         setModalConfirm(null)
         try {
+          // Si quedaba balón pendiente sin devolver, se restaura al stock de llenos
+          // (se está deshaciendo la salida del balón que se descontó al crear la deuda).
+          const balonesDevolver = parseInt(deuda?.balones_pendiente)||0
+          if(balonesDevolver > 0) {
+            const tipoBalonDeuda = deuda.historial?.[0]?.tipo_balon || '10kg'
+            const almacenId = deuda.almacen_id || perfil?.almacen_id
+            if(almacenId) {
+              const { data:sptFresco } = await supabase.from('stock_por_tipo').select('stock_actual').eq('almacen_id',almacenId).eq('tipo_balon',tipoBalonDeuda).maybeSingle()
+              await supabase.from('stock_por_tipo').upsert({
+                almacen_id:almacenId, tipo_balon:tipoBalonDeuda,
+                stock_actual:(sptFresco?.stock_actual||0)+balonesDevolver, updated_at:new Date().toISOString()
+              }, { onConflict:'almacen_id,tipo_balon' })
+              const { data:tiposFrescos } = await supabase.from('stock_por_tipo').select('stock_actual').eq('almacen_id',almacenId)
+              const totalRecalculado = (tiposFrescos||[]).reduce((s,t)=>s+(t.stock_actual||0),0)
+              await supabase.from('almacenes').update({ stock_actual:totalRecalculado, updated_at:new Date().toISOString() }).eq('id',almacenId)
+            }
+          }
+
           const { error } = await supabase.from('deudas')
             .update({ eliminado:true, eliminado_por:perfil?.id||null, eliminado_at:new Date().toISOString() })
             .eq('id', id)
           if(error) { console.error('Error eliminando deuda:', error); toast('Error: '+error.message, 'error'); return }
           if(deuda) await supabase.from('historial_eliminaciones')
             .insert({ tabla:'deudas', registro_id:id, datos_anteriores:deuda, eliminado_por:perfil?.id||null })
-          toast('Deuda eliminada'); cargar()
+          toast(balonesDevolver>0?`Deuda eliminada — ${balonesDevolver} balón(es) devuelto(s) al stock`:'Deuda eliminada')
+          cargar()
         } catch(err) {
           console.error('Error inesperado:', err); toast('Error al eliminar', 'error')
         }
