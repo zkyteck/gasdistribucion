@@ -651,7 +651,7 @@ export default function Deudas() {
           )}
           {puedeVer('deudas_ver_deuda_manual') && (
             <button onClick={()=>{setDeudaForm(emptyDeudaForm);setDeudaPendiente(null);setSelected(null);setError('');cargarClientes();setModal('deuda')}} className="btn-secondary" style={{fontSize:12}}>
-              <span className="hidden sm:inline">+ Registrar deuda manual</span><span className="sm:hidden">+ Deuda manual</span>
+              <span className="hidden sm:inline">+ Registrar deuda</span><span className="sm:hidden">+ Deuda</span>
             </button>
           )}
           <button onClick={()=>{setBusquedaPago('');setResultadosPago([]);setModal('buscar-pago')}} className="btn-primary" style={{fontSize:12}}>
@@ -1302,12 +1302,8 @@ export default function Deudas() {
 
       {/* ── Modal registrar deuda manual (solo admin) ── */}
       {modal==='deuda'&&puedeVer('deudas_ver_deuda_manual')&&(
-        <Modal title="Registrar deuda manual" onClose={()=>setModal(null)}>
+        <Modal title="Registrar deuda" onClose={()=>setModal(null)}>
           <div className="space-y-4">
-            <div style={{background:'rgba(234,179,8,0.08)',border:'1px solid rgba(234,179,8,0.25)',borderRadius:8,padding:'10px 14px',fontSize:12,color:'var(--app-text-secondary)'}}>
-              ⚠️ Solo para correcciones o casos especiales. Las ventas al crédito crean deudas automáticamente desde Ventas.
-            </div>
-
             {error&&<div style={{display:'flex',alignItems:'center',gap:8,background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#f87171',borderRadius:8,padding:'8px 12px',fontSize:13}}><AlertCircle style={{width:16,height:16}}/>{error}</div>}
 
             {deudaPendiente&&(
@@ -1328,7 +1324,7 @@ export default function Deudas() {
             <div style={{position:'relative'}}>
               <label className="label">Nombre del deudor *</label>
               <input className="input" value={deudaForm.nombre_deudor}
-                onChange={e=>{setDeudaForm(f=>({...f,nombre_deudor:e.target.value}));buscarSugerencias(e.target.value)}}
+                onChange={e=>{setDeudaForm(f=>({...f,nombre_deudor:e.target.value.toUpperCase()}));buscarSugerencias(e.target.value)}}
                 onFocus={()=>deudaForm.nombre_deudor&&buscarSugerencias(deudaForm.nombre_deudor)}
                 onBlur={()=>setTimeout(()=>setMostrarSugerencias(false),150)}
                 placeholder="Nombre completo"/>
@@ -1350,9 +1346,8 @@ export default function Deudas() {
               <div><label className="label">Plata S/</label><input type="number" min="0" className="input" value={deudaForm.monto} onChange={e=>setDeudaForm(f=>({...f,monto:e.target.value}))} placeholder="0"/></div>
               <div><label className="label">Balón a devolver</label><input type="number" min="0" className="input" value={deudaForm.balones} onChange={e=>setDeudaForm(f=>({...f,balones:e.target.value}))} placeholder="0"/></div>
             </div>
-            <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'-6px 0 0'}}>💡 Si debe un vale, conviértelo a plata (ej. 1 vale S/20 → pon 20 en "Plata").</p>
             <div><label className="label">Fecha</label><input type="date" className="input" value={deudaForm.fecha} onChange={e=>setDeudaForm(f=>({...f,fecha:e.target.value}))}/></div>
-            <div><label className="label">Observación</label><input className="input" value={deudaForm.notas} onChange={e=>setDeudaForm(f=>({...f,notas:e.target.value}))} placeholder="Contexto de la deuda..."/></div>
+            <div><label className="label">Observación</label><input className="input" value={deudaForm.notas} onChange={e=>setDeudaForm(f=>({...f,notas:e.target.value.toUpperCase()}))} placeholder="Contexto de la deuda..."/></div>
 
             <div className="flex gap-3 pt-2">
               <button onClick={()=>setModal(null)} className="btn-secondary flex-1">Cancelar</button>
