@@ -456,12 +456,17 @@ export default function Deudas() {
             }
           }
 
+          // eliminado_por requiere el ID real de Supabase Auth (auth.users),
+          // que no es lo mismo que perfil.id (ese es el id de la tabla "usuarios").
+          const { data:authData } = await supabase.auth.getUser()
+          const authUserId = authData?.user?.id || null
+
           const { error } = await supabase.from('deudas')
-            .update({ eliminado:true, eliminado_por:perfil?.id||null, eliminado_at:new Date().toISOString() })
+            .update({ eliminado:true, eliminado_por:authUserId, eliminado_at:new Date().toISOString() })
             .eq('id', id)
           if(error) { console.error('Error eliminando deuda:', error); toast('Error: '+error.message, 'error'); return }
           if(deuda) await supabase.from('historial_eliminaciones')
-            .insert({ tabla:'deudas', registro_id:id, datos_anteriores:deuda, eliminado_por:perfil?.id||null })
+            .insert({ tabla:'deudas', registro_id:id, datos_anteriores:deuda, eliminado_por:authUserId })
           toast(balonesDevolver>0?`Deuda eliminada — ${balonesDevolver} balón(es) devuelto(s) al stock`:'Deuda eliminada')
           cargar()
         } catch(err) {
