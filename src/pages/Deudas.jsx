@@ -362,7 +362,7 @@ export default function Deudas() {
     const balones = parseInt(pagoForm.balones)||0
     if(monto===0&&balones===0) { setError('Ingresa al menos un pago'); return }
 
-    const montoPendiente = parseFloat(selected.monto_pendiente)||0
+    const montoPendiente = plataPendiente(selected)
     const totalPago = monto
     if(totalPago>montoPendiente) { setError(`El total (S/${totalPago}) supera la deuda (S/${montoPendiente})`); return }
     if(balones>(parseInt(selected.balones_pendiente)||0)) { setError(`Máximo ${selected.balones_pendiente} balones`); return }
@@ -378,6 +378,7 @@ export default function Deudas() {
     const ops = [
       supabase.from('deudas').update({
         monto_pendiente:nuevoMonto, balones_pendiente:nuevoBal,
+        vales_20_pendiente:0, vales_43_pendiente:0, // se consolidan siempre en monto_pendiente (Plata)
         cantidad_pendiente:nuevoBal,
         estado:liquidada?'liquidada':'pagada_parcial',
         historial:[...(selected.historial||[]), entradaHistorial],
@@ -434,7 +435,7 @@ export default function Deudas() {
       if(balones > 0) detallesPago.push(`${balones} balón(es)`)
       if(vales20 > 0) detallesPago.push(`${vales20} vale(s) S/20`)
       if(vales43 > 0) detallesPago.push(`${vales43} vale(s) S/43`)
-      const montoRestante = Math.max(0,(parseFloat(selected.monto_pendiente)||0)-totalPago)
+      const montoRestante = Math.max(0,plataPendiente(selected)-totalPago)
       const quedaStr = montoRestante > 0 ? `S/${montoRestante}` : (nuevoBal > 0 ? `${nuevoBal} balón(es)` : '')
       Notif.pagoDeuda(selected.nombre_deudor, detallesPago.join(' + '), quedaStr, actor)
     }
@@ -941,12 +942,12 @@ export default function Deudas() {
             {error&&<div style={{display:'flex',alignItems:'center',gap:8,background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#f87171',borderRadius:8,padding:'8px 12px',fontSize:13}}><AlertCircle style={{width:16,height:16}}/>{error}</div>}
 
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              {parseFloat(selected.monto_pendiente)>0&&(
+              {plataPendiente(selected)>0&&(
                 <div>
                   <label className="label">💵 Efectivo S/</label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{color:'var(--app-text-secondary)'}}>S/</span>
-                    <input type="number" min="0" max={selected.monto_pendiente} className="input" style={{paddingLeft:'2rem'}} value={pagoForm.monto_efectivo} onChange={e=>setPagoForm(f=>({...f,monto_efectivo:e.target.value}))} placeholder="0"/>
+                    <input type="number" min="0" max={plataPendiente(selected)} className="input" style={{paddingLeft:'2rem'}} value={pagoForm.monto_efectivo} onChange={e=>setPagoForm(f=>({...f,monto_efectivo:e.target.value}))} placeholder="0"/>
                   </div>
                 </div>
               )}
@@ -973,7 +974,7 @@ export default function Deudas() {
               const m=(parseFloat(pagoForm.monto_efectivo)||0)
               const b=parseInt(pagoForm.balones)||0
               const totalPago=m
-              const quedaMonto=Math.max(0,(parseFloat(selected.monto_pendiente)||0)-totalPago)
+              const quedaMonto=Math.max(0,plataPendiente(selected)-totalPago)
               const quedaBal=Math.max(0,(parseInt(selected.balones_pendiente)||0)-b)
               const liquidada=quedaMonto===0&&quedaBal===0
               return(
