@@ -71,6 +71,9 @@ export default function Deudas() {
   const [deudaPendiente, setDeudaPendiente] = useState(null)
   const [sugerencias, setSugerencias] = useState([])
   const [mostrarSugerencias, setMostrarSugerencias] = useState(false)
+  const [busquedaPago, setBusquedaPago] = useState('')
+  const [resultadosPago, setResultadosPago] = useState([])
+  const [buscandoPago, setBuscandoPago] = useState(false)
   const [editForm, setEditForm] = useState({ monto_pendiente:'', balones_pendiente:'', fecha_deuda:'', notas:'' })
   const [historialCompleto, setHistorialCompleto] = useState(null)
   const [loadingHistorial, setLoadingHistorial] = useState(false)
@@ -170,6 +173,20 @@ export default function Deudas() {
     setSugerencias(found)
     setMostrarSugerencias(found.length > 0)
   }, [clientes])
+
+  // ─── Buscar deudor con deuda activa (para "Registrar pago" directo) ─────────
+  const buscarDeudorParaPago = useCallback(async (val) => {
+    setBusquedaPago(val)
+    if(!val.trim()) { setResultadosPago([]); return }
+    setBuscandoPago(true)
+    const { data } = await supabase.from('deudas').select('*')
+      .in('estado',['activa','pagada_parcial'])
+      .ilike('nombre_deudor', `%${val.trim()}%`)
+      .or('eliminado.is.null,eliminado.eq.false')
+      .limit(8)
+    setResultadosPago(data||[])
+    setBuscandoPago(false)
+  }, [])
 
   // ─── Guardar deuda manual (solo admin, sin venta ficticia) ───────────────────
   const guardarDeuda = useCallback(async (forzarNuevo=false) => {
@@ -576,6 +593,9 @@ export default function Deudas() {
               + Registrar deuda manual
             </button>
           )}
+          <button onClick={()=>{setBusquedaPago('');setResultadosPago([]);setModal('buscar-pago')}} className="btn-primary" style={{fontSize:12}}>
+            💰 Registrar pago
+          </button>
         </div>
       </div>
 
@@ -1068,6 +1088,68 @@ export default function Deudas() {
               <button onClick={()=>setModal(null)} className="btn-secondary flex-1">Cancelar</button>
               <button onClick={editarDeuda} disabled={saving} className="btn-primary flex-1 justify-center">{saving?'Guardando...':'✓ Guardar cambios'}</button>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Modal buscar deudor para registrar pago ── */}
+      {modal==='buscar-pago'&&(
+        <Modal title="💰 Registrar pago" onClose={()=>setModal(null)}>
+          <div className="space-y-4">
+            <div>
+              <label className="label">Buscar deudor</label>
+              <div className="relative">
+                <Search style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',width:14,height:14,color:'var(--app-text-secondary)'}}/>
+                <input
+                  className="input" style={{paddingLeft:34}}
+                  placeholder="Nombre del cliente..."
+                  value={busquedaPago}
+                  onChange={e=>buscarDeudorParaPago(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {buscandoPago&&<p style={{fontSize:12,color:'var(--app-text-secondary)',textAlign:'center'}}>Buscando...</p>}
+
+            {!buscandoPago&&busquedaPago.trim()&&resultadosPago.length===0&&(
+              <p style={{fontSize:13,color:'var(--app-text-secondary)',textAlign:'center',padding:'12px 0'}}>Nadie con ese nombre tiene deuda activa</p>
+            )}
+
+            {resultadosPago.length>0&&(
+              <div style={{display:'flex',flexDirection:'column',gap:8,maxHeight:320,overflowY:'auto'}}>
+                {resultadosPago.map(d=>{
+                  const balon = parseInt(d.balones_pendiente)||0
+                  const plata = plataPendiente(d)
+                  return (
+                    <button key={d.id}
+                      onClick={()=>{setSelected(d);setPagoForm(emptyPagoForm);setError('');setModal('pago')}}
+                      style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,padding:'12px 14px',borderRadius:10,border:'1px solid var(--app-card-border)',background:'var(--app-card-bg-alt)',cursor:'pointer',textAlign:'left'}}>
+                      <div>
+                        <p style={{fontSize:14,fontWeight:600,color:'var(--app-text)',margin:0}}>{d.nombre_deudor}</p>
+                        <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>
+                          {format(new Date(d.fecha_deuda+'T12:00:00'),'dd/MM/yyyy',{locale:es})}
+                        </p>
+                      </div>
+                      <div style={{display:'flex',gap:14,flexShrink:0,textAlign:'right'}}>
+                        {balon>0&&(
+                          <div>
+                            <p style={{fontSize:9,color:'var(--app-text-secondary)',margin:0,textTransform:'uppercase'}}>Balón</p>
+                            <p style={{fontSize:15,fontWeight:700,color:'#fb923c',margin:0}}>{balon}</p>
+                          </div>
+                        )}
+                        {plata>0&&(
+                          <div>
+                            <p style={{fontSize:9,color:'var(--app-text-secondary)',margin:0,textTransform:'uppercase'}}>Plata</p>
+                            <p style={{fontSize:15,fontWeight:700,color:'#f87171',margin:0}}>S/{plata.toLocaleString('es-PE')}</p>
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </Modal>
       )}
