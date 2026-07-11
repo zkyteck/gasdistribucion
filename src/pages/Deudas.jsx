@@ -690,10 +690,12 @@ export default function Deudas() {
             <p style={{fontSize:13,margin:0}}>Sin deudas registradas</p>
           </div>
         ):(
-          <div style={{overflowX:'auto'}}>
+          <>
+          <div className="hidden lg:block" style={{overflowX:'auto'}}>
             <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
               <thead>
                 <tr style={{borderBottom:'2px solid var(--app-card-border)'}}>
+                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>Fecha</th>
                   <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>Nombre</th>
                   <th style={{textAlign:'center',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>Balón</th>
                   <th style={{textAlign:'right',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>Plata</th>
@@ -710,6 +712,7 @@ export default function Deudas() {
                   const plata = plataPendiente(d)
                   return (
                     <tr key={d.id} style={{borderBottom:'1px solid var(--app-card-border)',background:u.bg}}>
+                      <td style={{padding:'10px 16px',color:'var(--app-text-secondary)',fontSize:12,whiteSpace:'nowrap'}}>{format(new Date(d.fecha_deuda+'T12:00:00'),'dd/MM/yyyy',{locale:es})}</td>
                       <td style={{padding:'10px 16px',fontWeight:600,color:'var(--app-text)',whiteSpace:'nowrap'}}>{d.nombre_deudor}</td>
                       <td style={{padding:'10px 16px',textAlign:'center',fontWeight:600,color:balon>0?'#fb923c':'var(--app-text-secondary)'}}>{balon>0?balon:'—'}</td>
                       <td style={{padding:'10px 16px',textAlign:'right',fontWeight:600,color:plata>0?(d.estado==='liquidada'?'#22c55e':'#f87171'):'var(--app-text-secondary)',whiteSpace:'nowrap'}}>{plata>0?`S/${plata.toLocaleString('es-PE')}`:'—'}</td>
@@ -725,7 +728,6 @@ export default function Deudas() {
                             {d.estado==='liquidada'?'✅ Liquidada':d.estado==='pagada_parcial'?'⚠️ Parcial':'🔴 Activa'}
                           </span>
                           {u.label&&<span style={{fontSize:10,color:u.color,display:'flex',alignItems:'center',gap:3}}><Clock style={{width:10,height:10}}/>{u.label}</span>}
-                          <span style={{fontSize:10,color:'var(--app-text-secondary)'}}>{format(new Date(d.fecha_deuda+'T12:00:00'),'dd/MM/yyyy',{locale:es})}</span>
                         </div>
                       </td>
                       <td style={{padding:'10px 16px'}}>
@@ -760,6 +762,84 @@ export default function Deudas() {
               </tbody>
             </table>
           </div>
+
+          {/* Vista mobile: tarjetas */}
+          <div className="lg:hidden">
+            {deudasFiltradas.map(d => {
+              const dias = differenceInDays(new Date(), new Date(d.fecha_deuda))
+              const u = urgenciaStyle(dias, d.estado)
+              const balon = parseInt(d.balones_pendiente)||0
+              const plata = plataPendiente(d)
+              return (
+                <div key={d.id} style={{padding:'12px 16px',borderBottom:'1px solid var(--app-card-border)',background:u.bg}}>
+                  {/* Fecha + Nombre */}
+                  <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 2px'}}>
+                    {format(new Date(d.fecha_deuda+'T12:00:00'),'dd/MM/yyyy',{locale:es})}
+                  </p>
+                  <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8,marginBottom:6}}>
+                    <p style={{fontSize:14,fontWeight:600,color:'var(--app-text)',margin:0,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.nombre_deudor}</p>
+                    <div style={{display:'flex',gap:12,flexShrink:0}}>
+                      {balon>0&&(
+                        <div style={{textAlign:'right'}}>
+                          <p style={{fontSize:9,color:'var(--app-text-secondary)',margin:0,textTransform:'uppercase'}}>Balón</p>
+                          <p style={{fontSize:14,fontWeight:700,color:'#fb923c',margin:0}}>{balon}</p>
+                        </div>
+                      )}
+                      {plata>0&&(
+                        <div style={{textAlign:'right'}}>
+                          <p style={{fontSize:9,color:'var(--app-text-secondary)',margin:0,textTransform:'uppercase'}}>Plata</p>
+                          <p style={{fontSize:14,fontWeight:700,color:d.estado==='liquidada'?'#22c55e':'#f87171',margin:0}}>S/{plata.toLocaleString('es-PE')}</p>
+                        </div>
+                      )}
+                      {balon===0&&plata===0&&<p style={{fontSize:13,fontWeight:600,color:'#22c55e',margin:0}}>Sin deuda</p>}
+                    </div>
+                  </div>
+
+                  {/* Estado + urgencia */}
+                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6,flexWrap:'wrap'}}>
+                    <span style={{
+                      fontSize:11,padding:'2px 8px',borderRadius:20,fontWeight:500,
+                      background:d.estado==='liquidada'?'rgba(34,197,94,0.12)':d.estado==='pagada_parcial'?'rgba(234,179,8,0.12)':'rgba(239,68,68,0.12)',
+                      color:d.estado==='liquidada'?'#22c55e':d.estado==='pagada_parcial'?'#eab308':'#f87171',
+                      border:`1px solid ${d.estado==='liquidada'?'rgba(34,197,94,0.3)':d.estado==='pagada_parcial'?'rgba(234,179,8,0.3)':'rgba(239,68,68,0.3)'}`
+                    }}>
+                      {d.estado==='liquidada'?'✅ Liquidada':d.estado==='pagada_parcial'?'⚠️ Parcial':'🔴 Activa'}
+                    </span>
+                    {u.label&&<span style={{fontSize:11,color:u.color,display:'flex',alignItems:'center',gap:3}}><Clock style={{width:11,height:11}}/>{u.label}</span>}
+                  </div>
+
+                  {d.notas&&<p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 8px',fontStyle:'italic'}}>📝 {d.notas}</p>}
+
+                  {/* Acciones */}
+                  <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                    <button onClick={()=>{setSelected(d);setError('');cargarHistorialCompleto(d.nombre_deudor);setModal('historial')}}
+                      style={{fontSize:11,padding:'5px 10px',borderRadius:6,background:'rgba(59,130,246,0.1)',border:'1px solid rgba(59,130,246,0.3)',color:'#60a5fa',cursor:'pointer'}}>
+                      📋 Historial
+                    </button>
+                    {d.estado!=='liquidada'&&(
+                      <button onClick={()=>{setSelected(d);setPagoForm(emptyPagoForm);setError('');setModal('pago')}}
+                        style={{fontSize:11,padding:'5px 10px',borderRadius:6,background:'rgba(34,197,94,0.1)',border:'1px solid rgba(34,197,94,0.3)',color:'#22c55e',cursor:'pointer'}}>
+                        ✓ Pagar
+                      </button>
+                    )}
+                    {isAdmin&&(
+                      <button onClick={()=>{setSelected(d);setEditForm({monto_pendiente:plataPendiente(d)||'',balones_pendiente:d.balones_pendiente||'',fecha_deuda:d.fecha_deuda,notas:d.notas||''});setError('');setModal('editar')}}
+                        style={{fontSize:11,padding:'5px 10px',borderRadius:6,background:'var(--app-card-bg-alt)',border:'1px solid var(--app-card-border)',color:'var(--app-text-secondary)',cursor:'pointer'}}>
+                        ✏️ Editar
+                      </button>
+                    )}
+                    {isAdmin&&(
+                      <button onClick={()=>eliminarDeuda(d.id)}
+                        style={{fontSize:11,padding:'5px 10px',borderRadius:6,background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.25)',color:'#f87171',cursor:'pointer'}}>
+                        🗑️
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          </>
         )}
         {/* Sentinel para scroll infinito */}
         <div ref={sentinelRef} style={{height:40,display:'flex',alignItems:'center',justifyContent:'center'}}>
