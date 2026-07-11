@@ -577,21 +577,21 @@ export default function Deudas() {
       <style>{`@keyframes fadeInUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
 
       {/* Header */}
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',flexWrap:'wrap',gap:12}}>
         <div>
           <h2 style={{fontSize:20,fontWeight:700,color:'var(--app-text)',margin:0}}>Deudas</h2>
           <p style={{fontSize:13,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Control de deudas en dinero, balones y vales</p>
         </div>
-        <div style={{display:'flex',gap:8}}>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
           <button onClick={imprimirReporte} className="btn-secondary" style={{fontSize:12}}>
-            <Printer style={{width:13,height:13}}/> Imprimir reporte
+            <Printer style={{width:13,height:13}}/> <span className="hidden sm:inline">Imprimir reporte</span><span className="sm:hidden">Imprimir</span>
           </button>
           <button onClick={exportarExcelDeudas} className="btn-secondary" style={{fontSize:12}}>
             <FileSpreadsheet style={{width:13,height:13}}/> Excel
           </button>
           {isAdmin && (
             <button onClick={()=>{setDeudaForm(emptyDeudaForm);setDeudaPendiente(null);setSelected(null);setError('');cargarClientes();setModal('deuda')}} className="btn-secondary" style={{fontSize:12}}>
-              + Registrar deuda manual
+              <span className="hidden sm:inline">+ Registrar deuda manual</span><span className="sm:hidden">+ Deuda manual</span>
             </button>
           )}
           <button onClick={()=>{setBusquedaPago('');setResultadosPago([]);setModal('buscar-pago')}} className="btn-primary" style={{fontSize:12}}>
