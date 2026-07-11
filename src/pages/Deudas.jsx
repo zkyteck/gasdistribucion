@@ -59,6 +59,7 @@ export default function Deudas() {
   const [modal, setModal] = useState(null)
   const [modalConfirm, setModalConfirm] = useState(null) // {mensaje, onConfirm}
   const [selected, setSelected] = useState(null)
+  const [filaResaltada, setFilaResaltada] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [busqueda, setBusqueda] = useState('')
@@ -695,12 +696,12 @@ export default function Deudas() {
             <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
               <thead>
                 <tr style={{borderBottom:'2px solid var(--app-card-border)'}}>
-                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>Fecha</th>
-                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>Nombre</th>
-                  <th style={{textAlign:'center',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>Balón</th>
-                  <th style={{textAlign:'right',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>Plata</th>
-                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)'}}>Observación</th>
-                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>Estado</th>
+                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>Fecha</th>
+                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>Nombre</th>
+                  <th style={{textAlign:'center',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>Balón</th>
+                  <th style={{textAlign:'right',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>Plata</th>
+                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',borderRight:'1px solid rgba(255,255,255,0.15)'}}>Observación</th>
+                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>Estado</th>
                   <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>Acciones</th>
                 </tr>
               </thead>
@@ -711,13 +712,14 @@ export default function Deudas() {
                   const balon = parseInt(d.balones_pendiente)||0
                   const plata = plataPendiente(d)
                   return (
-                    <tr key={d.id} style={{borderBottom:'1px solid var(--app-card-border)',background:u.bg}}>
-                      <td style={{padding:'10px 16px',color:'var(--app-text-secondary)',fontSize:12,whiteSpace:'nowrap'}}>{format(new Date(d.fecha_deuda+'T12:00:00'),'dd/MM/yyyy',{locale:es})}</td>
-                      <td style={{padding:'10px 16px',fontWeight:600,color:'var(--app-text)',whiteSpace:'nowrap'}}>{d.nombre_deudor}</td>
-                      <td style={{padding:'10px 16px',textAlign:'center',fontWeight:600,color:balon>0?'#fb923c':'var(--app-text-secondary)'}}>{balon>0?balon:'—'}</td>
-                      <td style={{padding:'10px 16px',textAlign:'right',fontWeight:600,color:plata>0?(d.estado==='liquidada'?'#22c55e':'#f87171'):'var(--app-text-secondary)',whiteSpace:'nowrap'}}>{plata>0?`S/${plata.toLocaleString('es-PE')}`:'—'}</td>
-                      <td style={{padding:'10px 16px',color:'var(--app-text-secondary)',fontStyle:d.notas?'italic':'normal',maxWidth:220}}>{d.notas||'—'}</td>
-                      <td style={{padding:'10px 16px',whiteSpace:'nowrap'}}>
+                    <tr key={d.id} onClick={()=>setFilaResaltada(filaResaltada===d.id?null:d.id)}
+                      style={{borderBottom:'1px solid var(--app-card-border)',background:filaResaltada===d.id?'rgba(59,130,246,0.16)':u.bg,cursor:'pointer',transition:'background 0.1s'}}>
+                      <td style={{padding:'10px 16px',color:'var(--app-text-secondary)',fontSize:12,whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>{format(new Date(d.fecha_deuda+'T12:00:00'),'dd/MM/yyyy',{locale:es})}</td>
+                      <td style={{padding:'10px 16px',fontWeight:600,color:'var(--app-text)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>{d.nombre_deudor}</td>
+                      <td style={{padding:'10px 16px',textAlign:'center',fontWeight:600,color:balon>0?'#fb923c':'var(--app-text-secondary)',borderRight:'1px solid rgba(255,255,255,0.15)'}}>{balon>0?balon:'—'}</td>
+                      <td style={{padding:'10px 16px',textAlign:'right',fontWeight:600,color:plata>0?(d.estado==='liquidada'?'#22c55e':'#f87171'):'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>{plata>0?`S/${plata.toLocaleString('es-PE')}`:'—'}</td>
+                      <td style={{padding:'10px 16px',color:'var(--app-text-secondary)',fontStyle:d.notas?'italic':'normal',maxWidth:220,borderRight:'1px solid rgba(255,255,255,0.15)'}}>{d.notas||'—'}</td>
+                      <td style={{padding:'10px 16px',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>
                         <div style={{display:'flex',flexDirection:'column',gap:3}}>
                           <span style={{
                             fontSize:11,padding:'2px 8px',borderRadius:20,fontWeight:500,width:'fit-content',
@@ -771,27 +773,28 @@ export default function Deudas() {
               const balon = parseInt(d.balones_pendiente)||0
               const plata = plataPendiente(d)
               return (
-                <div key={d.id} style={{padding:'12px 16px',borderBottom:'1px solid var(--app-card-border)',background:u.bg}}>
+                <div key={d.id} onClick={()=>setFilaResaltada(filaResaltada===d.id?null:d.id)}
+                  style={{padding:'12px 16px',borderBottom:'1px solid var(--app-card-border)',background:filaResaltada===d.id?'rgba(59,130,246,0.16)':u.bg,cursor:'pointer',transition:'background 0.1s'}}>
                   {/* Fecha + Nombre */}
                   <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 2px'}}>
                     {format(new Date(d.fecha_deuda+'T12:00:00'),'dd/MM/yyyy',{locale:es})}
                   </p>
-                  <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8,marginBottom:6}}>
-                    <p style={{fontSize:14,fontWeight:600,color:'var(--app-text)',margin:0,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{d.nombre_deudor}</p>
-                    <div style={{display:'flex',gap:12,flexShrink:0}}>
+                  <div style={{display:'flex',alignItems:'stretch',justifyContent:'space-between',gap:0,marginBottom:6}}>
+                    <p style={{fontSize:14,fontWeight:600,color:'var(--app-text)',margin:0,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,paddingRight:10,alignSelf:'center'}}>{d.nombre_deudor}</p>
+                    <div style={{display:'flex',flexShrink:0}}>
                       {balon>0&&(
-                        <div style={{textAlign:'right'}}>
+                        <div style={{textAlign:'right',padding:'0 12px',borderLeft:'1px solid var(--app-card-border)'}}>
                           <p style={{fontSize:9,color:'var(--app-text-secondary)',margin:0,textTransform:'uppercase'}}>Balón</p>
                           <p style={{fontSize:14,fontWeight:700,color:'#fb923c',margin:0}}>{balon}</p>
                         </div>
                       )}
                       {plata>0&&(
-                        <div style={{textAlign:'right'}}>
+                        <div style={{textAlign:'right',padding:'0 0 0 12px',borderLeft:'1px solid var(--app-card-border)'}}>
                           <p style={{fontSize:9,color:'var(--app-text-secondary)',margin:0,textTransform:'uppercase'}}>Plata</p>
                           <p style={{fontSize:14,fontWeight:700,color:d.estado==='liquidada'?'#22c55e':'#f87171',margin:0}}>S/{plata.toLocaleString('es-PE')}</p>
                         </div>
                       )}
-                      {balon===0&&plata===0&&<p style={{fontSize:13,fontWeight:600,color:'#22c55e',margin:0}}>Sin deuda</p>}
+                      {balon===0&&plata===0&&<p style={{fontSize:13,fontWeight:600,color:'#22c55e',margin:0,paddingLeft:12,borderLeft:'1px solid var(--app-card-border)'}}>Sin deuda</p>}
                     </div>
                   </div>
 
