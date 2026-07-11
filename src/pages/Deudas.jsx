@@ -72,6 +72,7 @@ export default function Deudas() {
   const [paginaOffset, setPaginaOffset] = useState(0)
   const [totalesGlobal, setTotalesGlobal] = useState({dinero:0,balones:0,deudores:0,urgentes:0})
   const sentinelRef = useRef(null)
+  const sentinelRefMobile = useRef(null)
   const [modal, setModal] = useState(null)
   const [modalConfirm, setModalConfirm] = useState(null) // {mensaje, onConfirm}
   const [selected, setSelected] = useState(null)
@@ -141,13 +142,13 @@ export default function Deudas() {
     setCargandoMas(false)
   }, [buildQuery, busqueda, paginaOffset])
 
-  // Scroll infinito — carga más cuando el sentinel entra en pantalla
+  // Scroll infinito — carga más cuando el sentinel entra en pantalla (desktop o mobile, el que esté visible)
   useEffect(() => {
-    if(!sentinelRef.current) return
     const observer = new IntersectionObserver(entries => {
-      if(entries[0].isIntersecting && hayMas && !cargandoMas) cargarMas()
+      if(entries.some(e=>e.isIntersecting) && hayMas && !cargandoMas) cargarMas()
     }, { threshold: 0.1 })
-    observer.observe(sentinelRef.current)
+    if(sentinelRef.current) observer.observe(sentinelRef.current)
+    if(sentinelRefMobile.current) observer.observe(sentinelRefMobile.current)
     return () => observer.disconnect()
   }, [hayMas, cargandoMas, cargarMas])
 
@@ -677,6 +678,7 @@ export default function Deudas() {
       )}
 
       {/* Totales */}
+      {puedeVer('deudas_ver_resumen') && (
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {totalDinero > 0 && (
           <div style={cardStyle}>
@@ -695,6 +697,7 @@ export default function Deudas() {
           <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Deudores activos</p>
         </div>
       </div>
+      )}
 
       {/* Búsqueda + Filtros — barra pegada al tope al scrollear */}
       <div style={{
@@ -826,10 +829,14 @@ export default function Deudas() {
                 })}
               </tbody>
             </table>
+            {/* Sentinel desktop — dentro del área de scroll de la tabla */}
+            <div ref={sentinelRef} style={{height:40,display:'flex',alignItems:'center',justifyContent:'center'}}>
+              {cargandoMas && <span style={{fontSize:12,color:'var(--app-text-secondary)'}}>Cargando más...</span>}
+            </div>
           </div>
 
-          {/* Vista mobile: tarjetas */}
-          <div className="lg:hidden">
+          {/* Vista mobile: tarjetas (con su propio scroll, para no scrollear toda la página) */}
+          <div className="lg:hidden" style={{maxHeight:'75vh',overflowY:'auto'}}>
             {deudasFiltradas.map(d => {
               const dias = differenceInDays(new Date(), new Date(d.fecha_deuda))
               const u = urgenciaStyle(dias, d.estado)
@@ -904,13 +911,13 @@ export default function Deudas() {
                 </div>
               )
             })}
+            {/* Sentinel mobile — dentro del área de scroll de las tarjetas */}
+            <div ref={sentinelRefMobile} style={{height:40,display:'flex',alignItems:'center',justifyContent:'center'}}>
+              {cargandoMas && <span style={{fontSize:12,color:'var(--app-text-secondary)'}}>Cargando más...</span>}
+            </div>
           </div>
           </>
         )}
-        {/* Sentinel para scroll infinito */}
-        <div ref={sentinelRef} style={{height:40,display:'flex',alignItems:'center',justifyContent:'center'}}>
-          {cargandoMas && <span style={{fontSize:12,color:'var(--app-text-secondary)'}}>Cargando más...</span>}
-        </div>
       </div>
 
       {/* ── Modal confirmar eliminación ── */}
@@ -1365,6 +1372,7 @@ export default function Deudas() {
               Tú (admin) siempre ves todo. Esto solo controla qué botones ven los demás usuarios.
             </p>
             {[
+              ['deudas_ver_resumen','Ver resumen (plata/balones/deudores totales)'],
               ['deudas_ver_imprimir','Imprimir reporte'],
               ['deudas_ver_excel','Exportar a Excel'],
               ['deudas_ver_deuda_manual','Registrar deuda manual'],
