@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { hoyPeru } from '../lib/fechas'
-import { Users, X, AlertCircle, Search, Clock, CheckCircle, AlertTriangle, TrendingDown, Printer, FileSpreadsheet } from 'lucide-react'
+import { Users, X, AlertCircle, Search, Clock, CheckCircle, AlertTriangle, TrendingDown, Printer, FileSpreadsheet, Plus } from 'lucide-react'
 import { format, differenceInDays } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useAuth } from '../context/AuthContext'
@@ -1390,6 +1390,22 @@ export default function Deudas() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Botón flotante "+" para agregar deuda (mismo permiso que el botón del header) */}
+      {puedeVer('deudas_ver_deuda_manual') && (
+        <button
+          onClick={()=>{setDeudaForm(emptyDeudaForm);setDeudaPendiente(null);setSelected(null);setError('');cargarClientes();setModal('deuda')}}
+          title="Registrar deuda"
+          style={{
+            position:'fixed', bottom:84, right:20, zIndex:40,
+            width:56, height:56, borderRadius:'50%',
+            background:'var(--app-accent)', color:'#fff', border:'none',
+            display:'flex', alignItems:'center', justifyContent:'center',
+            boxShadow:'0 6px 16px rgba(0,0,0,0.35)', cursor:'pointer'
+          }}>
+          <Plus style={{width:26,height:26}}/>
+        </button>
       )}
 
       <Toast toasts={toasts}/>
