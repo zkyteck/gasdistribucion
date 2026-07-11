@@ -16,12 +16,16 @@ import { exportarExcel } from '../lib/exportar'
 // ─── Modal con tema ───────────────────────────────────────────────────────────
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+// Deudas ahora solo tienen 2 dimensiones: Balón y Plata.
+// "Plata" incluye cualquier vale pendiente antiguo por si no se corrió la migración de consolidación.
+function plataPendiente(d) {
+  return (parseFloat(d.monto_pendiente)||0) + (parseInt(d.vales_20_pendiente)||0)*20 + (parseInt(d.vales_43_pendiente)||0)*43
+}
 function resumenDeuda(d) {
   const items = []
-  if(parseFloat(d.monto_pendiente)>0) items.push(`S/${Number(d.monto_pendiente).toLocaleString('es-PE')}`)
+  const plata = plataPendiente(d)
+  if(plata>0) items.push(`S/${plata.toLocaleString('es-PE')}`)
   if(parseInt(d.balones_pendiente)>0) items.push(`${d.balones_pendiente} balón(es)`)
-  if(parseInt(d.vales_20_pendiente)>0) items.push(`${d.vales_20_pendiente}×S/20`)
-  if(parseInt(d.vales_43_pendiente)>0) items.push(`${d.vales_43_pendiente}×S/43`)
   return items.join(' + ') || 'Sin deuda'
 }
 
@@ -34,7 +38,7 @@ function urgenciaStyle(dias, estado) {
 }
 
 const emptyDeudaForm = { nombre_deudor:'', cliente_id:'', monto:'', balones:'', tipo_balon:'10kg', vales_20:'', vales_43:'', fecha:hoyPeru(), notas:'' }
-const emptyPagoForm  = { monto_efectivo:'', monto_yape:'', balones:'', vales_20:'', vales_43:'', fecha:hoyPeru(), notas:'' }
+const emptyPagoForm  = { monto_efectivo:'', balones:'', fecha:hoyPeru(), notas:'' }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 const POR_PAGINA = 30
@@ -50,7 +54,7 @@ export default function Deudas() {
   const [hayMas, setHayMas] = useState(false)
   const [cargandoMas, setCargandoMas] = useState(false)
   const [paginaOffset, setPaginaOffset] = useState(0)
-  const [totalesGlobal, setTotalesGlobal] = useState({dinero:0,balones:0,vales20:0,vales43:0,deudores:0,urgentes:0})
+  const [totalesGlobal, setTotalesGlobal] = useState({dinero:0,balones:0,deudores:0,urgentes:0})
   const sentinelRef = useRef(null)
   const [modal, setModal] = useState(null)
   const [modalConfirm, setModalConfirm] = useState(null) // {mensaje, onConfirm}
@@ -67,7 +71,7 @@ export default function Deudas() {
   const [deudaPendiente, setDeudaPendiente] = useState(null)
   const [sugerencias, setSugerencias] = useState([])
   const [mostrarSugerencias, setMostrarSugerencias] = useState(false)
-  const [editForm, setEditForm] = useState({ monto_pendiente:'', balones_pendiente:'', vales_20_pendiente:'', vales_43_pendiente:'', fecha_deuda:'', notas:'' })
+  const [editForm, setEditForm] = useState({ monto_pendiente:'', balones_pendiente:'', fecha_deuda:'', notas:'' })
   const [historialCompleto, setHistorialCompleto] = useState(null)
   const [loadingHistorial, setLoadingHistorial] = useState(false)
   const [tabHistorial, setTabHistorial] = useState('movimientos')
@@ -94,10 +98,8 @@ export default function Deudas() {
       .in('estado',['activa','pagada_parcial'])
     if(todosParaTotales) {
       setTotalesGlobal({
-        dinero:   todosParaTotales.reduce((a,d)=>a+(parseFloat(d.monto_pendiente)||0),0),
+        dinero:   todosParaTotales.reduce((a,d)=>a+plataPendiente(d),0),
         balones:  todosParaTotales.reduce((a,d)=>a+(parseInt(d.balones_pendiente)||0),0),
-        vales20:  todosParaTotales.reduce((a,d)=>a+(parseInt(d.vales_20_pendiente)||0),0),
-        vales43:  todosParaTotales.reduce((a,d)=>a+(parseInt(d.vales_43_pendiente)||0),0),
         deudores: new Set(todosParaTotales.map(d=>d.nombre_deudor)).size,
         urgentes: todosParaTotales.filter(d=>differenceInDays(new Date(),new Date(d.fecha_deuda))>=30).length,
       })
@@ -186,7 +188,10 @@ export default function Deudas() {
 
     setSaving(true); setError('')
     const tipoBalonDeuda = deudaForm.tipo_balon||'10kg'
-    const entradaHistorial = { tipo:'deuda', fecha:deudaForm.fecha, monto, balones, tipo_balon:balones>0?tipoBalonDeuda:null, vales_20:vales20, vales_43:vales43, notas:deudaForm.notas||null }
+    // Simplificación: los vales que se deben se convierten a plata de una vez —
+    // de aquí en adelante una deuda solo tiene 2 dimensiones: Balón y Plata.
+    const montoFinal = monto + (vales20*20) + (vales43*43)
+    const entradaHistorial = { tipo:'deuda', fecha:deudaForm.fecha, monto:montoFinal, balones, tipo_balon:balones>0?tipoBalonDeuda:null, notas:deudaForm.notas||null }
 
     // Ubicar el almacén de esta deuda (para descontar stock Y para la venta reflejo)
     const { data:alms } = await supabase.from('almacenes').select('id,nombre,stock_actual').eq('activo',true)
@@ -211,9 +216,9 @@ export default function Deudas() {
       cliente_id: deudaForm.cliente_id||null,
       nombre_deudor: deudaForm.nombre_deudor.trim(),
       tipo_deuda: 'mixto',
-      monto_original:monto, monto_pendiente:monto,
+      monto_original:montoFinal, monto_pendiente:montoFinal,
       cantidad_original:balones, cantidad_pendiente:balones,
-      balones_pendiente:balones, vales_20_pendiente:vales20, vales_43_pendiente:vales43,
+      balones_pendiente:balones, vales_20_pendiente:0, vales_43_pendiente:0,
       fecha_deuda:deudaForm.fecha, estado:'activa', notas:deudaForm.notas,
       historial:[entradaHistorial], usuario_id:perfil?.id||null,
       almacen_id: perfil?.almacen_id||null
@@ -222,9 +227,9 @@ export default function Deudas() {
 
     // Reflejar como venta al crédito para que sume en el resumen de Ventas y en Reportes
     // (misma lógica que una venta al crédito normal: no cuenta como ingreso hasta que se cobre)
-    if((monto>0||balones>0) && tienda) {
+    if((montoFinal>0||balones>0) && tienda) {
       const cantidadRef = balones>0 ? balones : 1
-      const precioRef = cantidadRef>0 ? (monto/cantidadRef) : 0
+      const precioRef = cantidadRef>0 ? (montoFinal/cantidadRef) : 0
       await supabase.from('ventas').insert({
         cliente_id: deudaForm.cliente_id||null, almacen_id: tienda.id,
         tipo_balon: tipoBalonDeuda,
@@ -238,7 +243,7 @@ export default function Deudas() {
     setSaving(false)
     setDeudaPendiente(null); setModal(null); setDeudaForm(emptyDeudaForm)
     toast('Deuda registrada'); cargar()
-    const resumenNotif = monto > 0 ? `S/${monto}` : balones > 0 ? `${balones} balón(es)` : ''
+    const resumenNotif = montoFinal > 0 ? `S/${montoFinal}` : balones > 0 ? `${balones} balón(es)` : ''
     Notif.nuevaDeuda(deudaForm.nombre_deudor.trim(), resumenNotif, perfil?.nombre || 'Admin')
   }, [deudaForm, perfil, cargar, toast])
 
@@ -251,7 +256,9 @@ export default function Deudas() {
     const vales43 = parseInt(deudaForm.vales_43)||0
     setSaving(true); setError('')
     const tipoBalonAdd = deudaForm.tipo_balon||'10kg'
-    const entradaHistorial = { tipo:'deuda', fecha:deudaForm.fecha, monto, balones, tipo_balon:balones>0?tipoBalonAdd:null, vales_20:vales20, vales_43:vales43, notas:deudaForm.notas||null }
+    // Simplificación: los vales se convierten a plata de una vez (deuda = Balón + Plata)
+    const montoFinal = monto + (vales20*20) + (vales43*43)
+    const entradaHistorial = { tipo:'deuda', fecha:deudaForm.fecha, monto:montoFinal, balones, tipo_balon:balones>0?tipoBalonAdd:null, notas:deudaForm.notas||null }
 
     const { data:alms } = await supabase.from('almacenes').select('id,nombre,stock_actual').eq('activo',true)
     const almAdd = perfil?.almacen_id ? alms?.find(a=>a.id===perfil.almacen_id) : alms?.find(a=>a.nombre?.toLowerCase().includes('tienda'))||alms?.[0]
@@ -268,11 +275,9 @@ export default function Deudas() {
     }
 
     const { error:e } = await supabase.from('deudas').update({
-      monto_pendiente:(parseFloat(deudaPendiente.monto_pendiente)||0)+monto,
-      monto_original:(parseFloat(deudaPendiente.monto_original)||0)+monto,
+      monto_pendiente:(parseFloat(deudaPendiente.monto_pendiente)||0)+montoFinal,
+      monto_original:(parseFloat(deudaPendiente.monto_original)||0)+montoFinal,
       balones_pendiente:(parseInt(deudaPendiente.balones_pendiente)||0)+balones,
-      vales_20_pendiente:(parseInt(deudaPendiente.vales_20_pendiente)||0)+vales20,
-      vales_43_pendiente:(parseInt(deudaPendiente.vales_43_pendiente)||0)+vales43,
       estado:'activa',
       historial:[...(deudaPendiente.historial||[]), entradaHistorial],
       fecha_deuda:deudaForm.fecha,
@@ -281,9 +286,9 @@ export default function Deudas() {
     if(e) { setSaving(false); setError(e.message); return }
 
     // Reflejar como venta al crédito, igual que en guardarDeuda
-    if((monto>0||balones>0) && almAdd) {
+    if((montoFinal>0||balones>0) && almAdd) {
       const cantidadRef = balones>0 ? balones : 1
-      const precioRef = cantidadRef>0 ? (monto/cantidadRef) : 0
+      const precioRef = cantidadRef>0 ? (montoFinal/cantidadRef) : 0
       await supabase.from('ventas').insert({
         cliente_id: deudaPendiente.cliente_id||null, almacen_id: almAdd.id,
         tipo_balon: tipoBalonAdd,
@@ -297,7 +302,7 @@ export default function Deudas() {
     setSaving(false)
     setDeudaPendiente(null); setModal(null); setDeudaForm(emptyDeudaForm)
     toast('Deuda actualizada'); cargar()
-    const resumenNotifAdd = monto > 0 ? `S/${monto}` : balones > 0 ? `${balones} balón(es)` : ''
+    const resumenNotifAdd = montoFinal > 0 ? `S/${montoFinal}` : balones > 0 ? `${balones} balón(es)` : ''
     Notif.nuevaDeuda(deudaForm.nombre_deudor.trim(), resumenNotifAdd, perfil?.nombre || 'Admin')
   }, [deudaPendiente, deudaForm, perfil, cargar, toast])
 
@@ -305,38 +310,26 @@ export default function Deudas() {
   const registrarPago = useCallback(async () => {
     if(!selected) return
     const montoEf = parseFloat(pagoForm.monto_efectivo)||0
-    const montoYa = parseFloat(pagoForm.monto_yape)||0
-    const monto = montoEf + montoYa
+    const monto = montoEf
     const balones = parseInt(pagoForm.balones)||0
-    const vales20 = parseInt(pagoForm.vales_20)||0
-    const vales43 = parseInt(pagoForm.vales_43)||0
-    if(monto===0&&balones===0&&vales20===0&&vales43===0) { setError('Ingresa al menos un pago'); return }
+    if(monto===0&&balones===0) { setError('Ingresa al menos un pago'); return }
 
     const montoPendiente = parseFloat(selected.monto_pendiente)||0
-    const vales20Pend = parseInt(selected.vales_20_pendiente)||0
-    const vales43Pend = parseInt(selected.vales_43_pendiente)||0
-    const totalValesEnDinero = (vales20*20)+(vales43*43)
-    const totalPago = monto+(montoPendiente>0?totalValesEnDinero:0)
-    if(montoPendiente>0&&totalPago>montoPendiente) { setError(`El total (S/${totalPago}) supera la deuda (S/${montoPendiente})`); return }
-    if(vales20Pend>0&&vales20>vales20Pend) { setError(`Máximo ${vales20Pend} vales S/20`); return }
-    if(vales43Pend>0&&vales43>vales43Pend) { setError(`Máximo ${vales43Pend} vales S/43`); return }
+    const totalPago = monto
+    if(totalPago>montoPendiente) { setError(`El total (S/${totalPago}) supera la deuda (S/${montoPendiente})`); return }
     if(balones>(parseInt(selected.balones_pendiente)||0)) { setError(`Máximo ${selected.balones_pendiente} balones`); return }
 
     setSaving(true); setError('')
     const nuevoMonto = Math.max(0,montoPendiente-totalPago)
     const nuevoBal = Math.max(0,(parseInt(selected.balones_pendiente)||0)-balones)
-    const nuevoV20 = Math.max(0,vales20Pend-vales20)
-    const nuevoV43 = Math.max(0,vales43Pend-vales43)
-    const liquidada = nuevoMonto===0&&nuevoBal===0&&nuevoV20===0&&nuevoV43===0
-    const metodo = [montoEf>0&&'efectivo',montoYa>0&&'yape',(vales20>0||vales43>0)&&'vale'].filter(Boolean)
-    const metodoLabel = metodo.length>1?'mixto':(metodo[0]||'efectivo')
-    const entradaHistorial = { tipo:'pago', fecha:pagoForm.fecha, monto:totalPago, balones, vales_20:vales20, vales_43:vales43, metodo_pago:metodoLabel, notas:pagoForm.notas||null }
+    const liquidada = nuevoMonto===0&&nuevoBal===0
+    const metodoLabel = montoEf>0?'efectivo':'balon'
+    const entradaHistorial = { tipo:'pago', fecha:pagoForm.fecha, monto:totalPago, balones, metodo_pago:metodoLabel, notas:pagoForm.notas||null }
 
     // Si pagó con balones → sumarlos al almacén
     const ops = [
       supabase.from('deudas').update({
         monto_pendiente:nuevoMonto, balones_pendiente:nuevoBal,
-        vales_20_pendiente:nuevoV20, vales_43_pendiente:nuevoV43,
         cantidad_pendiente:nuevoBal,
         estado:liquidada?'liquidada':'pagada_parcial',
         historial:[...(selected.historial||[]), entradaHistorial],
@@ -372,8 +365,7 @@ export default function Deudas() {
           fecha:new Date().toISOString(),
           cantidad:1, precio_unitario:totalPago,
           metodo_pago:'cobro_credito',
-          monto_efectivo: montoEf, monto_yape: montoYa,
-          vales_20: vales20||null, vales_43: vales43||null,
+          monto_efectivo: montoEf,
           notas:`Cobro deuda — ${selected.nombre_deudor}${balones>0?` (${balones} bal. devuelto${balones>1?'s':''})`:''} [${metodoLabel}]`,
           usuario_id:perfil?.id||null
         }))
@@ -410,8 +402,7 @@ export default function Deudas() {
       monto_original:parseFloat(editForm.monto_pendiente)||0,
       balones_pendiente:parseInt(editForm.balones_pendiente)||0,
       cantidad_pendiente:parseInt(editForm.balones_pendiente)||0,
-      vales_20_pendiente:parseInt(editForm.vales_20_pendiente)||0,
-      vales_43_pendiente:parseInt(editForm.vales_43_pendiente)||0,
+      vales_20_pendiente:0, vales_43_pendiente:0, // se consolidan siempre en monto_pendiente (Plata)
       fecha_deuda:editForm.fecha_deuda,
       notas:editForm.notas,
       updated_at:new Date().toISOString()
@@ -461,8 +452,6 @@ export default function Deudas() {
 
   const totalDinero   = totalesGlobal.dinero
   const totalBalones  = totalesGlobal.balones
-  const totalVales20  = totalesGlobal.vales20
-  const totalVales43  = totalesGlobal.vales43
   const totalDeudores = totalesGlobal.deudores
   const urgentes      = totalesGlobal.urgentes
 
@@ -480,20 +469,19 @@ export default function Deudas() {
     const hoy = new Date().toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric' })
     const filas = deudasParaImprimir.map((d, i) => {
       const dias = differenceInDays(new Date(), new Date(d.fecha_deuda))
-      const importancia = dias >= 60 ? '🔴 Urgente' : dias >= 30 ? '🟠 Atrasado' : dias >= 7 ? '🟡 Reciente' : '⚪ Normal'
-      const debe = resumenDeuda(d)
-      const anotadoPor = d.notas ? d.notas : '—'
+      const plata = plataPendiente(d)
       return `<tr style="border-bottom:1px solid #ddd">
         <td style="padding:8px 10px;text-align:center">${i+1}</td>
         <td style="padding:8px 10px;font-weight:600">${d.nombre_deudor}</td>
-        <td style="padding:8px 10px;color:${dias>=60?'#c0392b':dias>=30?'#e67e22':'#333'};font-weight:600">${debe}</td>
-        <td style="padding:8px 10px;text-align:center;font-weight:600;color:${dias>=60?'#c0392b':dias>=30?'#e67e22':dias>=7?'#f39c12':'#333'}">${dias}d</td>
+        <td style="padding:8px 10px;text-align:center;font-weight:600;color:#e67e22">${parseInt(d.balones_pendiente)||0}</td>
+        <td style="padding:8px 10px;text-align:right;font-weight:600;color:${dias>=60?'#c0392b':dias>=30?'#e67e22':'#333'}">${plata>0?`S/${plata.toLocaleString('es-PE')}`:'—'}</td>
         <td style="padding:8px 10px;font-size:11px;color:#666;word-wrap:break-word;white-space:normal">${d.notas||'—'}</td>
+        <td style="padding:8px 10px;text-align:center;font-weight:600;color:${dias>=60?'#c0392b':dias>=30?'#e67e22':dias>=7?'#f39c12':'#333'}">${dias}d</td>
         <td style="padding:8px 10px;font-size:12px">${format(new Date(d.fecha_deuda+'T12:00:00'),'dd/MM/yyyy',{locale:es})}</td>
       </tr>`
     }).join('')
 
-    const totalDineroImp = deudasParaImprimir.reduce((a,d)=>a+(parseFloat(d.monto_pendiente)||0),0)
+    const totalDineroImp = deudasParaImprimir.reduce((a,d)=>a+plataPendiente(d),0)
     const totalBalonesImp = deudasParaImprimir.reduce((a,d)=>a+(parseInt(d.balones_pendiente)||0),0)
 
     const win = window.open('', '_blank')
@@ -517,10 +505,11 @@ export default function Deudas() {
       <table>
         <thead><tr>
           <th style="width:40px">#</th>
-          <th>Cliente</th>
-          <th>Debe</th>
+          <th>Nombre</th>
+          <th style="width:70px">Balón</th>
+          <th style="width:90px">Plata</th>
+          <th>Observación</th>
           <th style="width:60px">Días</th>
-          <th>Notas</th>
           <th style="width:90px">Fecha deuda</th>
         </tr></thead>
         <tbody>${filas}</tbody>
@@ -551,15 +540,13 @@ export default function Deudas() {
       const dias = differenceInDays(new Date(), new Date(d.fecha_deuda))
       return {
         Cliente: d.nombre_deudor,
-        'Monto pendiente S/': parseFloat(d.monto_pendiente)||0,
-        'Balones pendientes': parseInt(d.balones_pendiente)||0,
-        'Vales S/20 pendientes': parseInt(d.vales_20_pendiente)||0,
-        'Vales S/43 pendientes': parseInt(d.vales_43_pendiente)||0,
+        'Balón': parseInt(d.balones_pendiente)||0,
+        'Plata S/': plataPendiente(d),
         'Días de atraso': dias,
         Urgencia: dias>=60?'Urgente':dias>=30?'Atrasado':dias>=7?'Reciente':'Normal',
         Estado: d.estado,
         'Fecha deuda': format(new Date(d.fecha_deuda+'T12:00:00'),'dd/MM/yyyy',{locale:es}),
-        Notas: d.notas || '',
+        Observación: d.notas || '',
       }
     })
     exportarExcel(filas, `deudas_${hoyPeru()}`, 'Deudas')
@@ -608,19 +595,13 @@ export default function Deudas() {
         {totalDinero > 0 && (
           <div style={cardStyle}>
             <p style={{fontSize:22,fontWeight:700,color:'#f87171',margin:0}}>S/{totalDinero.toLocaleString('es-PE',{maximumFractionDigits:0})}</p>
-            <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Deudas en dinero</p>
+            <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Plata pendiente</p>
           </div>
         )}
         {totalBalones > 0 && (
           <div style={cardStyle}>
             <p style={{fontSize:22,fontWeight:700,color:'#fb923c',margin:0}}>{totalBalones} bal.</p>
             <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Balones prestados</p>
-          </div>
-        )}
-        {(totalVales20 > 0 || totalVales43 > 0) && (
-          <div style={cardStyle}>
-            <p style={{fontSize:22,fontWeight:700,color:'#eab308',margin:0}}>{totalVales20+totalVales43}</p>
-            <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Vales pendientes</p>
           </div>
         )}
         <div style={cardStyle}>
@@ -689,77 +670,75 @@ export default function Deudas() {
             <p style={{fontSize:13,margin:0}}>Sin deudas registradas</p>
           </div>
         ):(
-          <div>
-            {deudasFiltradas.map(d => {
-              const dias = differenceInDays(new Date(), new Date(d.fecha_deuda))
-              const u = urgenciaStyle(dias, d.estado)
-              return (
-                <div key={d.id} style={{padding:'14px 20px',borderBottom:'1px solid var(--app-card-border)',background:u.bg,transition:'background 0.15s'}}>
-                  <div style={{display:'flex',alignItems:'flex-start',gap:12}}>
-                    {/* Avatar */}
-                    <div style={{width:38,height:38,borderRadius:'50%',background:`color-mix(in srgb, ${u.color} 12%, transparent)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontWeight:600,color:u.color,flexShrink:0}}>
-                      {d.nombre_deudor?.charAt(0)?.toUpperCase()}
-                    </div>
-
-                    <div style={{flex:1,minWidth:0}}>
-                      {/* Nombre + monto */}
-                      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8,marginBottom:4}}>
-                        <p style={{fontSize:14,fontWeight:600,color:'var(--app-text)',margin:0}}>{d.nombre_deudor}</p>
-                        <p style={{fontSize:14,fontWeight:700,color:d.estado==='liquidada'?'#22c55e':'#f87171',margin:0,flexShrink:0,textAlign:'right'}}>{resumenDeuda(d)}</p>
-                      </div>
-
-                      {/* Estado + días */}
-                      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6,flexWrap:'wrap'}}>
-                        <span style={{
-                          fontSize:11,padding:'2px 8px',borderRadius:20,fontWeight:500,
-                          background:d.estado==='liquidada'?'rgba(34,197,94,0.12)':d.estado==='pagada_parcial'?'rgba(234,179,8,0.12)':'rgba(239,68,68,0.12)',
-                          color:d.estado==='liquidada'?'#22c55e':d.estado==='pagada_parcial'?'#eab308':'#f87171',
-                          border:`1px solid ${d.estado==='liquidada'?'rgba(34,197,94,0.3)':d.estado==='pagada_parcial'?'rgba(234,179,8,0.3)':'rgba(239,68,68,0.3)'}`
-                        }}>
-                          {d.estado==='liquidada'?'✅ Liquidada':d.estado==='pagada_parcial'?'⚠️ Parcial':'🔴 Activa'}
-                        </span>
-                        {u.label&&(
-                          <span style={{fontSize:11,color:u.color,display:'flex',alignItems:'center',gap:3}}>
-                            <Clock style={{width:11,height:11}}/>{u.label}
+          <div style={{overflowX:'auto'}}>
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+              <thead>
+                <tr style={{borderBottom:'2px solid var(--app-card-border)'}}>
+                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>Nombre</th>
+                  <th style={{textAlign:'center',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>Balón</th>
+                  <th style={{textAlign:'right',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>Plata</th>
+                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)'}}>Observación</th>
+                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>Estado</th>
+                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deudasFiltradas.map(d => {
+                  const dias = differenceInDays(new Date(), new Date(d.fecha_deuda))
+                  const u = urgenciaStyle(dias, d.estado)
+                  const balon = parseInt(d.balones_pendiente)||0
+                  const plata = plataPendiente(d)
+                  return (
+                    <tr key={d.id} style={{borderBottom:'1px solid var(--app-card-border)',background:u.bg}}>
+                      <td style={{padding:'10px 16px',fontWeight:600,color:'var(--app-text)',whiteSpace:'nowrap'}}>{d.nombre_deudor}</td>
+                      <td style={{padding:'10px 16px',textAlign:'center',fontWeight:600,color:balon>0?'#fb923c':'var(--app-text-secondary)'}}>{balon>0?balon:'—'}</td>
+                      <td style={{padding:'10px 16px',textAlign:'right',fontWeight:600,color:plata>0?(d.estado==='liquidada'?'#22c55e':'#f87171'):'var(--app-text-secondary)',whiteSpace:'nowrap'}}>{plata>0?`S/${plata.toLocaleString('es-PE')}`:'—'}</td>
+                      <td style={{padding:'10px 16px',color:'var(--app-text-secondary)',fontStyle:d.notas?'italic':'normal',maxWidth:220}}>{d.notas||'—'}</td>
+                      <td style={{padding:'10px 16px',whiteSpace:'nowrap'}}>
+                        <div style={{display:'flex',flexDirection:'column',gap:3}}>
+                          <span style={{
+                            fontSize:11,padding:'2px 8px',borderRadius:20,fontWeight:500,width:'fit-content',
+                            background:d.estado==='liquidada'?'rgba(34,197,94,0.12)':d.estado==='pagada_parcial'?'rgba(234,179,8,0.12)':'rgba(239,68,68,0.12)',
+                            color:d.estado==='liquidada'?'#22c55e':d.estado==='pagada_parcial'?'#eab308':'#f87171',
+                            border:`1px solid ${d.estado==='liquidada'?'rgba(34,197,94,0.3)':d.estado==='pagada_parcial'?'rgba(234,179,8,0.3)':'rgba(239,68,68,0.3)'}`
+                          }}>
+                            {d.estado==='liquidada'?'✅ Liquidada':d.estado==='pagada_parcial'?'⚠️ Parcial':'🔴 Activa'}
                           </span>
-                        )}
-                        <span style={{fontSize:11,color:'var(--app-text-secondary)'}}>
-                          {format(new Date(d.fecha_deuda+'T12:00:00'),'dd/MM/yyyy',{locale:es})}
-                        </span>
-                      </div>
-
-                      {d.notas&&<p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 6px',fontStyle:'italic'}}>📝 "{d.notas}"</p>}
-
-                      {/* Acciones */}
-                      <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
-                        <button onClick={()=>{setSelected(d);setError('');cargarHistorialCompleto(d.nombre_deudor);setModal('historial')}}
-                          style={{fontSize:11,padding:'4px 10px',borderRadius:6,background:'rgba(59,130,246,0.1)',border:'1px solid rgba(59,130,246,0.3)',color:'#60a5fa',cursor:'pointer'}}>
-                          📋 Historial
-                        </button>
-                        {d.estado!=='liquidada'&&(
-                          <button onClick={()=>{setSelected(d);setPagoForm(emptyPagoForm);setError('');setModal('pago')}}
-                            style={{fontSize:11,padding:'4px 10px',borderRadius:6,background:'rgba(34,197,94,0.1)',border:'1px solid rgba(34,197,94,0.3)',color:'#22c55e',cursor:'pointer'}}>
-                            ✓ Registrar pago
+                          {u.label&&<span style={{fontSize:10,color:u.color,display:'flex',alignItems:'center',gap:3}}><Clock style={{width:10,height:10}}/>{u.label}</span>}
+                          <span style={{fontSize:10,color:'var(--app-text-secondary)'}}>{format(new Date(d.fecha_deuda+'T12:00:00'),'dd/MM/yyyy',{locale:es})}</span>
+                        </div>
+                      </td>
+                      <td style={{padding:'10px 16px'}}>
+                        <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                          <button onClick={()=>{setSelected(d);setError('');cargarHistorialCompleto(d.nombre_deudor);setModal('historial')}}
+                            style={{fontSize:11,padding:'4px 10px',borderRadius:6,background:'rgba(59,130,246,0.1)',border:'1px solid rgba(59,130,246,0.3)',color:'#60a5fa',cursor:'pointer',whiteSpace:'nowrap'}}>
+                            📋 Historial
                           </button>
-                        )}
-                        {isAdmin&&(
-                          <button onClick={()=>{setSelected(d);setEditForm({monto_pendiente:d.monto_pendiente||'',balones_pendiente:d.balones_pendiente||'',vales_20_pendiente:d.vales_20_pendiente||'',vales_43_pendiente:d.vales_43_pendiente||'',fecha_deuda:d.fecha_deuda,notas:d.notas||''});setError('');setModal('editar')}}
-                            style={{fontSize:11,padding:'4px 10px',borderRadius:6,background:'var(--app-card-bg-alt)',border:'1px solid var(--app-card-border)',color:'var(--app-text-secondary)',cursor:'pointer'}}>
-                            ✏️ Editar
-                          </button>
-                        )}
-                        {isAdmin&&(
-                          <button onClick={()=>eliminarDeuda(d.id)}
-                            style={{fontSize:11,padding:'4px 10px',borderRadius:6,background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.25)',color:'#f87171',cursor:'pointer'}}>
-                            🗑️ Borrar
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
+                          {d.estado!=='liquidada'&&(
+                            <button onClick={()=>{setSelected(d);setPagoForm(emptyPagoForm);setError('');setModal('pago')}}
+                              style={{fontSize:11,padding:'4px 10px',borderRadius:6,background:'rgba(34,197,94,0.1)',border:'1px solid rgba(34,197,94,0.3)',color:'#22c55e',cursor:'pointer',whiteSpace:'nowrap'}}>
+                              ✓ Pagar
+                            </button>
+                          )}
+                          {isAdmin&&(
+                            <button onClick={()=>{setSelected(d);setEditForm({monto_pendiente:plataPendiente(d)||'',balones_pendiente:d.balones_pendiente||'',fecha_deuda:d.fecha_deuda,notas:d.notas||''});setError('');setModal('editar')}}
+                              style={{fontSize:11,padding:'4px 10px',borderRadius:6,background:'var(--app-card-bg-alt)',border:'1px solid var(--app-card-border)',color:'var(--app-text-secondary)',cursor:'pointer',whiteSpace:'nowrap'}}>
+                              ✏️
+                            </button>
+                          )}
+                          {isAdmin&&(
+                            <button onClick={()=>eliminarDeuda(d.id)}
+                              style={{fontSize:11,padding:'4px 10px',borderRadius:6,background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.25)',color:'#f87171',cursor:'pointer',whiteSpace:'nowrap'}}>
+                              🗑️
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         )}
         {/* Sentinel para scroll infinito */}
@@ -798,39 +777,18 @@ export default function Deudas() {
 
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
               {parseFloat(selected.monto_pendiente)>0&&(
-                <>
-                  <div>
-                    <label className="label">💵 Efectivo S/</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{color:'var(--app-text-secondary)'}}>S/</span>
-                      <input type="number" min="0" max={selected.monto_pendiente} className="input" style={{paddingLeft:'2rem'}} value={pagoForm.monto_efectivo} onChange={e=>setPagoForm(f=>({...f,monto_efectivo:e.target.value}))} placeholder="0"/>
-                    </div>
+                <div>
+                  <label className="label">💵 Efectivo S/</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{color:'var(--app-text-secondary)'}}>S/</span>
+                    <input type="number" min="0" max={selected.monto_pendiente} className="input" style={{paddingLeft:'2rem'}} value={pagoForm.monto_efectivo} onChange={e=>setPagoForm(f=>({...f,monto_efectivo:e.target.value}))} placeholder="0"/>
                   </div>
-                  <div>
-                    <label className="label">📱 Yape S/</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{color:'var(--app-text-secondary)'}}>S/</span>
-                      <input type="number" min="0" max={selected.monto_pendiente} className="input" style={{paddingLeft:'2rem'}} value={pagoForm.monto_yape} onChange={e=>setPagoForm(f=>({...f,monto_yape:e.target.value}))} placeholder="0"/>
-                    </div>
-                  </div>
-                </>
+                </div>
               )}
               {parseInt(selected.balones_pendiente)>0&&(
                 <div>
-                  <label className="label">Balones que devuelve</label>
+                  <label className="label">Balón que devuelve</label>
                   <input type="number" min="0" max={selected.balones_pendiente} className="input" value={pagoForm.balones} onChange={e=>setPagoForm(f=>({...f,balones:e.target.value}))} placeholder={`Máx: ${selected.balones_pendiente}`}/>
-                </div>
-              )}
-              {parseInt(selected.vales_20_pendiente)>0&&(
-                <div>
-                  <label className="label">Vales S/20 que entrega</label>
-                  <input type="number" min="0" max={selected.vales_20_pendiente} className="input" value={pagoForm.vales_20} onChange={e=>setPagoForm(f=>({...f,vales_20:e.target.value}))} placeholder={`Máx: ${selected.vales_20_pendiente}`}/>
-                </div>
-              )}
-              {parseInt(selected.vales_43_pendiente)>0&&(
-                <div>
-                  <label className="label">Vales S/43 que entrega</label>
-                  <input type="number" min="0" max={selected.vales_43_pendiente} className="input" value={pagoForm.vales_43} onChange={e=>setPagoForm(f=>({...f,vales_43:e.target.value}))} placeholder={`Máx: ${selected.vales_43_pendiente}`}/>
                 </div>
               )}
             </div>
@@ -846,16 +804,13 @@ export default function Deudas() {
             </div>
 
             {/* Preview pago */}
-            {((parseFloat(pagoForm.monto_efectivo)||0)+(parseFloat(pagoForm.monto_yape)||0)||parseInt(pagoForm.balones)||parseInt(pagoForm.vales_20)||parseInt(pagoForm.vales_43))>0&&(()=>{
-              const m=(parseFloat(pagoForm.monto_efectivo)||0)+(parseFloat(pagoForm.monto_yape)||0)
+            {((parseFloat(pagoForm.monto_efectivo)||0)||parseInt(pagoForm.balones))>0&&(()=>{
+              const m=(parseFloat(pagoForm.monto_efectivo)||0)
               const b=parseInt(pagoForm.balones)||0
-              const v20=parseInt(pagoForm.vales_20)||0
-              const v43=parseInt(pagoForm.vales_43)||0
-              const totalV=(v20*20)+(v43*43)
-              const totalPago=m+totalV
+              const totalPago=m
               const quedaMonto=Math.max(0,(parseFloat(selected.monto_pendiente)||0)-totalPago)
               const quedaBal=Math.max(0,(parseInt(selected.balones_pendiente)||0)-b)
-              const liquidada=quedaMonto===0&&quedaBal===0&&Math.max(0,(parseInt(selected.vales_20_pendiente)||0)-v20)===0&&Math.max(0,(parseInt(selected.vales_43_pendiente)||0)-v43)===0
+              const liquidada=quedaMonto===0&&quedaBal===0
               return(
                 <div style={{background:liquidada?'rgba(34,197,94,0.08)':'rgba(59,130,246,0.08)',border:`1px solid ${liquidada?'rgba(34,197,94,0.3)':'rgba(59,130,246,0.3)'}`,borderRadius:8,padding:'10px 14px',fontSize:12}}>
                   {liquidada
@@ -1104,10 +1059,8 @@ export default function Deudas() {
           <div className="space-y-4">
             {error&&<div style={{display:'flex',alignItems:'center',gap:8,background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#f87171',borderRadius:8,padding:'8px 12px',fontSize:13}}><AlertCircle style={{width:16,height:16}}/>{error}</div>}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <div><label className="label">Monto pendiente S/</label><input type="number" min="0" className="input" value={editForm.monto_pendiente} onChange={e=>setEditForm(f=>({...f,monto_pendiente:e.target.value}))}/></div>
-              <div><label className="label">Balones pendientes</label><input type="number" min="0" className="input" value={editForm.balones_pendiente} onChange={e=>setEditForm(f=>({...f,balones_pendiente:e.target.value}))}/></div>
-              <div><label className="label">Vales S/20 pendientes</label><input type="number" min="0" className="input" value={editForm.vales_20_pendiente} onChange={e=>setEditForm(f=>({...f,vales_20_pendiente:e.target.value}))}/></div>
-              <div><label className="label">Vales S/43 pendientes</label><input type="number" min="0" className="input" value={editForm.vales_43_pendiente} onChange={e=>setEditForm(f=>({...f,vales_43_pendiente:e.target.value}))}/></div>
+              <div><label className="label">Plata pendiente S/</label><input type="number" min="0" className="input" value={editForm.monto_pendiente} onChange={e=>setEditForm(f=>({...f,monto_pendiente:e.target.value}))}/></div>
+              <div><label className="label">Balón pendiente</label><input type="number" min="0" className="input" value={editForm.balones_pendiente} onChange={e=>setEditForm(f=>({...f,balones_pendiente:e.target.value}))}/></div>
             </div>
             <div><label className="label">Fecha</label><input type="date" className="input" value={editForm.fecha_deuda} onChange={e=>setEditForm(f=>({...f,fecha_deuda:e.target.value}))}/></div>
             <div><label className="label">Notas</label><textarea className="input" rows={2} value={editForm.notas} onChange={e=>setEditForm(f=>({...f,notas:e.target.value}))}/></div>
@@ -1166,13 +1119,12 @@ export default function Deudas() {
             </div>
 
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              <div><label className="label">Monto S/ (dinero)</label><input type="number" min="0" className="input" value={deudaForm.monto} onChange={e=>setDeudaForm(f=>({...f,monto:e.target.value}))} placeholder="0"/></div>
-              <div><label className="label">Balones a devolver</label><input type="number" min="0" className="input" value={deudaForm.balones} onChange={e=>setDeudaForm(f=>({...f,balones:e.target.value}))} placeholder="0"/></div>
-              <div><label className="label">Vales S/20</label><input type="number" min="0" className="input" value={deudaForm.vales_20} onChange={e=>setDeudaForm(f=>({...f,vales_20:e.target.value}))} placeholder="0"/></div>
-              <div><label className="label">Vales S/43</label><input type="number" min="0" className="input" value={deudaForm.vales_43} onChange={e=>setDeudaForm(f=>({...f,vales_43:e.target.value}))} placeholder="0"/></div>
+              <div><label className="label">Plata S/</label><input type="number" min="0" className="input" value={deudaForm.monto} onChange={e=>setDeudaForm(f=>({...f,monto:e.target.value}))} placeholder="0"/></div>
+              <div><label className="label">Balón a devolver</label><input type="number" min="0" className="input" value={deudaForm.balones} onChange={e=>setDeudaForm(f=>({...f,balones:e.target.value}))} placeholder="0"/></div>
             </div>
+            <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'-6px 0 0'}}>💡 Si debe un vale, conviértelo a plata (ej. 1 vale S/20 → pon 20 en "Plata").</p>
             <div><label className="label">Fecha</label><input type="date" className="input" value={deudaForm.fecha} onChange={e=>setDeudaForm(f=>({...f,fecha:e.target.value}))}/></div>
-            <div><label className="label">Notas</label><input className="input" value={deudaForm.notas} onChange={e=>setDeudaForm(f=>({...f,notas:e.target.value}))} placeholder="Contexto de la deuda..."/></div>
+            <div><label className="label">Observación</label><input className="input" value={deudaForm.notas} onChange={e=>setDeudaForm(f=>({...f,notas:e.target.value}))} placeholder="Contexto de la deuda..."/></div>
 
             <div className="flex gap-3 pt-2">
               <button onClick={()=>setModal(null)} className="btn-secondary flex-1">Cancelar</button>
