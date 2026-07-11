@@ -48,6 +48,22 @@ export default function Deudas() {
   const { toasts, toast } = useToast()
   const isAdmin = perfil?.rol === 'admin'
 
+  // ─── Permisos configurables para trabajadores (el admin siempre ve todo) ────
+  const [permisos, setPermisos] = useState({})
+  const [modalPermisos, setModalPermisos] = useState(false)
+  const cargarPermisos = useCallback(async () => {
+    const { data } = await supabase.from('permisos_trabajador').select('clave,habilitado')
+    const mapa = {}
+    ;(data||[]).forEach(p => { mapa[p.clave] = p.habilitado })
+    setPermisos(mapa)
+  }, [])
+  useEffect(() => { cargarPermisos() }, [cargarPermisos])
+  const puedeVer = useCallback((clave) => isAdmin || !!permisos[clave], [isAdmin, permisos])
+  const togglePermiso = useCallback(async (clave, valorActual) => {
+    setPermisos(p => ({ ...p, [clave]: !valorActual }))
+    await supabase.from('permisos_trabajador').update({ habilitado:!valorActual, updated_at:new Date().toISOString() }).eq('clave', clave)
+  }, [])
+
   const [deudas, setDeudas] = useState([])
   const [clientes, setClientes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -622,13 +638,17 @@ export default function Deudas() {
           <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>💡 Doble clic (o doble toque) en una fila abre su historial completo</p>
         </div>
         <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-          <button onClick={imprimirReporte} className="btn-secondary" style={{fontSize:12}}>
-            <Printer style={{width:13,height:13}}/> <span className="hidden sm:inline">Imprimir reporte</span><span className="sm:hidden">Imprimir</span>
-          </button>
-          <button onClick={exportarExcelDeudas} className="btn-secondary" style={{fontSize:12}}>
-            <FileSpreadsheet style={{width:13,height:13}}/> Excel
-          </button>
-          {isAdmin && (
+          {puedeVer('deudas_ver_imprimir') && (
+            <button onClick={imprimirReporte} className="btn-secondary" style={{fontSize:12}}>
+              <Printer style={{width:13,height:13}}/> <span className="hidden sm:inline">Imprimir reporte</span><span className="sm:hidden">Imprimir</span>
+            </button>
+          )}
+          {puedeVer('deudas_ver_excel') && (
+            <button onClick={exportarExcelDeudas} className="btn-secondary" style={{fontSize:12}}>
+              <FileSpreadsheet style={{width:13,height:13}}/> Excel
+            </button>
+          )}
+          {puedeVer('deudas_ver_deuda_manual') && (
             <button onClick={()=>{setDeudaForm(emptyDeudaForm);setDeudaPendiente(null);setSelected(null);setError('');cargarClientes();setModal('deuda')}} className="btn-secondary" style={{fontSize:12}}>
               <span className="hidden sm:inline">+ Registrar deuda manual</span><span className="sm:hidden">+ Deuda manual</span>
             </button>
@@ -636,6 +656,11 @@ export default function Deudas() {
           <button onClick={()=>{setBusquedaPago('');setResultadosPago([]);setModal('buscar-pago')}} className="btn-primary" style={{fontSize:12}}>
             💰 Registrar pago
           </button>
+          {isAdmin && (
+            <button onClick={()=>setModalPermisos(true)} className="btn-secondary" style={{fontSize:12}} title="Configurar qué ven los trabajadores">
+              ⚙️
+            </button>
+          )}
         </div>
       </div>
 
@@ -781,13 +806,13 @@ export default function Deudas() {
                               ✓ Pagar
                             </button>
                           )}
-                          {isAdmin&&(
+                          {puedeVer('deudas_ver_editar')&&(
                             <button onClick={()=>{setSelected(d);setEditForm({monto_pendiente:plataPendiente(d)||'',balones_pendiente:d.balones_pendiente||'',fecha_deuda:d.fecha_deuda,notas:d.notas||''});setError('');setModal('editar')}}
                               style={{fontSize:11,padding:'4px 10px',borderRadius:6,background:'var(--app-card-bg-alt)',border:'1px solid var(--app-card-border)',color:'var(--app-text-secondary)',cursor:'pointer',whiteSpace:'nowrap'}}>
                               ✏️
                             </button>
                           )}
-                          {isAdmin&&(
+                          {puedeVer('deudas_ver_eliminar')&&(
                             <button onClick={()=>eliminarDeuda(d.id)}
                               style={{fontSize:11,padding:'4px 10px',borderRadius:6,background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.25)',color:'#f87171',cursor:'pointer',whiteSpace:'nowrap'}}>
                               🗑️
@@ -862,13 +887,13 @@ export default function Deudas() {
                         ✓ Pagar
                       </button>
                     )}
-                    {isAdmin&&(
+                    {puedeVer('deudas_ver_editar')&&(
                       <button onClick={()=>{setSelected(d);setEditForm({monto_pendiente:plataPendiente(d)||'',balones_pendiente:d.balones_pendiente||'',fecha_deuda:d.fecha_deuda,notas:d.notas||''});setError('');setModal('editar')}}
                         style={{fontSize:11,padding:'5px 10px',borderRadius:6,background:'var(--app-card-bg-alt)',border:'1px solid var(--app-card-border)',color:'var(--app-text-secondary)',cursor:'pointer'}}>
                         ✏️ Editar
                       </button>
                     )}
-                    {isAdmin&&(
+                    {puedeVer('deudas_ver_eliminar')&&(
                       <button onClick={()=>eliminarDeuda(d.id)}
                         style={{fontSize:11,padding:'5px 10px',borderRadius:6,background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.25)',color:'#f87171',cursor:'pointer'}}>
                         🗑️
@@ -1194,7 +1219,7 @@ export default function Deudas() {
       })()}
 
       {/* ── Modal editar (solo admin) ── */}
-      {modal==='editar'&&selected&&isAdmin&&(
+      {modal==='editar'&&selected&&puedeVer('deudas_ver_editar')&&(
         <Modal title="Editar deuda" onClose={()=>setModal(null)}>
           <div className="space-y-4">
             {error&&<div style={{display:'flex',alignItems:'center',gap:8,background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#f87171',borderRadius:8,padding:'8px 12px',fontSize:13}}><AlertCircle style={{width:16,height:16}}/>{error}</div>}
@@ -1275,7 +1300,7 @@ export default function Deudas() {
       )}
 
       {/* ── Modal registrar deuda manual (solo admin) ── */}
-      {modal==='deuda'&&isAdmin&&(
+      {modal==='deuda'&&puedeVer('deudas_ver_deuda_manual')&&(
         <Modal title="Registrar deuda manual" onClose={()=>setModal(null)}>
           <div className="space-y-4">
             <div style={{background:'rgba(234,179,8,0.08)',border:'1px solid rgba(234,179,8,0.25)',borderRadius:8,padding:'10px 14px',fontSize:12,color:'var(--app-text-secondary)'}}>
@@ -1331,6 +1356,41 @@ export default function Deudas() {
             <div className="flex gap-3 pt-2">
               <button onClick={()=>setModal(null)} className="btn-secondary flex-1">Cancelar</button>
               <button onClick={()=>guardarDeuda(false)} disabled={saving} className="btn-primary flex-1 justify-center">{saving?'Guardando...':'✓ Registrar'}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Modal Permisos (solo admin) ── */}
+      {modalPermisos&&isAdmin&&(
+        <Modal title="⚙️ Qué ven los trabajadores en Deudas" onClose={()=>setModalPermisos(false)}>
+          <div className="space-y-3">
+            <p style={{fontSize:12,color:'var(--app-text-secondary)',margin:0}}>
+              Tú (admin) siempre ves todo. Esto solo controla qué botones ven los demás usuarios.
+            </p>
+            {[
+              ['deudas_ver_imprimir','Imprimir reporte'],
+              ['deudas_ver_excel','Exportar a Excel'],
+              ['deudas_ver_deuda_manual','Registrar deuda manual'],
+              ['deudas_ver_editar','Editar una deuda'],
+              ['deudas_ver_eliminar','Eliminar una deuda'],
+            ].map(([clave,label])=>(
+              <div key={clave} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderRadius:8,background:'var(--app-card-bg-alt)',border:'1px solid var(--app-card-border)'}}>
+                <span style={{fontSize:13,color:'var(--app-text)'}}>{label}</span>
+                <button onClick={()=>togglePermiso(clave,!!permisos[clave])}
+                  style={{
+                    width:42,height:24,borderRadius:20,border:'none',cursor:'pointer',position:'relative',
+                    background:permisos[clave]?'#22c55e':'var(--app-card-border)',transition:'background 0.15s'
+                  }}>
+                  <span style={{
+                    position:'absolute',top:3,left:permisos[clave]?21:3,width:18,height:18,borderRadius:'50%',
+                    background:'#fff',transition:'left 0.15s'
+                  }}/>
+                </button>
+              </div>
+            ))}
+            <div className="pt-2">
+              <button onClick={()=>setModalPermisos(false)} className="btn-primary w-full justify-center">Listo</button>
             </div>
           </div>
         </Modal>
