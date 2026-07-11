@@ -756,16 +756,16 @@ export default function Deudas() {
           </div>
         ):(
           <>
-          <div className="hidden lg:block" style={{overflowX:'auto'}}>
+          <div className="hidden lg:block" style={{overflowX:'auto',overflowY:'auto',maxHeight:'70vh'}}>
             <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
-              <thead>
-                <tr style={{borderBottom:'2px solid var(--app-card-border)'}}>
-                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>Fecha</th>
-                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>Nombre</th>
-                  <th style={{textAlign:'center',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>Balón</th>
-                  <th style={{textAlign:'right',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>Plata</th>
-                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>Estado</th>
-                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>Acciones</th>
+              <thead style={{position:'sticky',top:0,zIndex:1}}>
+                <tr style={{borderBottom:'2px solid var(--app-card-border)',background:'var(--app-card-bg)'}}>
+                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)',background:'var(--app-card-bg)'}}>Fecha</th>
+                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)',background:'var(--app-card-bg)'}}>Nombre</th>
+                  <th style={{textAlign:'center',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)',background:'var(--app-card-bg)'}}>Balón</th>
+                  <th style={{textAlign:'right',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)',background:'var(--app-card-bg)'}}>Plata</th>
+                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)',background:'var(--app-card-bg)'}}>Estado</th>
+                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',background:'var(--app-card-bg)'}}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
