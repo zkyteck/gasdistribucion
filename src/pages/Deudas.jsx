@@ -667,7 +667,7 @@ export default function Deudas() {
       </div>
 
       {/* Alerta urgentes */}
-      {urgentes > 0 && (
+      {urgentes > 0 && puedeVer('deudas_ver_alerta_atrasadas') && (
         <div style={{display:'flex',alignItems:'center',gap:10,background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:10,padding:'12px 16px'}}>
           <TrendingDown style={{width:18,height:18,color:'#f87171',flexShrink:0}}/>
           <div>
@@ -1372,6 +1372,7 @@ export default function Deudas() {
               Tú (admin) siempre ves todo. Esto solo controla qué botones ven los demás usuarios.
             </p>
             {[
+              ['deudas_ver_alerta_atrasadas','Ver alerta de deudas atrasadas (+30 días)'],
               ['deudas_ver_resumen','Ver resumen (plata/balones/deudores totales)'],
               ['deudas_ver_imprimir','Imprimir reporte'],
               ['deudas_ver_excel','Exportar a Excel'],
