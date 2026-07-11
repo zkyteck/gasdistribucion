@@ -629,7 +629,7 @@ export default function Deudas() {
   const cardStyle = { background:'var(--app-card-bg)', border:'1px solid var(--app-card-border)', borderRadius:12, padding:'14px 16px' }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 lg:space-y-0 lg:flex lg:flex-col lg:gap-5 lg:h-[calc(100vh-100px)] lg:overflow-hidden">
       <style>{`@keyframes fadeInUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
 
       {/* Header */}
@@ -743,14 +743,15 @@ export default function Deudas() {
       </div>{/* fin sticky bar */}
 
       {/* Lista */}
-      <div style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:12,overflow:'hidden'}}>
-        <div style={{padding:'12px 20px',borderBottom:'1px solid var(--app-card-border)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+      <div className="lg:flex-1 lg:min-h-0 lg:flex lg:flex-col" style={{background:'var(--app-card-bg)',border:'1px solid var(--app-card-border)',borderRadius:12,overflow:'hidden'}}>
+        <div style={{padding:'12px 20px',borderBottom:'1px solid var(--app-card-border)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
           <h3 style={{fontSize:13,fontWeight:600,color:'var(--app-text)',margin:0}}>
             {filtroEstado==='activas'?'Deudas activas':filtroEstado==='liquidadas'?'Liquidadas':'Todas'}
           </h3>
           <span className="badge-blue" style={{fontSize:11}}>{deudasFiltradas.length} registros</span>
         </div>
 
+        <div className="lg:flex-1 lg:min-h-0 overflow-visible lg:overflow-hidden">
         {loading?(
           <div style={{textAlign:'center',padding:'40px 0',color:'var(--app-text-secondary)',fontSize:13}}>Cargando...</div>
         ):deudasFiltradas.length===0?(
@@ -760,7 +761,7 @@ export default function Deudas() {
           </div>
         ):(
           <>
-          <div className="hidden lg:block" style={{overflowX:'auto',overflowY:'auto',maxHeight:'70vh'}}>
+          <div className="hidden lg:flex lg:flex-col lg:h-full" style={{overflowX:'auto',overflowY:'auto'}}>
             <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
               <thead style={{position:'sticky',top:0,zIndex:1}}>
                 <tr style={{borderBottom:'2px solid var(--app-card-border)',background:'var(--app-card-bg)'}}>
@@ -835,8 +836,8 @@ export default function Deudas() {
             </div>
           </div>
 
-          {/* Vista mobile: tarjetas (con su propio scroll, para no scrollear toda la página) */}
-          <div className="lg:hidden" style={{maxHeight:'75vh',overflowY:'auto'}}>
+          {/* Vista mobile: tarjetas (scroll normal de la página) */}
+          <div className="lg:hidden">
             {deudasFiltradas.map(d => {
               const dias = differenceInDays(new Date(), new Date(d.fecha_deuda))
               const u = urgenciaStyle(dias, d.estado)
@@ -918,6 +919,7 @@ export default function Deudas() {
           </div>
           </>
         )}
+        </div>
       </div>
 
       {/* ── Modal confirmar eliminación ── */}
