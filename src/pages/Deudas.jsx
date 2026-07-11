@@ -60,6 +60,7 @@ export default function Deudas() {
   const [modalConfirm, setModalConfirm] = useState(null) // {mensaje, onConfirm}
   const [selected, setSelected] = useState(null)
   const [filaResaltada, setFilaResaltada] = useState(null)
+  const ultimoClickRef = useRef({ id:null, time:0 })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [busqueda, setBusqueda] = useState('')
@@ -158,6 +159,19 @@ export default function Deudas() {
     setHistorialCompleto({ deudas:data||[], movimientos:todosMovimientos })
     setLoadingHistorial(false)
   }, [])
+
+  // ─── Clic simple = resalta la fila · Doble clic / doble toque = abre historial ──
+  const handleFilaClick = useCallback((d) => {
+    const ahora = Date.now()
+    const esDobleClick = ultimoClickRef.current.id===d.id && (ahora-ultimoClickRef.current.time)<400
+    if(esDobleClick) {
+      ultimoClickRef.current = { id:null, time:0 }
+      setSelected(d); setError(''); cargarHistorialCompleto(d.nombre_deudor); setModal('historial')
+    } else {
+      ultimoClickRef.current = { id:d.id, time:ahora }
+      setFilaResaltada(prev=>prev===d.id?null:d.id)
+    }
+  }, [cargarHistorialCompleto])
 
   useEffect(() => {
     cargar(); cargarClientes()
@@ -605,6 +619,7 @@ export default function Deudas() {
         <div>
           <h2 style={{fontSize:20,fontWeight:700,color:'var(--app-text)',margin:0}}>Deudas</h2>
           <p style={{fontSize:13,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>Control de deudas en dinero, balones y vales</p>
+          <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'2px 0 0'}}>💡 Doble clic (o doble toque) en una fila abre su historial completo</p>
         </div>
         <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
           <button onClick={imprimirReporte} className="btn-secondary" style={{fontSize:12}}>
@@ -724,7 +739,6 @@ export default function Deudas() {
                   <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>Nombre</th>
                   <th style={{textAlign:'center',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>Balón</th>
                   <th style={{textAlign:'right',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>Plata</th>
-                  <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',borderRight:'1px solid rgba(255,255,255,0.15)'}}>Observación</th>
                   <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>Estado</th>
                   <th style={{textAlign:'left',padding:'10px 16px',fontSize:11,textTransform:'uppercase',color:'var(--app-text-secondary)',whiteSpace:'nowrap'}}>Acciones</th>
                 </tr>
@@ -736,13 +750,12 @@ export default function Deudas() {
                   const balon = parseInt(d.balones_pendiente)||0
                   const plata = plataPendiente(d)
                   return (
-                    <tr key={d.id} onClick={()=>setFilaResaltada(filaResaltada===d.id?null:d.id)}
+                    <tr key={d.id} onClick={()=>handleFilaClick(d)}
                       style={{borderBottom:'1px solid var(--app-card-border)',background:filaResaltada===d.id?'rgba(59,130,246,0.16)':u.bg,cursor:'pointer',transition:'background 0.1s'}}>
                       <td style={{padding:'10px 16px',color:'var(--app-text-secondary)',fontSize:12,whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>{format(new Date(d.fecha_deuda+'T12:00:00'),'dd/MM/yyyy',{locale:es})}</td>
                       <td style={{padding:'10px 16px',fontWeight:600,color:'var(--app-text)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>{d.nombre_deudor}</td>
                       <td style={{padding:'10px 16px',textAlign:'center',fontWeight:600,color:balon>0?'#fb923c':'var(--app-text-secondary)',borderRight:'1px solid rgba(255,255,255,0.15)'}}>{balon>0?balon:'—'}</td>
                       <td style={{padding:'10px 16px',textAlign:'right',fontWeight:600,color:plata>0?(d.estado==='liquidada'?'#22c55e':'#f87171'):'var(--app-text-secondary)',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>{plata>0?`S/${plata.toLocaleString('es-PE')}`:'—'}</td>
-                      <td style={{padding:'10px 16px',color:'var(--app-text-secondary)',fontStyle:d.notas?'italic':'normal',maxWidth:220,borderRight:'1px solid rgba(255,255,255,0.15)'}}>{d.notas||'—'}</td>
                       <td style={{padding:'10px 16px',whiteSpace:'nowrap',borderRight:'1px solid rgba(255,255,255,0.15)'}}>
                         <div style={{display:'flex',flexDirection:'column',gap:3}}>
                           <span style={{
@@ -797,7 +810,7 @@ export default function Deudas() {
               const balon = parseInt(d.balones_pendiente)||0
               const plata = plataPendiente(d)
               return (
-                <div key={d.id} onClick={()=>setFilaResaltada(filaResaltada===d.id?null:d.id)}
+                <div key={d.id} onClick={()=>handleFilaClick(d)}
                   style={{padding:'12px 16px',borderBottom:'1px solid var(--app-card-border)',background:filaResaltada===d.id?'rgba(59,130,246,0.16)':u.bg,cursor:'pointer',transition:'background 0.1s'}}>
                   {/* Fecha + Nombre */}
                   <p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 2px'}}>
@@ -835,7 +848,7 @@ export default function Deudas() {
                     {u.label&&<span style={{fontSize:11,color:u.color,display:'flex',alignItems:'center',gap:3}}><Clock style={{width:11,height:11}}/>{u.label}</span>}
                   </div>
 
-                  {d.notas&&<p style={{fontSize:11,color:'var(--app-text-secondary)',margin:'0 0 8px',fontStyle:'italic'}}>📝 {d.notas}</p>}
+                  {/* La observación ahora se ve dentro de Historial (doble toque) */}
 
                   {/* Acciones */}
                   <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
